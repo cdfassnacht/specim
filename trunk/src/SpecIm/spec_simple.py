@@ -13,7 +13,7 @@ Classes and their most useful methods (UNDER CONSTRUCTION, BUT GETTING THERE.)
      smooth_boxcar
      plot_sky
      apply_wavecal_linear (NEEDS TO BE CHANGED TO ACCEPT A POLYFIT POLYNOMIAL)
-     mark_speclines
+     mark_lines
      save
 
 Stand-alone functions:
@@ -545,56 +545,96 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def load_linelist(self):
+    def load_linelist(self, linefile='default'):
 
         linefmt = [('name', 'S10'), ('wavelength', float), ('label', 'S10'),
                    ('dxlab', float), ('type', int), ('plot', bool)]
         self.lineinfo = np.array([
-                ("Ly-alpha",     1216.,     r"Ly$\alpha$", 0.0, 4, True),
-                ("C IV",          1549.,     "C IV",            0.0, 4, True),
-                ("C III]",        1909.,     "C III]",         0.0, 4, True),
-                ("Mg II",         2800.,     "Mg II",          0.0, 3, True),
-                ("[O II]",        3726.03,  "[O II]",         0.0, 4, True),
-                ("[O II]",        3728.82,  "[O II]",         0.0, 4, False),
-                ("CN bandhd",    3883,      "CN",              0.0, 0, True),
-                ("CaII K",        3933.667, "CaII K",         0.0, 0, True),
-                ("CaII H",        3968.472, "CaII H",         0.0, 0, True),
-                ("H-delta",      4101,      r"H$\delta$",    0.0, 1, True),
-                ("G-band",        4305,      "G-band",         0.0, 0, True),
-                ("H-gamma",      4340,      r"H$\gamma$",    0.0, 1, True),
-                ("Fe4383",        4383,      "Fe4383",         0.0, 0, True),
-                ("Ca4455",        4455,      "Ca4455",         0.0, 0, True),
-                ("Fe4531",        4531,      "Fe4531",         0.0, 0, True),
-                ("H-beta",        4861,      r"H$\beta$",     0.0, 3, True),
-                ("[O III]",      4962.,     "[O III]",        0.0, 4, False),
-                ("[O III]",      5007.,     "[O III]",        0.0, 4, True),
-                ("Mg I (b)",     5176,      "Mg b",            0.0, 0, True),
-                ("[N I]",         5199.,     "[N I]",          0.0, 2, True),
-                ("HeI",            5876.,     "He I",            0.0, 2, True),
-                ("Na I (D)",     5889.95,  "     ",            0.0, 0, True),
-                ("Na I (D)",     5895.92,  "Na D ",          0.0, 0, True),
-                ("[O I]",         6300.,     "[O I]",          0.0, 2, True),
-                ("[N II]",        6548.,     "[N II]",         0.0, 2, False),
-                ("H-alpha",      6562.8,    r"H$\alpha$",    0.0, 3, True),
-                ("[N II]",        6583.5,    "[N II]",         0.0, 2, False),
-                ("[S II]",        6716.4,    "[S II]",         0.0, 2, False),
-                ("[S II]",        6730.8,    "[S II]",         0.0, 2, True),
-                ("Ca triplet",  8498.03,  "CaII",            0.0, 0, True),
-                ("Ca triplet",  8542.09,  "CaII",            0.0, 0, True),
-                ("Ca triplet",  8662.14,  "CaII",            0.0, 0, True),
-                ("[S III]",      9069,      "[S III]",        0.0, 2, True),
-                ("[S III]",      9532,      "[S III]",        0.0, 2, True),
-                ("Pa-gamma",    10900.,     r"Pa $\gamma$", 0.0, 4, True),
-                ("Pa-beta",     12800.,     r"Pa $\beta$",  0.0, 4, True),
-                ("Pa-alpha",    18700.,     r"Pa $\alpha$", 0.0, 4, True)
+                ('He II'   ,      256.32, 'HeII',    0.0, 2, True),
+                ('He II'   ,      303.78, 'HeII',    0.0, 2, True),
+                ('He I'    ,      537.03, 'HeI',     0.0, 2, True),
+                ('He I'    ,      584.33, 'HeI',     0.0, 2, True),
+                ('Ly-gamma',      972.54, 'Ly',      0.0, 3, True),
+                ('Ly-beta' ,     1025.7 , 'Ly',      0.0, 3, True),
+                ('O VI'    ,     1035.07, 'OVI',     0.0, 2, True),
+                ("Ly-alpha",     1216.,   r"Ly$\alpha$", 0.0, 4, True),
+                ('N V',          1240.1,  'NV',      0.0, 4, True),
+                ('Si II',        1263.3,  'SiII',    0.0, 4, True),
+                ('O I',          1303.5,  'OI',      0.0, 4, True),
+                ('C II',         1334.53, 'CII',     0.0, 4, True),
+                ('Si IV',        1396.7,  'SiIV',    0.0, 2, False),
+                ('Si IV/O IV]',  1400,    'SiIV / OIV]',    0.0, 4, True),
+                ('O IV]',        1402.2,  'OIV]',    0.0, 2, False),
+                ('N IV]',        1486.5,  'NIV]',    0.0, 4, True),
+                ("C IV",         1549.1,  "C IV",    0.0, 4, True),
+                ('He II ',       1640.5,  'HeII',    0.0, 2, True),
+                ('O III]',       1663.0,  'OIII]',   0.0, 2, True),
+                ('N III]',       1750.4,  'NIII]',   0.0, 2, True),
+                ('Al III',       1858.7,  'AlIII',   0.0, 4, True),
+                ('Si III]',      1892.0,  'SiIII]',  0.0, 4, True),
+                ("C III]",       1908.7,  "C III]",  0.0, 4, True),
+                ('Fe III',       2075,    'FeIII',   0.0, 0, True),
+                ('C II] ',       2326,    'CII]',    0.0, 2, True),
+                ('Fe II',        2375,    'FeII',    0.0, 0, True),
+                ('Fe II',        2383,    'FeII',    0.0, 0, True),
+                ('[Ne IV]',      2423,    '[NeIV]',  0.0, 2, True),
+                ('Fe II',        2587,    'FeII',    0.0, 0, True),
+                ('Fe II',        2600,    'FeII',    0.0, 0, True),
+                ('Fe II',        2750.3,  'FeII',    0.0, 0, True),
+                ('Mg II',        2799.8,  'MgII',    0.0, 4, True),
+                ('Mg II',        2795.53, 'MgII',    0.0, 0, True),
+                ('Mg II',        2802.71, 'MgII',    0.0, 0, True),
+                ('Mg I',         2852,    'MgI',     0.0, 0, True),
+                ('O III',        3047,    'OIII',    0.0, 2, True),
+                ('O III ',       3133,    'OIII',    0.0, 2, True),
+                ('[Ne V]',       3346,    '[NeV]',   0.0, 2, True),
+                ('[Ne V]',       3426,    '[NeV]',   0.0, 2, True),
+                ('[O II]',       3726.03, '[O II]',  0.0, 4, True),
+                ('[O II]',       3728.82, '[O II]',  0.0, 4, False),
+                ('H-kappa',      3750,    r'H$\kappa$', 0.0, 0, True),
+                ('[Fe VII]',     3761.4,  '[FeVII]', 0.0, 0, True),
+                ('H-iota',       3770,    r'H$\iota$', 0.0, 0, True),
+                ('H-theta',      3797,    r'H$\theta$', 0.0, 0, True),
+                ('H-eta',        3835,    r'H$\eta$', 0.0, 0, True),
+                ('CN bandhd',    3883,    'CN',      0.0, 0, True),
+                ('CaII K',       3933.67, 'CaII K',  0.0, 0, True),
+                ('CaII H',       3968.47, 'CaII H',  0.0, 0, True),
+                ('H-delta',      4101,    r'H$\delta$', 0.0, 1, True),
+                ('G-band',       4305,    'G-band',  0.0, 0, True),
+                ('H-gamma',      4340,    r'H$\gamma$', 0.0, 1, True),
+                ('Fe4383',       4383,    'Fe4383',  0.0, 0, True),
+                ('Ca4455',       4455,    'Ca4455',  0.0, 0, True),
+                ('Fe4531',       4531,    'Fe4531',  0.0, 0, True),
+                ('H-beta',       4861,    r'H$\beta$', 0.0, 3, True),
+                ('[O III]',      4962.,   '[O III]', 0.0, 4, False),
+                ('[O III]',      5007.,   '[O III]', 0.0, 4, True),
+                ('Mg I (b)',     5176,    'Mg b',    0.0, 0, True),
+                ('[N I]',        5199.,   '[N I]',   0.0, 2, True),
+                ('HeI',          5876.,   'He I',    0.0, 2, True),
+                ('Na I (D)',     5889.95, '     ',   0.0, 0, True),
+                ('Na I (D)',     5895.92, 'Na D ',   0.0, 0, True),
+                ('[O I]',        6300.,   '[O I]',   0.0, 2, True),
+                ('[N II]',       6548.,   '[N II]',  0.0, 2, False),
+                ('H-alpha',      6562.8,  r'H$\alpha$', 0.0, 3, True),
+                ('[N II]',       6583.5,  '[N II]',  0.0, 2, False),
+                ('[S II]',       6716.4,  '[S II]',  0.0, 2, False),
+                ('[S II]',       6730.8,  '[S II]',  0.0, 2, True),
+                ('Ca triplet',   8498.03, 'CaII',    0.0, 0, True),
+                ('Ca triplet',   8542.09, 'CaII',    0.0, 0, True),
+                ('Ca triplet',   8662.14, 'CaII',    0.0, 0, True),
+                ('[S III]',      9069,    '[S III]', 0.0, 2, True),
+                ('[S III]',      9532,    '[S III]', 0.0, 2, True),
+                ('Pa-gamma',    10900.,   r'Pa $\gamma$', 0.0, 4, True),
+                ('Pa-beta',     12800.,   r'Pa $\beta$',  0.0, 4, True),
+                ('Pa-alpha',    18700.,   r'Pa $\alpha$', 0.0, 4, True)
                 ], dtype=linefmt)
 
     # -----------------------------------------------------------------------
 
-    def mark_speclines(self, linetype, z, usesmooth=False, marktype='tick',
-                       labww=20., labfs=12, tickfrac=0.05, tickfac=0.75,
-                       showz=True, labloc='default', labcolor='k',
-                       namepos='top', markatm=True):
+    def mark_lines(self, linetype, z, usesmooth=False, marktype='tick',
+                   labww=20., labfs=12, tickfrac=0.05, tickfac=0.75,
+                   showz=True, labloc='default', labcolor='k',
+                   namepos='top', markatm=True):
         """
         A generic routine for marking spectral lines in the plotted spectrum.
         The required linetype parameter can be either 'abs' or 'em' and will
@@ -659,10 +699,10 @@ class Spec1d(df.Data1d):
         zlines = (z + 1.0) * tmplines['wavelength']
         print ''
         print 'Line        lambda_rest  lambda_obs'
-        print '--------  -----------  -----------'
+        print '----------  -----------  -----------'
         for i in range(len(tmplines)):
             line = tmplines[i]
-            print "%-9s    %8.2f      %8.2f" % \
+            print "%-10s   %8.2f      %8.2f" % \
                 (line['name'], line['wavelength'], zlines[i])
 
         """ Set the length of the ticks """
@@ -687,7 +727,7 @@ class Spec1d(df.Data1d):
         for i in range(len(tmplines)):
             xarr[i] = tmplines['wavelength'][i] * (z + 1.0)
             tmpmask = np.fabs(self['wav']-xarr[i]) < dlocwin
-            if linetype == 'em':
+            if linetype == 'em' or linetype == 'strongem':
                 specflux[i] = flux[tmpmask].max()
             else:
                 specflux[i] = flux[tmpmask].min()
@@ -703,14 +743,21 @@ class Spec1d(df.Data1d):
                 tickend = tickstart + pm * ticklen
                 labstart = tickstart + pm * 1.5*ticklen
                 plt.plot([xarr[i], xarr[i]], [tickstart, tickend], 'k')
-                if info['plot']:
-                    plt.text(xarr[i] + info['dxlab'], labstart, info['label'],
-                             rotation='vertical', ha='center', va=labva,
-                             color=labcolor, fontsize=labfs)
+                labha = 'center'
             else:
                 plt.axvline(xarr[i], color='k', ls='--')
-                # if namepos == 'bottom':
-                #     labstart =
+                labha = 'right'
+                if namepos == 'bottom':
+                    labstart = y0 + 0.05 * ydiff
+                else:
+                    labstart = y1 - 0.05 * ydiff
+                    labva = 'top'
+
+            """ Label the lines """
+            if info['plot']:
+                plt.text(xarr[i] + info['dxlab'], labstart, info['label'],
+                         rotation='vertical', ha=labha, va=labva,
+                         color=labcolor, fontsize=labfs)
             # elif tmpfmin[i] > plt.ylim()[0]:
             #     plt.axvline(xarr[i], linestyle='--', color='k', lw=1)
             #     # print i['label'], tickstart, labstart, ticklen, tmpfmin
@@ -1220,6 +1267,8 @@ class Spec2d(imf.Image):
          profile, and then plots it if requested
         """
 
+        color='b'
+
         """ Set the data range in which to find the trace """
         if pixrange is not None:
             if self.data.ndim < 2:
@@ -1251,7 +1300,7 @@ class Spec2d(imf.Image):
         requested
         """
         if(showplot):
-            plt.plot(self.x, self.cdat, linestyle='steps')
+            plt.plot(self.x, self.cdat, linestyle='steps', color=color)
             plt.xlabel('Spatial direction (0-indexed)')
             if fit is not None:
                 xmod = np.arange(1, self.cdat.shape[0]+1, 0.1)
@@ -2071,13 +2120,13 @@ def plot_blue_and_red(bluefile, redfile, outfile=None, smooth_width=7,
             f = np.concatenate((bspec.smoflux, rspec.smoflux))
         combspec = Spec1d(wav=w, flux=f)
         if mark_em:
-            combspec.mark_speclines('em', z)
+            combspec.mark_lines('em', z)
             is_z_shown = True
         if mark_abs:
             if is_z_shown:
-                combspec.mark_speclines('abs', z, showz=False)
+                combspec.mark_lines('abs', z, showz=False)
             else:
-                combspec.mark_speclines('abs', z)
+                combspec.mark_lines('abs', z)
 
 
 # -----------------------------------------------------------------------
@@ -3093,7 +3142,7 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651.):
     ax1 = plt.subplot(211)
     atm.plot(color='g', title='Near IR Sky', ylabel='Transmission')
     if z is not None:
-        print atm.mark_speclines('strongem', z, marktype='line', showz=False)
+        atm.mark_lines('strongem', z, marktype='line', showz=False)
     plt.xlim(xmin, xmax)
     plt.ylim(-0.15, 1.1)
 
@@ -3101,7 +3150,7 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651.):
     plt.subplot(212, sharex=ax1)
     skymod.plot(title=None, ylabel='Sky Emission')
     if z is not None:
-        print atm.mark_speclines('strongem', z, marktype='line')
+        atm.mark_lines('strongem', z, marktype='line')
     plt.xlim(xmin, xmax)
     dy = 0.05 * skymod['flux'].max()
     plt.ylim(-dy, (skymod['flux'].max()+dy))
