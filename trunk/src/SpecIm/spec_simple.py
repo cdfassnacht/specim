@@ -563,7 +563,7 @@ class Spec1d(df.Data1d):
                 ('O I',          1303.5,  'OI',      0.0, 4, True),
                 ('C II',         1334.53, 'CII',     0.0, 4, True),
                 ('Si IV',        1396.7,  'SiIV',    0.0, 2, False),
-                ('Si IV/O IV]',  1400,    'SiIV / OIV]',    0.0, 4, True),
+                ('Si IV/O IV]',  1400,    'SiIV/OIV]',    0.0, 4, True),
                 ('O IV]',        1402.2,  'OIV]',    0.0, 2, False),
                 ('N IV]',        1486.5,  'NIV]',    0.0, 4, True),
                 ("C IV",         1549.1,  "C IV",    0.0, 4, True),
@@ -572,17 +572,17 @@ class Spec1d(df.Data1d):
                 ('N III]',       1750.4,  'NIII]',   0.0, 2, True),
                 ('Al III',       1858.7,  'AlIII',   0.0, 4, True),
                 ('Si III]',      1892.0,  'SiIII]',  0.0, 4, True),
-                ("C III]",       1908.7,  "C III]",  0.0, 4, True),
+                ("C III]",       1908.7,  "C III]",  100.0, 4, True),
                 ('Fe III',       2075,    'FeIII',   0.0, 0, True),
                 ('C II] ',       2326,    'CII]',    0.0, 2, True),
-                ('Fe II',        2375,    'FeII',    0.0, 0, True),
-                ('Fe II',        2383,    'FeII',    0.0, 0, True),
+                ('Fe II',        2375,    'FeII',  -10.0, 0, True),
+                ('Fe II',        2383,    'FeII',   20.0, 0, True),
                 ('[Ne IV]',      2423,    '[NeIV]',  0.0, 2, True),
-                ('Fe II',        2587,    'FeII',    0.0, 0, True),
-                ('Fe II',        2600,    'FeII',    0.0, 0, True),
+                ('Fe II',        2587,    'FeII',  -10.0, 0, True),
+                ('Fe II',        2600,    'FeII',   20.0, 0, True),
                 ('Fe II',        2750.3,  'FeII',    0.0, 0, True),
                 ('Mg II',        2799.8,  'MgII',    0.0, 4, True),
-                ('Mg II',        2795.53, 'MgII',    0.0, 0, True),
+                ('Mg II',        2795.53, 'MgII',    0.0, 0, False),
                 ('Mg II',        2802.71, 'MgII',    0.0, 0, True),
                 ('Mg I',         2852,    'MgI',     0.0, 0, True),
                 ('O III',        3047,    'OIII',    0.0, 2, True),
@@ -758,23 +758,25 @@ class Spec1d(df.Data1d):
                 plt.text(xarr[i] + info['dxlab'], labstart, info['label'],
                          rotation='vertical', ha=labha, va=labva,
                          color=labcolor, fontsize=labfs)
-            # elif tmpfmin[i] > plt.ylim()[0]:
-            #     plt.axvline(xarr[i], linestyle='--', color='k', lw=1)
-            #     # print i['label'], tickstart, labstart, ticklen, tmpfmin
 
         """ Label the plot with the redshift, if requested """
+        ax = plt.gca()
         if showz:
             if labloc == 'topright':
                 labx = x0 + 0.95 * xdiff
                 laby = y0 + 0.95 * ydiff
+                labx = 0.99
+                laby = 0.9
                 ha = 'right'
             else:
                 labx = x0 + 0.05 * xdiff
                 laby = y0 + 0.95 * ydiff
+                labx = 0.05
+                laby = 0.95
                 ha = 'left'
             # print labx, laby
             plt.text(labx, laby, 'z = %5.3f' % z, ha=ha, va='center',
-                     color=labcolor, fontsize=labfs+4)
+                     color=labcolor, fontsize=labfs+4, transform=ax.transAxes)
 
     # -----------------------------------------------------------------------
 
