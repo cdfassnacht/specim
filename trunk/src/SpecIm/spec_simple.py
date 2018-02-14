@@ -633,7 +633,7 @@ class Spec1d(df.Data1d):
 
     def mark_lines(self, linetype, z, usesmooth=False, marktype='tick',
                    labww=20., labfs=12, tickfrac=0.05, tickfac=0.75,
-                   showz=True, labloc='default', labcolor='k',
+                   showz=True, zstr='z', labloc='default', labcolor='k',
                    namepos='top', markatm=True):
         """
         A generic routine for marking spectral lines in the plotted spectrum.
@@ -775,7 +775,7 @@ class Spec1d(df.Data1d):
                 laby = 0.95
                 ha = 'left'
             # print labx, laby
-            plt.text(labx, laby, 'z = %5.3f' % z, ha=ha, va='center',
+            plt.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='center',
                      color=labcolor, fontsize=labfs+4, transform=ax.transAxes)
 
     # -----------------------------------------------------------------------
