@@ -550,13 +550,13 @@ class Spec1d(df.Data1d):
         linefmt = [('name', 'S10'), ('wavelength', float), ('label', 'S10'),
                    ('dxlab', float), ('type', int), ('plot', bool)]
         self.lineinfo = np.array([
-                ('He II'   ,      256.32, 'HeII',    0.0, 2, True),
-                ('He II'   ,      303.78, 'HeII',    0.0, 2, True),
-                ('He I'    ,      537.03, 'HeI',     0.0, 2, True),
-                ('He I'    ,      584.33, 'HeI',     0.0, 2, True),
+                ('He II',         256.32, 'HeII',    0.0, 2, True),
+                ('He II',         303.78, 'HeII',    0.0, 2, True),
+                ('He I',          537.03, 'HeI',     0.0, 2, True),
+                ('He I',          584.33, 'HeI',     0.0, 2, True),
                 ('Ly-gamma',      972.54, 'Ly',      0.0, 3, True),
-                ('Ly-beta' ,     1025.7 , 'Ly',      0.0, 3, True),
-                ('O VI'    ,     1035.07, 'OVI',     0.0, 2, True),
+                ('Ly-beta',      1025.7,  'Ly',      0.0, 3, True),
+                ('O VI',         1035.07, 'OVI',     0.0, 2, True),
                 ("Ly-alpha",     1216.,   r"Ly$\alpha$", 0.0, 4, True),
                 ('N V',          1240.1,  'NV',      0.0, 4, True),
                 ('Si II',        1263.3,  'SiII',    0.0, 4, True),
@@ -580,7 +580,7 @@ class Spec1d(df.Data1d):
                 ('[Ne IV]',      2423,    '[NeIV]',  0.0, 2, True),
                 ('Fe II',        2587,    'FeII',  -10.0, 0, True),
                 ('Fe II',        2600,    'FeII',   20.0, 0, True),
-                ('Fe II',        2750.3,  'FeII',    0.0, 0, True),
+                ('Fe II',        2750.3,  'FeII',    0.0, 0, False),
                 ('Mg II',        2799.8,  'MgII',    0.0, 4, True),
                 ('Mg II',        2795.53, 'MgII',    0.0, 0, False),
                 ('Mg II',        2802.71, 'MgII',    0.0, 0, True),
@@ -631,10 +631,55 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
+    def draw_tick(self, lam, linetype, ticklen, usesmooth=False, labww=20.,
+                  tickfac=0.75):
+        """
+        This method is called by mark_lines
+        It labels a spectral line by drawing a tickmark above or below the
+         spectrum at the given wavelength (lam).
+        """
+
+        """ Choose whether to use the smoothed flux or not """
+        if usesmooth:
+            flux = self.smoflux
+        else:
+            flux = self['flux']
+
+        """ Check linetype """
+        if linetype == 'abs':
+            pm = -1.
+            labva = 'top'
+        elif linetype == 'em' or linetype == 'strongem':
+            pm = 1.
+            labva = 'bottom'
+        else:
+            print ''
+            print "ERROR: linetype must be either 'abs', 'em', or 'strongem'"
+            print ''
+            return None, None
+
+        """ Set up the tick parameters"""
+        tmpmask = np.fabs(self['wav'] - lam) < (labww / 2.)
+        if linetype == 'em' or linetype == 'strongem':
+            specflux = flux[tmpmask].max()
+        else:
+            specflux = flux[tmpmask].min()
+        tickstart = specflux + pm * tickfac * ticklen
+        tickend = tickstart + pm * ticklen
+        labstart = tickstart + pm * 1.5 * ticklen
+
+        """ Draw the tick mark """
+        plt.plot([lam, lam], [tickstart, tickend], 'k')
+
+        """ Return relevant info for plotting """
+        return labstart, labva
+
+    # -----------------------------------------------------------------------
+
     def mark_lines(self, linetype, z, usesmooth=False, marktype='tick',
                    labww=20., labfs=12, tickfrac=0.05, tickfac=0.75,
-                   showz=True, zstr='z', labloc='default', labcolor='k',
-                   namepos='top', markatm=True):
+                   showz=True, zstr='z', zfs=16, labloc='default',
+                   labcolor='k', namepos='top', markatm=True):
         """
         A generic routine for marking spectral lines in the plotted spectrum.
         The required linetype parameter can be either 'abs' or 'em' and will
@@ -667,22 +712,15 @@ class Spec1d(df.Data1d):
 
         """ Set the display limits """
         lammin, lammax = self['wav'].min(), self['wav'].max()
-        # dlam = self['wav'][1] - self['wav'][0]
         x0, x1 = plt.xlim()
         y0, y1 = plt.ylim()
         if x0 > lammin:
             lammin = x0
         if x1 < lammax:
             lammax = x1
-        # wmask = (self['wav'] >= x0) & (self['wav'] <= x1)
-        # if usesmooth:
-        #     ff = self.smoflux[wmask]
-        # else:
-        #     ff = self['flux'][wmask]
-        # fluxdiff = ff.max() - ff.min()
         xdiff = x1 - x0
         ydiff = y1 - y0
-        dlocwin = labww / 2.
+        # dlocwin = labww / 2.
 
         """ Select lines within current display range """
         zlines = (z + 1.0) * self.lineinfo['wavelength']
@@ -708,12 +746,6 @@ class Spec1d(df.Data1d):
         """ Set the length of the ticks """
         ticklen = tickfrac * ydiff
 
-        """ Choose whether to use the smoothed flux or not """
-        if usesmooth:
-            flux = self.smoflux
-        else:
-            flux = self['flux']
-
         print ''
         if (len(tmplines) == 0):
             print ''
@@ -722,15 +754,7 @@ class Spec1d(df.Data1d):
             print ''
             return
 
-        xarr = np.zeros(len(tmplines))
-        specflux = np.zeros(len(tmplines))
-        for i in range(len(tmplines)):
-            xarr[i] = tmplines['wavelength'][i] * (z + 1.0)
-            tmpmask = np.fabs(self['wav']-xarr[i]) < dlocwin
-            if linetype == 'em' or linetype == 'strongem':
-                specflux[i] = flux[tmpmask].max()
-            else:
-                specflux[i] = flux[tmpmask].min()
+        xarr = tmplines['wavelength'] * (z + 1.)
 
         """
         Mark the location of the spectral lines with either tickmarks (default)
@@ -739,10 +763,19 @@ class Spec1d(df.Data1d):
         for i in range(len(tmplines)):
             info = tmplines[i]
             if marktype == 'tick':
-                tickstart = specflux[i] + pm * tickfac*ticklen
-                tickend = tickstart + pm * ticklen
-                labstart = tickstart + pm * 1.5*ticklen
-                plt.plot([xarr[i], xarr[i]], [tickstart, tickend], 'k')
+                labstart, labva = \
+                    self.draw_tick(xarr[i], linetype, ticklen,
+                                   usesmooth=usesmooth, labww=labww,
+                                   tickfac=tickfac)
+                # tmpmask = np.fabs(self['wav']-xarr[i]) < dlocwin
+                # if linetype == 'em' or linetype == 'strongem':
+                #     specflux = flux[tmpmask].max()
+                # else:
+                #     specflux = flux[tmpmask].min()
+                # tickstart = specflux + pm * tickfac*ticklen
+                # tickend = tickstart + pm * ticklen
+                # labstart = tickstart + pm * 1.5*ticklen
+                # plt.plot([xarr[i], xarr[i]], [tickstart, tickend], 'k')
                 labha = 'center'
             else:
                 plt.axvline(xarr[i], color='k', ls='--')
@@ -763,20 +796,15 @@ class Spec1d(df.Data1d):
         ax = plt.gca()
         if showz:
             if labloc == 'topright':
-                labx = x0 + 0.95 * xdiff
-                laby = y0 + 0.95 * ydiff
                 labx = 0.99
                 laby = 0.9
                 ha = 'right'
             else:
-                labx = x0 + 0.05 * xdiff
-                laby = y0 + 0.95 * ydiff
-                labx = 0.05
-                laby = 0.95
+                labx = 0.01
+                laby = 0.99
                 ha = 'left'
-            # print labx, laby
             plt.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='center',
-                     color=labcolor, fontsize=labfs+4, transform=ax.transAxes)
+                     color=labcolor, fontsize=zfs, transform=ax.transAxes)
 
     # -----------------------------------------------------------------------
 
@@ -1269,7 +1297,7 @@ class Spec2d(imf.Image):
          profile, and then plots it if requested
         """
 
-        color='b'
+        color = 'b'
 
         """ Set the data range in which to find the trace """
         if pixrange is not None:
