@@ -95,7 +95,7 @@ class Image:
             try:
                 self.read_from_file(indat, verbose=verbose)
             except IOError:
-                return None
+                raise IOError
 
         if verbose:
             self.hdu.info()
@@ -634,13 +634,15 @@ class Image:
         w = self.wcsinfo.wcs
         rad2deg = 180. / pi
         if imwcs.has_cd():
+            print('Using CD matrix to determine pixel scale')
             self.pixscale = sqrt(w.cd[raax, raax]**2 +
                                  w.cd[decax, raax]**2) * 3600.
             rot1 = atan(-1. * w.cd[raax, decax] / w.cd[decax, decax])
             rot2 = atan(w.cd[decax, raax] / w.cd[raax, raax])
         elif imwcs.has_pc():
+            print('Using PC matrix and CDELT to determine pixel scale')
             self.pixscale = sqrt(w.pc[raax, raax]**2 + w.pc[decax, raax]**2) *\
-                w.cdelt[raax] * 3600.
+                abs(w.cdelt[raax]) * 3600.
             rot1 = atan(-1. * w.cdelt[raax] * w.pc[raax, decax] /
                         (w.cdelt[decax] * w.pc[decax, decax]))
             rot2 = atan(w.cdelt[decax] * w.pc[decax, raax] /

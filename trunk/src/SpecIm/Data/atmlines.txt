@@ -1,0 +1,4 @@
+# name  wavelength
+[OI]     5577.
+B-band   6868.
+A-band   7605.

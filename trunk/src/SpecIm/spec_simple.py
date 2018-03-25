@@ -964,7 +964,7 @@ class Spec2d(imf.Image):
         if test.rfind('hdu') > 0:
             self.hdu = inspec
         else:
-            imf.Image.__init__(self, inspec, verbose=verbose)
+            imf.Image.__init__(self, inspec, datahext=hext, verbose=verbose)
 
         """ Read in the external variance file if there is one """
         if extvar is not None:
