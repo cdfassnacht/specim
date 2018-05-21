@@ -101,8 +101,8 @@ class Image:
             self.hdu.info()
 
         """ Set up pointers to the default data and header """
-        self.data = self.hdu[datahext].data.copy()
-        self.hdr = self.hdu[hdrhext].header.copy()
+        # self.data = self.hdu[datahext].data.copy()
+        # self.hdr = self.hdu[hdrhext].header.copy()
 
         """ Do an initial import of the WCS information from the header """
         self.found_wcs = False
@@ -727,7 +727,8 @@ class Image:
         self.subim_wcs = w
 
         """ Convert to a fits header format """
-        hdr = w.wcs.to_header()
+        hdr = w.to_header()
+        print(hdr['crpix1'])
         return hdr
 
     # -----------------------------------------------------------------------
@@ -1392,8 +1393,8 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def def_subim_radec(self, ra, dec, xsize, ysize=None, outscale=None,
-                        docdmatx=True, hext=0, dext=0, verbose=True):
+    def def_subim_radec(self, imcent, imsize, outscale=None,
+                        hext=0, dext=0, verbose=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
 
@@ -1404,16 +1405,17 @@ class Image:
         Inputs:
           ra       - Central right ascension in decimal degrees
           dec      - Central declination in decimal degrees
-          xsize    - Output image x size in arcsec
-          ysize    - Output image y size in arcsec
-                      If ysize is None (the default) then use the same size
-                      for y as is being used for x (i.e., ysize=xsize)
+          imsize   - size of the subimage to be displayed in arcsec
+                     The default, designated by imsize=None, is to display
+                     the entire image.  The imsize parameter can take
+                     any of the following formats:
+                        1. A single number (which will produce a square image)
+                        2. A 2-element numpy array
+                        3. A 2-element list:  [xsize, ysize]
+                        4. A 2-element tuple: (xsize, ysize)
           outscale - Output image pixel scale, in arcsec/pix.
                       If outscale is None (the default) then the output image
                       scale will be the same as the input image scale
-          docdmatx - If set to True (the default), then put the output image
-                      scale in terms of a CD matrix.  If False, then use the
-                      CDELT and PC matrix formalism instead.
           hext     - Input file HDU number that contains the WCS info
                         (default 0)
           dext     - Input file HDU number that contains the image data
@@ -1430,7 +1432,7 @@ class Image:
         ny = self.hdu[hext].data.shape[0]
 
         """ Check to make sure that a subimage is even requested """
-        if (ra is None or dec is None) and xsize is None:
+        if (imcent is None) and imsize is None:
             self.data = self.hdu[hext].data.copy()
             self.subsizex = nx
             self.subsizey = ny
@@ -1443,11 +1445,11 @@ class Image:
         w = wcs.WCS(self.subimhdr)
 
         """
-        If the passed ra or dec is None, then just take the central pixel
+        If the passed imcent is None, then just take the central pixel
          of the image as the requested center.
         If not, then we need to do some calculations
         """
-        if ra is None or dec is None:
+        if imcent is None:
             x = nx / 2.
             y = ny / 2.
 
@@ -1458,7 +1460,7 @@ class Image:
             The first step is to convert ra and dec into astropy.coordinates
              SkyCoord format
             """
-            self.radec = self.radec_to_skycoord(ra, dec)
+            self.radec = self.radec_to_skycoord(imcent[0], imcent[1])
 
             """
             Calculate the (x, y) that is associated with the requested center
@@ -1469,14 +1471,23 @@ class Image:
             xy = w.wcs_world2pix([radec], 0)[0]
             x = xy[0]
             y = xy[1]
-
         """
         Get rough image size in pixels for the segment of input image, since
         the pixel scale for the output image does not necessarily match that
         of the input image.
         """
-        if ysize is None:
-            ysize = xsize
+
+        """ Set the display size """
+        if imsize is None:
+            xsize = None
+            ysize = None
+        else:
+            xysize = np.atleast_1d(imsize)  # Converts imsize to a np array
+            xsize = xysize[0]
+            if xysize.size > 1:
+                ysize = xysize[1]
+            else:
+                ysize = xysize[0]
         inpixxsize = int(xsize / self.pixscale)
         inpixysize = int(ysize / self.pixscale)
         if outscale is None:
@@ -1536,15 +1547,15 @@ class Image:
         #     print 'Warning: CRPIX2 header not found in %s' % self.infile
         #     pass
 
-        """
-        Set up the output header and do the coordinate transform preparation
-        """
+        """ Set up the output header """
         if self.subimhdr['naxis'] == 4:
             data = self.hdu[dext].data[0, 0, :, :].copy()
         else:
             data = self.hdu[dext].data.copy()
         outhdr = self.make_header(self.radec, outscale, self.subsizex,
                                   self.subsizey)
+
+        """ Do the coordinate transform preparation """
         coords = np.indices((self.subsizey, self.subsizex)).astype(np.float32)
         skycoords = self.subim_wcs.wcs_pix2world(coords[1], coords[0], 0)
         ccdcoords = w.wcs_world2pix(skycoords[0], skycoords[1], 0)
@@ -1564,51 +1575,10 @@ class Image:
         self.data = ndimage.map_coordinates(data, coords, output=np.float64,
                                             order=5)
         self.data[np.isnan(self.data)] = 0.
-        self.subimhdr = outhdr
+        self.subimhdr = outhdr.copy()
 
         """ Clean up """
         del data, coords, skycoords, ccdcoords
-
-    # -----------------------------------------------------------------------
-
-    def get_rms(self, centpos, size, hext=0, verbose=True):
-        """
-        Calculates the rms (by calling the sigma_clip method) by calculating
-        the pixel value statistics in a region of the image defined by its
-        center (centpos parameter) and its size (size parameter).
-
-        Inputs:
-            centpos - (x, y) coordinates of the center of the region, in pixels
-                      centpos can take any of the following formats:
-                       1. A 2-element numpy array
-                       2. A 2-element list:  [xsize, ysize]
-                       3. A 2-element tuple: (xsize, ysize)
-                       4. centpos=None.  In this case, the center of the cutout
-                          is just the center of the full image
-            size    - size of cutout (postage stamp) image, in pixels
-                      size can take any of the following formats:
-                       1. A single number (which will produce a square image)
-                       2. A 2-element numpy array
-                       3. A 2-element list:  [xsize, ysize]
-                       4. A 2-element tuple: (xsize, ysize)
-                       5. size=None.  In this case, the full image is used
-            hext    - HDU containing the image data in the input image
-                      (default=0)
-        """
-
-        """
-        Convert the center and size paramters into the coordinates of the
-        corners of the region
-        """
-        statsec = self.get_subim_bounds(centpos, size, hext)
-        print('')
-        print statsec
-
-        """ Get the pixel statistics """
-        self.sigma_clip(statsec=statsec)
-        if verbose:
-            print 'RMS = %f' % self.rms_clip
-        return self.rms_clip
 
     # -----------------------------------------------------------------------
 
@@ -1616,10 +1586,10 @@ class Image:
                      verbose=True):
         """
         Creates a subimage that is a cutout of the original image.  For
-        this method, the image center is defined by its (x, y) coordinate
-        rather than (ra, dec).
+         this method, the image center is defined by its (x, y) coordinate
+         rather than (ra, dec).
         The image is written to an output fits file if the outfile parameter
-        is set.
+         is set.
 
         Inputs:
             centpos - (x, y) coordinates of cutout center, in pixels
@@ -1657,55 +1627,81 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def poststamp_radec(self, ra, dec, xsize, ysize, scale, outfile,
-                        docdmatx=True, hext=0, dext=0, verbose=True):
+    def poststamp_radec(self, imcent, imsize, outscale=None, outfile=None,
+                        docdmatx=False, hext=0, dext=0, verbose=True,
+                        debug=False):
         """
-        Given a central coordinate (RA, dec), a size in pixels, and a pixel
-        scale, creates an output cutout image
+        Given a central coordinate (RA, dec) and an image size in arcseconds,
+         creates an output cutout image
 
         The majority of the code is Matt Auger's (his image_cutout in
-        imagelib.py).
+         imagelib.py).
         Some modifications have been made by Chris Fassnacht.
 
         Inputs:
-            ra       - Central right ascension in decimal degrees
-            dec      - Central declination in decimal degrees
-            xsize    - Output image x size in arcsec
-            ysize    - Output image y size in arcsec
-            scale    - Output image pixel scale, in arcsec/pix
-            outfile  - Output file name
-            docdmatx - If set to True (the default), then put the output image
-                        scale in terms of a CD matrix.  If False, then use the
-                        CDELT and PC matrix formalism instead.
-            hext     - Input file HDU number that contains the WCS info
-                        (default 0)
-            dext     - Input file HDU number that contains the image data
-                        (default 0)
+          imcent   - center of the subimage to be displayed, either in
+                      decimal degrees (if mode='radec') or in pixels 
+                      (if mode='xy').
+                     The default value, designated by imcent=None, will just
+                      use the center of the input image.
+                     The imcent parameter can take any of the following formats
+                        1. A 2-element numpy array
+                        2. A 2-element list:  [xsize, ysize]
+                        3. A 2-element tuple: (xsize, ysize)                    
+          imsize   - size of the subimage to be displayed, either in arcsec
+                      (if mode='radec')or pixels (if mode='xy').
+                     The default, designated by imsize=None, is to display
+                      the entire image.
+                     The imsize parameter can take any of the following formats
+                        1. A single number (which will produce a square image)
+                        2. A 2-element numpy array
+                        3. A 2-element list:  [xsize, ysize]
+                        4. A 2-element tuple: (xsize, ysize)
+
+         Optional inputs:
+          outscale - Output image pixel scale, in arcsec/pix.
+                      If outscale is None (the default) then the output image
+                      scale will be the same as the input image scale
+          hext     - Input file HDU number that contains the WCS info
+                      (default 0)
+          dext     - Input file HDU number that contains the image data
+                      (default 0)
+          docdmatx - If set to True, then put the output image
+                      scale in terms of a CD matrix.  If False (the default), 
+                      then use the CDELT and PC matrix formalism instead.
+                     NOTE: With the new use of the astropy.wcs package,
+                      this parameter may become obsolete
         """
 
         """ Create the postage stamp data """
-        self.def_subim_radec(ra, dec, xsize, ysize, scale, docdmatx, hext,
+        self.def_subim_radec(imcent, imsize, outscale, hext,
                              dext, verbose)
 
         """
-        Put the new WCS information into the original header, along with some
-        additional info.
+        Set up the header for the output image to be the full image header
         """
         newhdr = self.hdu[hext].header.copy()
-        wcskeys = \
-            ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1', 'crval2',
-             'crpix2']
-        if docdmatx:
-            for i in ('cd1_1', 'cd1_2', 'cd2_1', 'cd2_2'):
-                wcskeys.append(i)
-        else:
-            for i in ('cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2'):
-                wcskeys.append(i)
 
-        for i in wcskeys:
-            newhdr.update(i, self.subimhdr[i])
+        """
+        Now eliminate, as much as possible, the WCS header keywords from
+         the original header.  This is done to avoid possibly conflicting
+         information, e.g., a CD matrix in the original header and then
+         a CDELT + PC matrix from the cutout.
+        """
+        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1', 'crval2',
+                   'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2', 'cdelt1',
+                   'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
+        for key in wcskeys:
+            if key.upper() in newhdr.keys():
+                del newhdr[key]
+                if debug:
+                    print('Deleting original %s keyword' % key.upper())
+
+        """ Copy new WCS information from subimage into the output header """
+        for key in self.subimhdr.keys():
+            newhdr[key] = self.subimhdr[key]
         if self.infile:
-            newhdr.update('ORIG_IM', self.infile)
+            newhdr['ORIG_IM'] = self.infile
 
         """ Write the postage stamp to the output file """
         pf.PrimaryHDU(self.data, newhdr).writeto(outfile, overwrite=True)
@@ -1789,6 +1785,47 @@ class Image:
 
     # -----------------------------------------------------------------------
 
+    def get_rms(self, centpos, size, hext=0, verbose=True):
+        """
+        Calculates the rms (by calling the sigma_clip method) by calculating
+        the pixel value statistics in a region of the image defined by its
+        center (centpos parameter) and its size (size parameter).
+
+        Inputs:
+            centpos - (x, y) coordinates of the center of the region, in pixels
+                      centpos can take any of the following formats:
+                       1. A 2-element numpy array
+                       2. A 2-element list:  [xsize, ysize]
+                       3. A 2-element tuple: (xsize, ysize)
+                       4. centpos=None.  In this case, the center of the cutout
+                          is just the center of the full image
+            size    - size of cutout (postage stamp) image, in pixels
+                      size can take any of the following formats:
+                       1. A single number (which will produce a square image)
+                       2. A 2-element numpy array
+                       3. A 2-element list:  [xsize, ysize]
+                       4. A 2-element tuple: (xsize, ysize)
+                       5. size=None.  In this case, the full image is used
+            hext    - HDU containing the image data in the input image
+                      (default=0)
+        """
+
+        """
+        Convert the center and size paramters into the coordinates of the
+        corners of the region
+        """
+        statsec = self.get_subim_bounds(centpos, size, hext)
+        print('')
+        print statsec
+
+        """ Get the pixel statistics """
+        self.sigma_clip(statsec=statsec)
+        if verbose:
+            print 'RMS = %f' % self.rms_clip
+        return self.rms_clip
+
+    # -----------------------------------------------------------------------
+
     def snr_image_xy(self, centpos, imsize, statcent=None, statsize=None,
                      outfile=None, hext=0, verbose=True):
         """
@@ -1854,7 +1891,7 @@ class Image:
         self.data /= imrms
         if outfile is not None:
             if verbose:
-                print 'Output SNR file: %s' % outfile
+                print('Output SNR file: %s' % outfile)
             pf.PrimaryHDU(self.data, self.subimhdr).writeto(outfile,
                                                             overwrite=True)
 
@@ -2096,10 +2133,32 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def set_subim(self, hext=0, mode='xy', imcent=None, imsize=None,
+    def set_subim(self, hext=0, mode='radec', imcent=None, imsize=None,
                   verbose=False):
         """
         Sets the region of the image to be displayed
+
+        Optional inputs:
+          mode    - Either 'radec' (the default) or 'xy'.  Replaces the
+                    obsolete subimdef and dispunits parameters
+          imcent  - center of the subimage to be displayed, either in
+                     decimal degrees (if mode='radec') or in pixels 
+                     (if mode='xy').
+                    The default value, designated by imcent=None, will just
+                     use the center of the input image.
+                    The imcent parameter can take any of the following formats:
+                       1. A 2-element numpy array
+                       2. A 2-element list:  [xsize, ysize]
+                       3. A 2-element tuple: (xsize, ysize)                    
+          imsize  - size of the subimage to be displayed, either in arcsec
+                     (if mode='radec')or pixels (if mode='xy').
+                    The default, designated by imsize=None, is to display
+                     the entire image.
+                    The imsize parameter can take any of the following formats:
+                       1. A single number (which will produce a square image)
+                       2. A 2-element numpy array
+                       3. A 2-element list:  [xsize, ysize]
+                       4. A 2-element tuple: (xsize, ysize)
         """
 
         """ First check to see if any modification needs to be made """
@@ -2117,72 +2176,10 @@ class Image:
         Treat each case appropriately.
         """
         if mode == 'radec':
-            # NOTE: need to check to see if found_wcs is True
-
-            """ Set the display center"""
-            if imcent is None:
-                ra = None
-                dec = None
-            else:
-                ra = imcent[0]
-                dec = imcent[1]
-
-            """ Set the display size """
-            if imsize is None:
-                xsize = None
-                ysize = None
-            else:
-                xsize = imsize[0]
-                ysize = imsize[1]
-            self.def_subim_radec(ra, dec, xsize, ysize, hext=hext,
-                                 verbose=verbose)
-
+            self.def_subim_radec(imcent, imsize, hext=hext, verbose=verbose)
         else:
-            """
-            If not requesting a (RA, dec) cutout, the code is simpler
-            """
             self.poststamp_xy(imcent, imsize, hext=hext)
         print('')
-
-    # -----------------------------------------------------------------------
-
-    def display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
-                      funits='sigma', fscale='linear', statsize=2048,
-                      title=None,  mode='xy', zeropos=None, verbose=False):
-        """
-        Sets parameters within the Image class that will be used to actually
-         display the image or the requested part of it.
-        NOTE: This method is usually called from the display method, and is
-         not meant to be used in a stand-alone manner
-        For more information about the parameters, etc., please see the
-         help information for the display method.
-        """
-
-        """ Set the displayed axes to be in WCS offsets, if requested """
-        self.mode = mode
-        if self.mode == 'radec':
-            if not self.found_wcs:
-                print('')
-                print("WARNING: mode='radec' but no WCS info in image"
-                      "header")
-                print 'Using pixels instead'
-                print('')
-                self.mode = 'xy'
-                self.extval = None
-            else:
-                self.set_wcsextent(hext, zeropos)
-        else:
-            self.extval = None
-
-        """ Set the image flux display limits """
-        self.set_display_limits(fmin, fmax, funits, hext=hext, verbose=verbose)
-        self.fscale = fscale
-
-        """ Set the color map """
-        self.set_cmap(cmap)
-
-        """ Set other display parameters """
-        self.title = title
 
     # -----------------------------------------------------------------------
 
@@ -2249,6 +2246,46 @@ class Image:
 
     # -----------------------------------------------------------------------
 
+    def display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
+                      funits='sigma', fscale='linear', statsize=2048,
+                      title=None,  mode='xy', zeropos=None, verbose=False):
+        """
+        Sets parameters within the Image class that will be used to actually
+         display the image or the requested part of it.
+        NOTE: This method is usually called from the display method, and is
+         not meant to be used in a stand-alone manner
+        For more information about the parameters, etc., please see the
+         help information for the display method.
+        """
+
+        """ Set the displayed axes to be in WCS offsets, if requested """
+        self.mode = mode
+        if self.mode == 'radec':
+            if not self.found_wcs:
+                print('')
+                print("WARNING: mode='radec' but no WCS info in image"
+                      "header")
+                print 'Using pixels instead'
+                print('')
+                self.mode = 'xy'
+                self.extval = None
+            else:
+                self.set_wcsextent(hext, zeropos)
+        else:
+            self.extval = None
+
+        """ Set the image flux display limits """
+        self.set_display_limits(fmin, fmax, funits, hext=hext, verbose=verbose)
+        self.fscale = fscale
+
+        """ Set the color map """
+        self.set_cmap(cmap)
+
+        """ Set other display parameters """
+        self.title = title
+
+    # -----------------------------------------------------------------------
+
     def display_implot(self, show_xyproj=False, axlabel=True, fontsize=None):
         """
 
@@ -2293,23 +2330,9 @@ class Image:
             if self.mode == 'radec':
                 xlabel = 'Offset (arcsec)'
                 ylabel = 'Offset (arcsec)'
-                # if fontsize is not None:
-                #     plt.xlabel(r"$\Delta \alpha$ (arcsec)",
-                #         fontsize=fontsize)
-                #     plt.ylabel(r"$\Delta \delta$ (arcsec)",
-                #         fontsize=fontsize)
-                # else:
-                #     plt.xlabel(r"$\Delta \alpha$ (arcsec)")
-                #     plt.ylabel(r"$\Delta \delta$ (arcsec)")
             else:
                 xlabel = 'x (pix)'
                 ylabel = 'y (pix)'
-                # if fontsize is not None:
-                #     plt.xlabel('x (pix)', fontsize=fontsize)
-                #     plt.ylabel('y (pix)', fontsize=fontsize)
-                # else:
-                #     plt.xlabel('x (pix)')
-                #     plt.ylabel('y (pix)')
             if fontsize is not None:
                 plt.xlabel(xlabel, fontsize=fontsize)
                 plt.ylabel(ylabel, fontsize=fontsize)
@@ -2346,6 +2369,7 @@ class Image:
                 zeropos=None, axlabel=True, fontsize=None,
                 mask=None, show_xyproj=False, verbose=False):
         """
+
         The main way to display the image data contained in the Image class.
         The default is to display the entire image, but it is possible to
         display cutouts (subimages), which can be defined either by (RA, dec)
@@ -2353,17 +2377,26 @@ class Image:
 
         Optional inputs:
           mode    - Either 'radec' (the default) or 'xy'.  Replaces the
-                    obsolete subimdef and dispunits parameters
-          imsize - size of the subimage to be displayed, either in pixels
-                       (the default) or arcsec (if mode='radec').  The
-                       default, designated by imsize=None, is to display
-                       the entire image.  The imsize parameter can take
-                       any of the following formats:
-                         1. A single number (which will produce a square image)
-                         2. A 2-element numpy array
-                         3. A 2-element list:  [xsize, ysize]
-                         4. A 2-element tuple: (xsize, ysize)
-          zeropos   - NOTE: Only used if mode='radec'
+                     obsolete subimdef and dispunits parameters
+          imcent  - center of the subimage to be displayed, either in
+                     decimal degrees (if mode='radec') or in pixels 
+                     (if mode='xy').
+                    The default value, designated by imcent=None, will just
+                     use the center of the input image.
+                    The imcent parameter can take any of the following formats:
+                       1. A 2-element numpy array
+                       2. A 2-element list:  [xsize, ysize]
+                       3. A 2-element tuple: (xsize, ysize)                    
+          imsize  - size of the subimage to be displayed, either in arcsec
+                     (if mode='radec')or pixels (if mode='xy').
+                    The default, designated by imsize=None, is to display
+                     the entire image.
+                    The imsize parameter can take any of the following formats:
+                       1. A single number (which will produce a square image)
+                       2. A 2-element numpy array
+                       3. A 2-element list:  [xsize, ysize]
+                       4. A 2-element tuple: (xsize, ysize)
+          zeropos - NOTE: Only used if mode='radec'
                        By default, which happens when zeropos=None, the (0, 0)
                        point on the output image, as designated by the image
                        axis labels, will be at the center of the image.
@@ -2449,11 +2482,11 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, hext=0, outfile=None,
 # -----------------------------------------------------------------------
 
 
-def make_cutout(infile, ra, dec, imsize, scale, outfile, whtsuff=None,
+def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
                 makerms=False, rmssuff='_rms', hext=0, dext=0, verbose=True):
     """
     Makes a cutout from an input image, based on a requested (RA, dec) center
-    and an image size in arcsec.
+     and an image size in arcsec.
     Additional, optional functionality:
         - Makes the same-sized cutout for the associated weight file.  Done if
           whtsuff is not None
@@ -2462,8 +2495,11 @@ def make_cutout(infile, ra, dec, imsize, scale, outfile, whtsuff=None,
 
     Inputs:
       infile  - input file
-      ra      - RA of cutout center, in decimal degrees
-      dec     - Dec of cutout center, in decimal degrees
+      imcent  - center of the cutout in decimal degrees
+                The imcent parameter can take any of the following formats:
+                  1. A 2-element numpy array
+                  2. A 2-element list:  [xsize, ysize]
+                  3. A 2-element tuple: (xsize, ysize)                    
       imsize  - output image size, in arcsec
       scale   - pixel scale of output image, in arcsec/pix
       outfile - output file name
@@ -2473,7 +2509,7 @@ def make_cutout(infile, ra, dec, imsize, scale, outfile, whtsuff=None,
                  Example: whtsuff='_wht' means that for infile='foo.fits' the
                   weight file is called 'foo_wht.fits'
       makerms - Set to True to make, in addition, an output rms file
-                 following Matt Auger's prescription for the NIRC2 data.
+                 following the prescription of Matt Auger for the NIRC2 data.
                  Default is False
                  NB: Both whtsuff being something other than None and
                   makerms=True are required for an output rms file to be
@@ -2486,7 +2522,7 @@ def make_cutout(infile, ra, dec, imsize, scale, outfile, whtsuff=None,
 
     """ Make the input file cutout """
     infits = Image(infile)
-    infits.poststamp_radec(ra, dec, imsize, imsize, scale, outfile, hext=hext,
+    infits.poststamp_radec(imcent, imsize, scale, outfile, hext=hext,
                            dext=dext, verbose=verbose)
 
     """ Make the weight file cutout, if requested """
@@ -2494,7 +2530,7 @@ def make_cutout(infile, ra, dec, imsize, scale, outfile, whtsuff=None,
         whtfile = infile.replace('.fits', '%s.fits' % whtsuff)
         outwht = outfile.replace('.fits', '%s.fits' % whtsuff)
         whtfits = Image(whtfile)
-        whtfits.poststamp_radec(ra, dec, imsize, imsize, scale, outwht,
+        whtfits.poststamp_radec(imcent, imsize, scale, outwht,
                                 hext=hext, dext=dext, verbose=verbose)
 
     """ Make output RMS file, if requested """
@@ -2604,7 +2640,7 @@ def imcopy(infile, x1, x2, y1, y2, outfile):
     """ Write to output file """
     outhdu = pf.PrimaryHDU(data=outdat, header=inhdr)
     outhdu.verify('fix')
-    print "imcopy: Writing to output file %s" % outfile
+    print('imcopy: Writing to output file %s' % outfile)
     outhdu.writeto(outfile, overwrite=True)
 
     return
@@ -2662,7 +2698,7 @@ def make_snr_image(infile, outcent=None, outsize=None, statcent=None,
 # ---------------------------------------------------------------------------
 
 
-def overlay_contours(infile1, infile2, ra, dec, imsize, pixscale=None,
+def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
                      zeropos=None, fmax=10., hext1=0,
                      hext2=0, rms2=None, ccolor2='r',
                      infile3=None, hext3=0, rms3=None, ccolor3='b',
@@ -2675,11 +2711,13 @@ def overlay_contours(infile1, infile2, ra, dec, imsize, pixscale=None,
     Required inputs:
       infile1 - fits file containing the data for the first image
       infile2 - fits file containing the data for the second image
-      ra      - single number containing RA for image center
-                 (best if in decimal degrees)
-      dec     - single number containing Dec for image center
-                 (best if in decimal degrees)
+      imcent  - center of the cutout in decimal degrees, in any of the following
+                formats
+                  1. A 2-element numpy array
+                  2. A 2-element list:  [xsize, ysize]
+                  3. A 2-element tuple: (xsize, ysize)                    
       imsize  - length of one side of output image, in arcsec
+
     Optional inputs:
       pixscale  - pixel scale of output image, in arcsec/pix
                    If pixscale is None (the default) then just use the
@@ -2738,9 +2776,9 @@ def overlay_contours(infile1, infile2, ra, dec, imsize, pixscale=None,
     For the first image this is done via a call to display
     """
     im1.display(hext=hext1, cmap='gray_inv', mode='radec',
-                imcent=(ra, dec), imsize=(imsize, imsize),
+                imcent=imcent, imsize=(imsize, imsize),
                 fmax=fmax, zeropos=zeropos)
-    im2.def_subim_radec(ra, dec, imsize, outscale=pixscale)
+    im2.def_subim_radec(imcent, imsize, outscale=pixscale)
 
     """ Set contour levels for the second image """
     im2.set_contours(rms2)
@@ -2764,7 +2802,7 @@ def overlay_contours(infile1, infile2, ra, dec, imsize, pixscale=None,
             print('')
             print 'ERROR: Could not properly open %s' % infile3
             return
-        im3.def_subim_radec(ra, dec, imsize, outscale=pixscale)
+        im3.def_subim_radec(imcent, imsize, outscale=pixscale)
         im3.set_contours(rms3)
         im3.set_wcsextent(zeropos=zeropos)
         plt.contour(im3.subim, im3.clevs, colors=ccolor3, extent=im3.extval)

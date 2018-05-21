@@ -1,0 +1,9 @@
+Installation instructions
+-------------------------
+
+* If you have write priveleges in your python distribution's site-packages
+directory
+
+1. cd trunk
+2. python setup.py install
+
