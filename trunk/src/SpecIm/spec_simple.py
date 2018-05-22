@@ -64,7 +64,8 @@ class Spec1d(df.Data1d):
     """
 
     def __init__(self, infile=None, informat='text',
-                 wav=None, flux=None, var=None, sky=None, logwav=False):
+                 wav=None, flux=None, var=None, sky=None, logwav=False,
+                 debug=False):
         """
         Reads in the input 1-dimensional spectrum.
         This can be done in two mutually exclusive ways:
@@ -155,7 +156,8 @@ class Spec1d(df.Data1d):
         if infile is not None:
             self.infile = infile
             try:
-                wav0, flux0, var0, sky0 = self.read_from_file(informat)
+                wav0, flux0, var0, sky0 = self.read_from_file(informat,
+                                                              debug=debug)
             except:
                 print ''
                 print 'Could not read input file %s' % infile
@@ -189,6 +191,10 @@ class Spec1d(df.Data1d):
         """
         Call the superclass initialization for useful Data1d attributes
         """
+        if debug:
+            print(names0)
+            print('Wavelength vector size: %d' % wav0.size)
+            print('Flux vector size: %d' % flux0.size)
         if var0 is not None:
             df.Data1d.__init__(self, wav0, flux0, var0, names=names0)
         else:
@@ -203,7 +209,7 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def read_from_file(self, informat, verbose=True):
+    def read_from_file(self, informat, verbose=True, debug=False):
         """
 
         Reads a 1-d spectrum from a file.  The file must have one of the
@@ -252,10 +258,23 @@ class Spec1d(df.Data1d):
             del hdu
         elif informat == 'fitsflux':
             hdu = pf.open(self.infile)
-            flux = hdu[0].data.copy()
+            if len(hdu[0].data.shape) == 2:
+                flux = hdu[0].data[0, :]
+            else:
+                flux = hdu[0].data.copy()
             self.hasvar = False
-            wav = np.arange(self.flux.size)
+            wav = np.arange(flux.size)
             hdr1 = hdu[0].header
+            if debug:
+                print('Wavelength vector size: %d' % wav.size)
+                print('Flux vector size: %d' % flux.size)
+                print(flux.shape)
+                testkeys = ['crval1', 'cd1_1']
+                for k in testkeys:
+                    if k.upper() in hdr1.keys():
+                        print('%s: %f' % (k.upper(), hdr1[k]))
+                    else:
+                        print('ERROR: could not find %s in header' % k.upper())
             if self.logwav:
                 wav = 10.**(hdr1['crval1'] + wav * hdr1['cd1_1'])
             else:
@@ -505,43 +524,6 @@ class Spec1d(df.Data1d):
         #     else:
         #         save_spectrum(outfile, wavelength, outflux)
         #     print ""
-
-    # -----------------------------------------------------------------------
-
-    def apply_wavecal_linear(self, lambda0, dlambda, outfile=None,
-                             outformat='text', doplot=True):
-        """
-
-        Applies a very simple linear mapping from pixels to wavelength
-        and saves the output if desired.  The required inputs provide an
-        intercept (lambda0) and a slope (dlambda) that are used to define the
-        linear mapping, i.e.,
-           wavelength = lambda0 + pix * dlambda
-
-        Required inputs:
-          lambda0:    Intercept value in Angstrom
-          dlambda:    Slope (dispersion) in Angstrom/pix
-        Optional inputs:
-          outfile:    Name of output file, if one is desired.  The default
-                       value (None) means no output file is produced
-          outformat: Format of output file (see help file for Spec1d.save for
-                       the possible values).  Default value is 'text'
-          doplot:     Plot the spectrum with the new wavelength calibration if
-                       desired.  Default value (True) means make the plot.
-
-        """
-
-        """ Make the new wavelength vector """
-        x = np.arange(self['wav'].size)
-        self['wav'] = lambda0 + dlambda * x
-
-        """ Plot the spectrum if desired """
-        if doplot:
-            self.plot()
-
-        """ Save the wavelength-calibrated spectrum if desired """
-        if outfile is not None:
-            self.save(outfile, outformat=outformat)
 
     # -----------------------------------------------------------------------
 
@@ -808,50 +790,144 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def save(self, outfile, outformat='text', verbose=True):
+    def apply_wavecal_linear(self, lambda0, dlambda, outfile=None,
+                             outformat='text', doplot=True):
+        """
+
+        Applies a very simple linear mapping from pixels to wavelength
+        and saves the output if desired.  The required inputs provide an
+        intercept (lambda0) and a slope (dlambda) that are used to define the
+        linear mapping, i.e.,
+           wavelength = lambda0 + pix * dlambda
+
+        Required inputs:
+          lambda0:    Intercept value in Angstrom
+          dlambda:    Slope (dispersion) in Angstrom/pix
+        Optional inputs:
+          outfile:    Name of output file, if one is desired.  The default
+                       value (None) means no output file is produced
+          outformat: Format of output file (see help file for Spec1d.save for
+                       the possible values).  Default value is 'text'
+          doplot:     Plot the spectrum with the new wavelength calibration if
+                       desired.  Default value (True) means make the plot.
+
+        """
+
+        """ Make the new wavelength vector """
+        x = np.arange(self['wav'].size)
+        self['wav'] = lambda0 + dlambda * x
+
+        """ Plot the spectrum if desired """
+        if doplot:
+            self.plot()
+
+        """ Save the wavelength-calibrated spectrum if desired """
+        if outfile is not None:
+            self.save(outfile, outformat=outformat)
+
+    # -----------------------------------------------------------------------
+
+    def resample(self, owave=None):
+        """
+        Resample the spectrum onto a linearized wavelength grid.  The grid 
+        can either be defined by the input wavelength range itself
+        (the default) or by a wavelength vector that is passed to the function.
+        """
+
+        if owave is None:
+            w0 = self['wav'][0]
+            w1 = self['wav'][-1]
+            owave = np.linspace(w0, w1, self['wav'].size)
+
+        specmod = interpolate.splrep(self['wav'], self['flux'])
+        outspec = interpolate.splev(owave, specmod)
+
+        """ Store resampled spectrum """
+        print('resample: replacing input spectrum with resampled version')
+        print('resample: for now not resampling the variance')
+        self.rswav = owave
+        self.rsflux = outspec
+
+    # -----------------------------------------------------------------------
+
+    def save(self, outfile, outformat='text', useresamp=False, verbose=True):
         """
         Saves a spectrum into the designated output file.
         Right now, there are two options:
-           1. 'text' - produces a text file with columns for wavelength, flux,
-                       variance (if available), and sky (if available)
-           2. 'fits' - produces a multiextension fits files with separate
-                        HDUs for wavelength, flux, variance (if available), and
-                        sky (if available).
-
+           1. 'text'     - produces a text file with columns for wavelength,
+                           flux, variance (if available), and sky (if available)
+           2. 'fits'     - produces a multiextension fits file with separate
+                           HDUs for wavelength, flux, variance (if available),
+                           and sky (if available).
+           3. 'fitsflux' - produces a single-extension fits file with a 1-dim
+                           data vector for the flux.  The wavelength information
+                           is stored in the crpix1 and cd1_1 keywords.
+                           NOTE: By storing the wavelength info in this way,
+                            the wavelength vector must be evenly spaced in
+                            wavelength (and not log(wavelength)).
         """
 
+        """
+        Set temporary variables for the vectors.  This will allow for future
+        flexibility
+        """
+        if useresamp:
+            wav = self.rswav
+            flux = self.rsflux
+            var = None
+        else:
+            wav = self['wav']
+            vsize = len(wav)
+            flux = self['flux']
+            if self.hasvar:
+                var = self['var']
+            else:
+                var = None
+            if self.sky:
+                sky = self['sky']
+
+        """ Save the spectrum in the requested format """
         if outformat == 'fits':
             hdu = pf.HDUList()
             phdu = pf.PrimaryHDU()
             hdu.append(phdu)
-            outwv = pf.ImageHDU(self['wav'].data, name='wavelength')
-            outflux = pf.ImageHDU(self['flux'].data, name='flux')
+            outwv = pf.ImageHDU(wav, name='wavelength')
+            outflux = pf.ImageHDU(flux, name='flux')
             hdu.append(outwv)
             hdu.append(outflux)
             if self.hasvar:
-                outvar = pf.ImageHDU(self['var'].data, name='variance')
+                outvar = pf.ImageHDU(var, name='variance')
                 hdu.append(outvar)
             if self.sky:
-                outsky = pf.ImageHDU(self['sky'].data, name='sky')
+                outsky = pf.ImageHDU(sky, name='sky')
                 hdu.append(outsky)
-            hdu.writeto(outfile, clobber=True)
+            hdu.writeto(outfile, overwrite=True)
+
+        elif outformat == 'fitsflux':
+            """ Only use this if the wavelength vector is evenly spaced """
+            phdu = pf.PrimaryHDU(flux)
+            phdu.header['crpix1'] = 1
+            phdu.header['crval1'] = wav[0]
+            phdu.header['ctype1'] = 'PIXEL'
+            phdu.header['cd1_1'] = wav[1] - wav[0]
+            phdu.writeto(outfile, overwrite=True)
 
         elif outformat == 'text':
             # CONSIDER JUST USING THE WRITE() METHOD FOR THE TABLE HERE!
             if self.hasvar:
                 if self.sky:
-                    outdata = np.zeros((self['wav'].shape[0], 4))
+                    outdata = np.zeros((vsize, 4))
                     fmtstring = '%7.2f %9.3f %10.4f %9.3f'
-                    outdata[:, 3] = self['sky']
+                    outdata[:, 3] = sky
                 else:
-                    outdata = np.zeros((self['wav'].shape[0], 3))
+                    outdata = np.zeros((vsize, 3))
                     fmtstring = '%7.2f %9.3f %10.4f'
-                outdata[:, 2] = self['var']
+                outdata[:, 2] = var
             else:
-                outdata = np.zeros((self['wav'].shape[0], 2))
+                outdata = np.zeros((vsize, 2))
                 fmtstring = '%7.2f %9.3f'
-            outdata[:, 0] = self['wav']
-            outdata[:, 1] = self['flux']
+            outdata[:, 0] = wav
+            outdata[:, 1] = flux
             print ""
             np.savetxt(outfile, outdata, fmt=fmtstring)
             del outdata
@@ -2574,29 +2650,6 @@ def extract_wtsum_col(spatialdat, mu, apmin, apmax, weight='gauss', sig=1.0,
         var = (varspec * gweight)[apmask].sum() / gweight[apmask].sum()
 
     return wtsum, var, bkgd
-
-# -----------------------------------------------------------------------
-
-
-def resample_spec(w, spec, owave=None):
-    """
-    Given an input spectrum, represented by wavelength values (w) and fluxes
-     (spec), resample onto a linearized wavelength grid.  The grid can either
-     be defined by the input wavelength range itself (the default) or by
-     a wavelength vector that is passed to the function.
-
-    *** MOVE TO SPEC1D CLASS ***
-    """
-
-    if owave is None:
-        w0 = w[0]
-        w1 = w[-1]
-        owave = np.linspace(w0, w1, w.size)
-
-    specmod = interpolate.splrep(w, spec)
-    outspec = interpolate.splev(owave, specmod)
-
-    return owave, outspec
 
 # -----------------------------------------------------------------------
 
