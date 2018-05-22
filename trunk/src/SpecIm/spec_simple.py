@@ -38,10 +38,13 @@ from scipy.ndimage import filters
 import matplotlib.pyplot as plt
 try:
     from astropy.io import fits as pf
-except:
+except ImportError:
     import pyfits as pf
 import imfuncs as imf
-import datafuncs as df
+try:
+    from CDFutils import datafuncs as df
+except ImportError:
+    import datafuncs as df
 
 # -----------------------------------------------------------------------
 

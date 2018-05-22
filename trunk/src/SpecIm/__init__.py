@@ -1,6 +1,6 @@
-print 'import imfuncs'
+# print 'import imfuncs'
 import imfuncs
-print 'import spec_simple'
+# print 'import spec_simple'
 import spec_simple
 
 __version__ = 'unknown'

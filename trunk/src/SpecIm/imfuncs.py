@@ -35,20 +35,23 @@ Stand-alone functions
 import os
 from math import log, log10, sqrt, pi, fabs, atan
 from math import cos as mcos, sin as msin
+import numpy as np
+from scipy import ndimage
+import matplotlib.pyplot as plt
+from astropy import wcs
+from astropy import units as u
 try:
     from astropy.io import fits as pf
-except:
+except ImportError:
     import pyfits as pf
 try:
     from astropy.coordinates import SkyCoord
 except ImportError:
     from astropy.coordinates import ICRS as SkyCoord
-from astropy import wcs
-from astropy import units as u
-import numpy as np
-from scipy import ndimage
-import matplotlib.pyplot as plt
-import datafuncs as df
+try:
+    from CDFutils import datafuncs as df
+except ImportError:
+    import datafuncs as df
 
 # -----------------------------------------------------------------------
 
