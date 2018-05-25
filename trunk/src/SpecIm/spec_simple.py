@@ -79,7 +79,7 @@ class Spec1d(df.Data1d):
                       ---- or ----
 
          2. By providing the name of a file that contains the spectrum.
-            There are four possible input file formats:
+            There are several possible input file formats:
               fits: A multi-extension fits file
                  Extension 1 is the wavelength
                  Extension 2 is the extracted spectrum (flux)
@@ -220,6 +220,7 @@ class Spec1d(df.Data1d):
           fits
           fitstab
           fitsflux
+          deimos
           mwa
           text (default)
 
@@ -312,7 +313,7 @@ class Spec1d(df.Data1d):
             flux = hdu[1].data.copy()
             var = hdu[3].data.copy()
             self.hasvar = True
-            wav = np.arange(self.flux.size)
+            wav = np.arange(flux.size)
             hdr1 = hdu[1].header
             if self.logwav:
                 wav = hdr1['crval1'] + 10.**(wav*hdr1['cd1_1'])
