@@ -39,19 +39,23 @@ import numpy as np
 from scipy import ndimage
 import matplotlib.pyplot as plt
 from astropy import wcs
-from astropy import units as u
+# from astropy import units as u
 try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
-try:
-    from astropy.coordinates import SkyCoord
-except ImportError:
-    from astropy.coordinates import ICRS as SkyCoord
+# try:
+#     from astropy.coordinates import SkyCoord
+# except ImportError:
+#     from astropy.coordinates import ICRS as SkyCoord
 try:
     from CDFutils import datafuncs as df
 except ImportError:
     import datafuncs as df
+try:
+    from CDFutils import coords
+except ImportError:
+    import coords
 
 # -----------------------------------------------------------------------
 
@@ -537,43 +541,6 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def radec_to_skycoord(self, ra, dec):
-        """
-        Converts a (RA, dec) pair into the astropy.coordinates SkyCoord
-        format
-
-        Required inputs:
-          ra  - RA in one of three formats:
-                 Decimal degrees: ddd.ddddddd  (as many significant figures
-                   as desired)
-                 Sexigesimal:     hh mm ss.sss (as many significant figures
-                   as desired)
-                 Sexigesimal:     hh:mm:ss.sss (as many significant figures
-                   as desired)
-          dec - Dec in one of three formats:
-                 Decimal degrees: sddd.ddddddd, where "s" is + or -
-                 Sexigesimal:     sdd mm ss.sss (as many significant figures
-                    as desired)
-                 Sexigesimal:     sdd:mm:ss.sss (as many significant figures
-                    as desired)
-        """
-
-        """ Get RA format """
-        if type(ra) == float or type(ra) == np.float32 or \
-                type(ra) == np.float64:
-            rafmt = u.deg
-        else:
-            rafmt = u.hourangle
-
-        """ Dec format is always degrees, even if in Sexigesimal format """
-        decfmt = u.deg
-
-        """ Do the conversion """
-        radec = SkyCoord(ra, dec, unit=(rafmt, decfmt))
-        return radec
-
-    # -----------------------------------------------------------------------
-
     def get_wcs(self, hext=0, verbose=True):
         """
         Reads in WCS information from the header and stores it in
@@ -629,8 +596,8 @@ class Image:
         imcent[0, raax] = xcent
         imcent[0, decax] = ycent
         imcentradec = self.wcsinfo.wcs_pix2world(imcent, 1)
-        self.radec = self.radec_to_skycoord(imcentradec[0, raax],
-                                            imcentradec[0, decax])
+        self.radec = coords.radec_to_skycoord(imcentradec[0, raax],
+                                              imcentradec[0, decax])
 
         """ Calculate the pixel scale and image PA (E of N) """
         self.found_wcs = True
@@ -689,53 +656,6 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def make_header(self, radec, pixscale, nx, ny=None, rot=None):
-        """
-
-        Makes a header with wcs information.
-
-        Inputs:
-          radec    - The desired (RA, Dec) pair to be put into the CRVAL
-                      keywords.
-                      NOTE: This should be in the SkyCoord format defined in
-                       astropy.coordinates.  To convert a "normal" pair of
-                       numbers / sexigesimal strings to SkyCoord format, use
-                       the radec_to_skycoord method in this Image class.
-          pixscale - Desired pixel scale in arcsec/pix
-          nx       - image size along the x-axis --or-- if the image is square
-                       (indicated by ny=None) then this is also the y-axis size
-          ny       - [OPTIONAL] y-axis size, if different from the x-axis size
-                       ny=None means that the two axes have the same size
-          rot      - [OPTIONAL] desired rotation angle, in degrees E of N.
-                       NOT IMPLEMENTED YET
-        """
-
-        """ Create a blank 2d WCS container """
-        w = wcs.WCS(naxis=2)
-
-        """ Get the image size and central pixel """
-        cp1 = nx / 2.
-        if ny is None:
-            cp2 = cp1
-        else:
-            cp2 = ny / 2.
-
-        """ Fill it in with appropriate values and save it """
-        px = pixscale / 3600.
-        w.wcs.crpix = [cp1, cp2]
-        w.wcs.crval = [radec.ra.degree, radec.dec.degree]
-        w.wcs.cdelt = [(-1.*px), px]
-        w.wcs.ctype = ['RA---TAN', 'DEC--TAN']
-        w.wcs.equinox = 2000.
-        self.subim_wcs = w
-
-        """ Convert to a fits header format """
-        hdr = w.to_header()
-        print(hdr['crpix1'])
-        return hdr
-
-    # -----------------------------------------------------------------------
-
     def set_wcsextent(self, hext=0, zeropos=None):
         """
         For making plots with WCS information, it is necessary to define
@@ -762,10 +682,10 @@ class Image:
         """
 
         self.get_wcs(hext)
-        coords = np.indices(self.data.shape).astype(np.float32)
-        pltc = np.zeros(coords.shape)
-        pltc[0] = (coords[0] - self.data.shape[0] / 2.) * self.pixscale
-        pltc[1] = (coords[1] - self.data.shape[1] / 2.) * self.pixscale
+        icoords = np.indices(self.data.shape).astype(np.float32)
+        pltc = np.zeros(icoords.shape)
+        pltc[0] = (icoords[0] - self.data.shape[0] / 2.) * self.pixscale
+        pltc[1] = (icoords[1] - self.data.shape[1] / 2.) * self.pixscale
         pltc[1] *= -1.
         maxi = np.atleast_1d(self.data.shape) - 1
         extx1 = pltc[1][0, 0]
@@ -1463,7 +1383,7 @@ class Image:
             The first step is to convert ra and dec into astropy.coordinates
              SkyCoord format
             """
-            self.radec = self.radec_to_skycoord(imcent[0], imcent[1])
+            self.radec = coords.radec_to_skycoord(imcent[0], imcent[1])
 
             """
             Calculate the (x, y) that is associated with the requested center
@@ -1555,16 +1475,17 @@ class Image:
             data = self.hdu[dext].data[0, 0, :, :].copy()
         else:
             data = self.hdu[dext].data.copy()
-        outhdr = self.make_header(self.radec, outscale, self.subsizex,
-                                  self.subsizey)
+        outhdr, self.subim_wcs = coords.make_header(self.radec, outscale,
+                                                    self.subsizex,
+                                                    self.subsizey)
 
         """ Do the coordinate transform preparation """
-        coords = np.indices((self.subsizey, self.subsizex)).astype(np.float32)
-        skycoords = self.subim_wcs.wcs_pix2world(coords[1], coords[0], 0)
+        icoords = np.indices((self.subsizey, self.subsizex)).astype(np.float32)
+        skycoords = self.subim_wcs.wcs_pix2world(icoords[1], icoords[0], 0)
         ccdcoords = w.wcs_world2pix(skycoords[0], skycoords[1], 0)
-        coords[0] = ccdcoords[1]
-        coords[1] = ccdcoords[0]
-        self.coords = coords.copy()
+        icoords[0] = ccdcoords[1]
+        icoords[1] = ccdcoords[0]
+        self.coords = icoords.copy()
 
         # *** Now need to deal with regions that extend outside the data
         # should be doable, since map_coordinates just takes coordinate pairs
@@ -1575,13 +1496,13 @@ class Image:
         #  that are both large enough and have PA=0.
 
         """ Transform the coordinates """
-        self.data = ndimage.map_coordinates(data, coords, output=np.float64,
+        self.data = ndimage.map_coordinates(data, icoords, output=np.float64,
                                             order=5)
         self.data[np.isnan(self.data)] = 0.
         self.subimhdr = outhdr.copy()
 
         """ Clean up """
-        del data, coords, skycoords, ccdcoords
+        del data, icoords, skycoords, ccdcoords
 
     # -----------------------------------------------------------------------
 
@@ -1643,14 +1564,14 @@ class Image:
 
         Inputs:
           imcent   - center of the subimage to be displayed, either in
-                      decimal degrees (if mode='radec') or in pixels 
+                      decimal degrees (if mode='radec') or in pixels
                       (if mode='xy').
                      The default value, designated by imcent=None, will just
                       use the center of the input image.
                      The imcent parameter can take any of the following formats
                         1. A 2-element numpy array
                         2. A 2-element list:  [xsize, ysize]
-                        3. A 2-element tuple: (xsize, ysize)                    
+                        3. A 2-element tuple: (xsize, ysize)
           imsize   - size of the subimage to be displayed, either in arcsec
                       (if mode='radec')or pixels (if mode='xy').
                      The default, designated by imsize=None, is to display
@@ -1670,7 +1591,7 @@ class Image:
           dext     - Input file HDU number that contains the image data
                       (default 0)
           docdmatx - If set to True, then put the output image
-                      scale in terms of a CD matrix.  If False (the default), 
+                      scale in terms of a CD matrix.  If False (the default),
                       then use the CDELT and PC matrix formalism instead.
                      NOTE: With the new use of the astropy.wcs package,
                       this parameter may become obsolete
@@ -1691,9 +1612,9 @@ class Image:
          information, e.g., a CD matrix in the original header and then
          a CDELT + PC matrix from the cutout.
         """
-        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1', 'crval2',
-                   'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2', 'cdelt1',
-                   'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
+        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
+                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
+                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
         for key in wcskeys:
             if key.upper() in newhdr.keys():
                 del newhdr[key]
@@ -2145,14 +2066,14 @@ class Image:
           mode    - Either 'radec' (the default) or 'xy'.  Replaces the
                     obsolete subimdef and dispunits parameters
           imcent  - center of the subimage to be displayed, either in
-                     decimal degrees (if mode='radec') or in pixels 
+                     decimal degrees (if mode='radec') or in pixels
                      (if mode='xy').
                     The default value, designated by imcent=None, will just
                      use the center of the input image.
                     The imcent parameter can take any of the following formats:
                        1. A 2-element numpy array
                        2. A 2-element list:  [xsize, ysize]
-                       3. A 2-element tuple: (xsize, ysize)                    
+                       3. A 2-element tuple: (xsize, ysize)
           imsize  - size of the subimage to be displayed, either in arcsec
                      (if mode='radec')or pixels (if mode='xy').
                     The default, designated by imsize=None, is to display
@@ -2382,14 +2303,14 @@ class Image:
           mode    - Either 'radec' (the default) or 'xy'.  Replaces the
                      obsolete subimdef and dispunits parameters
           imcent  - center of the subimage to be displayed, either in
-                     decimal degrees (if mode='radec') or in pixels 
+                     decimal degrees (if mode='radec') or in pixels
                      (if mode='xy').
                     The default value, designated by imcent=None, will just
                      use the center of the input image.
                     The imcent parameter can take any of the following formats:
                        1. A 2-element numpy array
                        2. A 2-element list:  [xsize, ysize]
-                       3. A 2-element tuple: (xsize, ysize)                    
+                       3. A 2-element tuple: (xsize, ysize)
           imsize  - size of the subimage to be displayed, either in arcsec
                      (if mode='radec')or pixels (if mode='xy').
                     The default, designated by imsize=None, is to display
@@ -2502,7 +2423,7 @@ def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
                 The imcent parameter can take any of the following formats:
                   1. A 2-element numpy array
                   2. A 2-element list:  [xsize, ysize]
-                  3. A 2-element tuple: (xsize, ysize)                    
+                  3. A 2-element tuple: (xsize, ysize)
       imsize  - output image size, in arcsec
       scale   - pixel scale of output image, in arcsec/pix
       outfile - output file name
@@ -2714,11 +2635,11 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
     Required inputs:
       infile1 - fits file containing the data for the first image
       infile2 - fits file containing the data for the second image
-      imcent  - center of the cutout in decimal degrees, in any of the following
-                formats
+      imcent  - center of the cutout in decimal degrees, in any of the
+                following formats
                   1. A 2-element numpy array
                   2. A 2-element list:  [xsize, ysize]
-                  3. A 2-element tuple: (xsize, ysize)                    
+                  3. A 2-element tuple: (xsize, ysize)
       imsize  - length of one side of output image, in arcsec
 
     Optional inputs:
