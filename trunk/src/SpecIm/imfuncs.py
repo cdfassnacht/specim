@@ -179,7 +179,7 @@ class Image:
         if os.path.isfile(infile):
             try:
                 self.hdu = open_fits(infile)
-            except:
+            except IOError:
                 print(' ERROR. Problem in loading file %s' % infile)
                 print(' Check to make sure filename matches an existing'
                       'file')
@@ -1651,8 +1651,8 @@ class Image:
 
         """ Get info about input image """
         inhdr = self.hdu[hext].header.copy()
-        xmax = inhdr["NAXIS1"]
-        ymax = inhdr["NAXIS2"]
+        xmax = inhdr['naxis1']
+        ymax = inhdr['naxis2']
         print('')
         print "imcopy: Input image has dimensions %d x %d" % \
             (xmax, ymax)
@@ -2519,8 +2519,8 @@ def imcopy(infile, x1, x2, y1, y2, outfile):
 
     """ Get info about input image """
     inhdr = hdu_list[0].header
-    xmax = inhdr["NAXIS1"]
-    ymax = inhdr["NAXIS2"]
+    xmax = inhdr['naxis1']
+    ymax = inhdr['naxis2']
     print('')
     print('imcopy: Input image %s has dimensions %d x %d' %
           (infile, xmax, ymax))
@@ -2544,12 +2544,12 @@ def imcopy(infile, x1, x2, y1, y2, outfile):
     print "------------------------------------------"
     try:
         crpix1 = inhdr['crpix1']
-    except:
+    except KeyError:
         print "    No CRPIX1 header found"
         crpix1 = np.nan
     try:
         crpix2 = inhdr['crpix2']
-    except:
+    except KeyError:
         print "    No CRPIX2 header found"
         crpix2 = np.nan
     if np.isnan(crpix1) is False:
