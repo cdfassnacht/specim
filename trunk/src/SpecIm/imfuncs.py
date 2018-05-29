@@ -108,6 +108,8 @@ class Image:
             self.hdu.info()
 
         """ Set up pointers to the default data and header """
+        self.data = None
+        self.hdr = None
         # self.data = self.hdu[datahext].data.copy()
         # self.hdr = self.hdu[hdrhext].header.copy()
 
@@ -553,94 +555,15 @@ class Image:
 
         """
 
-        """ Read in the header and use it to set the WCS information"""
-        hdr = self.hdu[hext].header
-        try:
-            self.wcsinfo = wcs.WCS(hdr)
-        except:
-            if verbose:
-                print('get_wcs: No WCS information in image header')
-            self.found_wcs = False
-            return
+        """ Read the WCS information from the header """
+        fileWCS = coords.fileWCS(self.hdu[hext].header, verbose)
 
-        """
-        Make sure that the WCS information is actually WCS-like and not,
-        for example, pixel-based
-        """
-
-        imwcs = self.wcsinfo.wcs
-        rafound = False
-        decfound = False
-        count = 0
-        for ct in imwcs.ctype:
-            if ct[0:2] == 'RA':
-                rafound = True
-                raax = count
-                rakey = 'naxis%d' % (count + 1)
-            if ct[0:3] == 'DEC':
-                decfound = True
-                decax = count
-                deckey = 'naxis%d' % (count + 1)
-            count += 1
-        if rafound is False or decfound is False:
-            if verbose:
-                print('get_wcs: No valid WCS information in image header')
-                print('         RA and/or DEC information is missing')
-            self.found_wcs = False
-            return
-
-        """ Get the RA and Dec of the center of the image """
-        xcent = hdr[rakey] / 2.
-        ycent = hdr[deckey] / 2.
-        imcent = np.ones((1, hdr['naxis']))
-        imcent[0, raax] = xcent
-        imcent[0, decax] = ycent
-        imcentradec = self.wcsinfo.wcs_pix2world(imcent, 1)
-        self.radec = coords.radec_to_skycoord(imcentradec[0, raax],
-                                              imcentradec[0, decax])
-
-        """ Calculate the pixel scale and image PA (E of N) """
-        self.found_wcs = True
-        w = self.wcsinfo.wcs
-        rad2deg = 180. / pi
-        if imwcs.has_cd():
-            print('Using CD matrix to determine pixel scale')
-            self.pixscale = sqrt(w.cd[raax, raax]**2 +
-                                 w.cd[decax, raax]**2) * 3600.
-            rot1 = atan(-1. * w.cd[raax, decax] / w.cd[decax, decax])
-            rot2 = atan(w.cd[decax, raax] / w.cd[raax, raax])
-        elif imwcs.has_pc():
-            print('Using PC matrix and CDELT to determine pixel scale')
-            self.pixscale = sqrt(w.pc[raax, raax]**2 + w.pc[decax, raax]**2) *\
-                abs(w.cdelt[raax]) * 3600.
-            rot1 = atan(-1. * w.cdelt[raax] * w.pc[raax, decax] /
-                        (w.cdelt[decax] * w.pc[decax, decax]))
-            rot2 = atan(w.cdelt[decax] * w.pc[decax, raax] /
-                        (w.cdelt[raax] * w.pc[raax, raax]))
-        elif isinstance(imwcs.cdelt, np.ndarray):
-            self.pixscale = abs(w.cdelt[raax]) * 3600.
-        else:
-            print 'Warning: no WCS info in header %d' % hext
-            self.found_wcs = False
-
-        """ Save the PA information """
-        rot1 *= rad2deg
-        rot2 *= rad2deg
-        if fabs(rot1 - rot2) < 1.:
-            self.instpa = (rot1 + rot2) / 2.
-        else:
-            self.instpa = np.array([rot1, rot2])
-
-        if self.found_wcs and verbose:
-            print('Pixel scale: %7.3f arcsec/pix' % self.pixscale)
-            print('Instrument FOV (arcsec): %7.1f %7.1f' %
-                  (self.pixscale * hdr[rakey], self.pixscale * hdr[deckey]))
-            if isinstance(self.instpa, np.ndarray):
-                print('Instrument position angles (E of N): %+7.2f %+7.2f' %
-                      (self.instpa[0], self.instpa[1]))
-            else:
-                print('Instrument position angle (E of N): %+7.2f' %
-                      self.instpa)
+        """ Transfer the information """
+        self.wcsinfo = fileWCS.wcsinfo
+        self.found_wcs = fileWCS.found_wcs
+        self.pixscale = fileWCS.pixscale
+        self.impa = fileWCS.impa
+        self.radec = fileWCS.radec
 
     # -----------------------------------------------------------------------
 
