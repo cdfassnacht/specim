@@ -1056,7 +1056,7 @@ class Spec2d(imf.Image):
                 self.extvar = pf.open(extvar)
 
         """ Set the portion of the input spectrum that should be used """
-        # self.hdr = self.hdu[hext].header
+        self.hdr = self.hdu[hext].header
         nx = self.hdr['naxis1']
         ny = self.hdr['naxis2']
         trimmed = False
