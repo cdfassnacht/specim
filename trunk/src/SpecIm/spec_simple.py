@@ -222,7 +222,7 @@ class Spec1d(df.Data1d):
           fitsflux
           deimos
           mwa
-          text (default)
+          text
 
         """
 
@@ -329,8 +329,10 @@ class Spec1d(df.Data1d):
             flux = spec[:, 1]
             if spec.shape[1] > 2:
                 var = spec[:, 2]
+                self.hasvar = True
             if spec.shape[1] > 3:
                 sky = spec[:, 3]
+                self.sky = True
             del spec
 
         """ Check for NaN's, which this code can't handle """
@@ -857,7 +859,7 @@ class Spec1d(df.Data1d):
     def save(self, outfile, outformat='text', useresamp=False, verbose=True):
         """
         Saves a spectrum into the designated output file.
-        Right now, there are two options:
+        Right now, there are only the followoing options:
            1. 'text'     - produces a text file with columns for wavelength,
                            flux, variance (if available), and sky (if available)
            2. 'fits'     - produces a multiextension fits file with separate
