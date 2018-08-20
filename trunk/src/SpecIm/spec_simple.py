@@ -10,7 +10,7 @@ Classes and their most useful methods (UNDER CONSTRUCTION, BUT GETTING THERE.)
      extract
   Spec1d
      plot
-     smooth_boxcar
+     smooth
      plot_sky
      apply_wavecal_linear (NEEDS TO BE CHANGED TO ACCEPT A POLYFIT POLYNOMIAL)
      mark_lines
@@ -145,8 +145,6 @@ class Spec1d(df.Data1d):
         self.hasvar = False
         self.sky = False
         self.infile = None
-        self.smoflux = None
-        self.smovar = None
         names0 = ['wav', 'flux', 'var']
         wav0 = None
         flux0 = None
@@ -388,10 +386,10 @@ class Spec1d(df.Data1d):
         plt.axhline(color='k')
 
         """ Plot the spectrum """
-        if usesmooth and self.smoflux is not None:
-            flux = self.smoflux
-            if self.smovar is not None:
-                var = self.smovar
+        if usesmooth and self.ysmooth is not None:
+            flux = self.ysmooth
+            if self.varsmooth is not None:
+                var = self.varsmooth
         else:
             flux = self['flux']
             try:
@@ -491,38 +489,42 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def smooth_boxcar(self, filtwidth, doplot=True, outfile=None,
-                      color='b', title='default',
-                      xlabel='Wavelength (Angstroms)'):
-        """
-        Does a boxcar smooth of the spectrum.
-        The default is to do inverse variance weighting, using the variance
-         spectrum if it exists.
-        The other default is not to write out an output file.  This can be
-        changed by setting the outfile parameter.
+    def smooth(self, filtwidth, smfunc='boxcar', doplot=True, outfile=None,
+               color='b', title='default', xlabel='Wavelength (Angstroms)'):
         """
 
-        """ Set the weighting """
-        if self.hasvar:
-            print 'Weighting by the inverse variance'
-            wht = 1.0 / self['var']
+        Smooths the spectrum using the requested function.  The smoothing
+        function is set by the smfunc parameter.  Available functions are:
+          'boxcar' - the default value and only available value for now
+
+        Simple usage example, for a spectrum called "myspec":
+
+           myspec.smooth(7)
+
+         This will do a variance weighted boxcar smoothing with a 7-pixel 
+          smoothing width, if the variance spectrum is available.  Otherwise
+          it will do a uniformly-weighted boxcar smoothing
+        """
+
+        """
+        Smooth the spectrum using the requested smoothing function
+         [For now, only boxcar smoothing is allowed]
+        The smoothing functions are inherited from the Data1d class
+        """
+        if smfunc == 'boxcar':
+            self.smooth_boxcar(filtwidth)
         else:
-            print 'Uniform weighting'
-            wht = 0.0 * self['flux'] + 1.0
-
-        """ Smooth the spectrum and store results in smoflux and smovar """
-        yin = wht * self['flux']
-        smowht = ndimage.filters.uniform_filter(wht, filtwidth)
-        self.smoflux = ndimage.filters.uniform_filter(yin, filtwidth)
-        self.smoflux /= smowht
-        if self.hasvar:
-            self.smovar = 1.0 / (filtwidth * smowht)
+            print('')
+            print('For smoothing, smfunc can only be one of the following:')
+            print("  'boxcar'")
+            print('')
+            raise ValueError
 
         """ Plot the smoothed spectrum if desired """
         if doplot:
             self.plot(usesmooth=True, title=title, xlabel=xlabel, color=color)
 
-        """ Save the output file if desired """
+        # """ Save the output file if desired """
         # if(outfile):
         #     print "Saving smoothed spectrum to %s" % outfile
         #     if varwt:
@@ -629,7 +631,7 @@ class Spec1d(df.Data1d):
 
         """ Choose whether to use the smoothed flux or not """
         if usesmooth:
-            flux = self.smoflux
+            flux = self.ysmooth
         else:
             flux = self['flux']
 
@@ -1355,11 +1357,16 @@ class Spec2d(imf.Image):
 
         """ Plot the subtracted sky spectrum if desired """
         if doskysub:
-            plt.subplot(412, sharex=ax1, sharey=ax1)
+            """ First get rid of the x-axis tick labels for main plot """
+            ax1.set_xticklabels([])
+
+            """ Plot the sky-subtracted 2D spectrum """
+            ax2 = plt.subplot(412, sharex=ax1, sharey=ax1)
             self.found_rms = False
             self.display(hext=self.ssext)
 
-            plt.subplot(212, sharex=ax1)
+            """ Plot an estimate of the 1D sky spectrum """
+            ax3 = plt.subplot(212, sharex=ax1)
             # print self.sky1d['wav']
             # print self.sky1d['flux']
             self.sky1d.plot(title=None)
@@ -2218,8 +2225,8 @@ def plot_blue_and_red(bluefile, redfile, outfile=None, smooth_width=7,
     if smooth_width is None:
         usesmooth = False
     else:
-        bspec.smooth_boxcar(smooth_width)
-        rspec.smooth_boxcar(smooth_width)
+        bspec.smooth(smooth_width)
+        rspec.smooth(smooth_width)
         usesmooth = True
 
     """ Plot the spectra """
@@ -2234,7 +2241,7 @@ def plot_blue_and_red(bluefile, redfile, outfile=None, smooth_width=7,
         if smooth_width is None:
             f = np.concatenate((bspec['flux'], rspec['flux']))
         else:
-            f = np.concatenate((bspec.smoflux, rspec.smoflux))
+            f = np.concatenate((bspec.ysmooth, rspec.ysmooth))
         combspec = Spec1d(wav=w, flux=f)
         if mark_em:
             combspec.mark_lines('em', z)
@@ -3238,24 +3245,27 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651.):
     """ Plot the atmospheric transmission spectrum """
     ax1 = plt.subplot(211)
     atm.plot(color='g', title='Near IR Sky', ylabel='Transmission')
+    """
+    Plot the locations of bright emission features at the requested redshift
+    """
     if z is not None:
         atm.mark_lines('strongem', z, marktype='line', showz=False)
     plt.xlim(xmin, xmax)
     plt.ylim(-0.15, 1.1)
-    ax1.set_xticklabels([])
+    plt.setp(ax1.get_xticklabels(), visible=False)
 
     """ Plot the night-sky emission lines """
     plt.subplot(212, sharex=ax1)
     skymod.plot(title=None, ylabel='Sky Emission')
+    """
+    Plot the locations of bright emission features at the requested redshift
+    """
     if z is not None:
         atm.mark_lines('strongem', z, marktype='line', zfs=12)
     plt.xlim(xmin, xmax)
     dy = 0.05 * skymod['flux'].max()
     plt.ylim(-dy, (skymod['flux'].max()+dy))
 
-    """
-    Plot the locations of bright emission features at the requested redshift
-    """
 
 # -----------------------------------------------------------------------
 
@@ -3339,57 +3349,6 @@ def plot_sky(infile):
     sky = np.median(data, axis=0)
     pix = np.arange(sky.size)
     plot_spectrum_array(pix, sky, xlabel='Pixels', title='Sky Spectrum')
-
-# -----------------------------------------------------------------------
-
-
-def smooth_boxcar(infile, filtwidth, outfile=None, varwt=True):
-    """
-    Does a boxcar smooth of an input spectrum.  The default is to do
-    inverse variance weighting, using the variance encoded in the third column
-    of the input spectrum file.
-    The other default is not to write out an output file.  This can be
-    changed by setting the outfile parameter.
-    """
-
-    """ Read the input spectrum """
-    inspec = np.loadtxt(infile)
-    wavelength = inspec[:, 0]
-    influx = inspec[:, 1]
-    if(varwt):
-        if(inspec.shape[1] < 3):
-            print ""
-            print "ERROR: Inverse variance weighting requested, but input file"
-            print "         has fewer than 3 columns (ncol = %d)" % \
-                inspec.shape[1]
-            return
-        else:
-            wt = 1.0 / inspec[:, 2]
-    else:
-        wt = 0.0 * influx + 1.0
-
-    """ Smooth spectrum """
-    yin = wt * influx
-    outflux = ndimage.filters.uniform_filter(yin, filtwidth)
-    outflux /= ndimage.filters.uniform_filter(wt, filtwidth)
-    if varwt:
-        outvar = 1.0 / (filtwidth *
-                        ndimage.filters.uniform_filter(wt, filtwidth))
-
-    """ Plot the smoothed spectrum """
-    if varwt:
-        plot_spectrum_array(wavelength, outflux, outvar, title=None)
-    else:
-        plot_spectrum_array(wavelength, outflux, title=None)
-
-    """ Save the output file if desired """
-    if(outfile):
-        print "Saving smoothed spectrum to %s" % outfile
-        if varwt:
-            save_spectrum(outfile, wavelength, outflux, outvar)
-        else:
-            save_spectrum(outfile, wavelength, outflux)
-        print ""
 
 # -----------------------------------------------------------------------
 
