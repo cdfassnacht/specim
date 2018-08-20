@@ -791,7 +791,7 @@ class Spec1d(df.Data1d):
                 labx = 0.01
                 laby = 0.99
                 ha = 'left'
-            plt.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='center',
+            plt.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='top',
                      color=labcolor, fontsize=zfs, transform=ax.transAxes)
 
     # -----------------------------------------------------------------------
@@ -1296,7 +1296,11 @@ class Spec2d(imf.Image):
             self.sky1d = Spec1d(wav=pix, flux=tmp1d)
 
         """ Turn the 1-dimension sky spectrum into a 2-dimensional form """
-        sky2d = np.tile(self.sky1d['flux'], (self.data.shape[spaceaxis], 1))
+        #sky2d = np.zeros(self.data.shape)
+        #for i in range(self.nspat):
+        #    sky2
+        sky2d = np.tile(self.sky1d['flux'].data,
+                        (self.data.shape[spaceaxis], 1))
         skyhdu = pf.ImageHDU(sky2d, name='Sky')
         self.hdu.append(skyhdu)
         self.skyext = len(self.hdu) - 1
@@ -3156,22 +3160,25 @@ def atm_trans(w, fwhm=15., flux=None, scale=1., offset=0.0, modfile='default'):
     trans = ndimage.gaussian_filter(trans, fwhm)
 
     """ Resample the smoothed spectrum """
-    watm, trans = resample_spec(watm, trans, w)
+    tmpspec = Spec1d(wav=watm, flux=trans)
+    tmpspec.resample(w)
+
+    """ Store result as a Spec1d instance """
+    atm = Spec1d(wav=tmpspec.rswav, flux=tmpspec.rsflux)
 
     """
     If an input spectrum has been given, then rescale the trans spectrum
     """
     if flux is not None:
-        trans *= scale * flux.max()
+        atm['flux'] *= scale * flux.max()
     else:
-        trans *= scale
+        atm['flux'] *= scale
 
     """ Add any requested vertical offset """
-    trans += offset
+    atm['flux'] += offset
 
-    """ Save as a Spec1d instance and return """
-    atm = Spec1d(wav=watm, flux=trans)
-    del watm, trans
+    """ Return the transmission spectrum """
+    del watm, trans, tmpspec
     return atm
 
 # -----------------------------------------------------------------------
@@ -3235,12 +3242,13 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651.):
         atm.mark_lines('strongem', z, marktype='line', showz=False)
     plt.xlim(xmin, xmax)
     plt.ylim(-0.15, 1.1)
+    ax1.set_xticklabels([])
 
     """ Plot the night-sky emission lines """
     plt.subplot(212, sharex=ax1)
     skymod.plot(title=None, ylabel='Sky Emission')
     if z is not None:
-        atm.mark_lines('strongem', z, marktype='line')
+        atm.mark_lines('strongem', z, marktype='line', zfs=12)
     plt.xlim(xmin, xmax)
     dy = 0.05 * skymod['flux'].max()
     plt.ylim(-dy, (skymod['flux'].max()+dy))
