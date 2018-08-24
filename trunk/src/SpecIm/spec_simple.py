@@ -440,7 +440,7 @@ class Spec1d(df.Data1d):
     # -----------------------------------------------------------------------
 
     def plot_sky(self, color='g', linestyle='-', xlabel='default',
-                 title='default', verbose=True):
+                 title='default', label='default', verbose=True):
         """
 
         Plots the sky spectrum, if the appropriate information is available.
@@ -455,15 +455,17 @@ class Spec1d(df.Data1d):
         """ Check to make sure that there is a spectrum to plot """
         if self.sky:
             skyflux = self['sky']
+            skylab = 'Sky spectrum'
         elif self.hasvar:
             skyflux = np.sqrt(self['var'])
+            print('Using RMS spectrum as a proxy for the sky spectrum')
+            skylab = 'RMS spectrum'
         else:
             if verbose:
                 print ''
                 print 'Cannot plot sky spectrum.'
-                print 'No sky or variance information in the spectrum'
                 print ''
-            return
+            raise KeyError('No sky or variance information in the spectrum')
 
         """ Set up for plotting """
         ls = 'steps%s' % linestyle
@@ -471,9 +473,16 @@ class Spec1d(df.Data1d):
             xlab = 'Wavelength (Angstroms)'
         else:
             xlab = xlabel
+        if label == 'default':
+            lab = skylab
+        else:
+            lab = label
 
         """ Plot the spectrum """
-        plt.plot(self['wav'], skyflux, ls=ls, color=color)
+        if lab is not None:
+            plt.plot(self['wav'], skyflux, ls=ls, color=color, label=lab)
+        else:
+            plt.plot(self['wav'], skyflux, ls=ls, color=color)
         if title == 'default':
             plttitle = 'Sky Spectrum'
         else:
@@ -851,46 +860,40 @@ class Spec1d(df.Data1d):
           1. The actual sky spectrum, if it exists (preferred)
           2. The square root of the variance spectrum, if it exists
         """
-        if self.sky:
-            skyflux = self['sky']
-            skylab = "Observed Sky"
-        elif self.hasvar:
-            skyflux = np.sqrt(self['var'])
-            skylab = "RMS Spectrum"
-        else:
-            if verbose:
-                print ''
-                print 'Cannot plot observed sky spectrum.'
-                print 'No sky or variance information in the spectrum'
-                print ''
+
+        """ Plot the observed sky spectrum """
+        try:
+            self.plot_sky()
+        except KeyError:
             return
 
         """ Create the model sky spectrum, with the appropriate smoothing """
         print('')
         waveobs = self['wav'].copy()
-        skymod = make_sky_model(waveobs, modsmoothkernel)
+        skymod = make_sky_model(self['wav'], modsmoothkernel)
 
         """
         Scale the sky spectrum to roughly be 75% of the amplitude of the
         observed spectrum
         """
 
-        deltaobs = skyflux.max() - skyflux.min()
+        ymin, ymax = plt.ylim()
+        deltaobs = ymax - ymin
         deltamod = skymod['flux'].max() - skymod['flux'].min()
+        print deltaobs, deltamod
         skymod['flux'] *= 0.75 * deltaobs / deltamod
-        skymod['flux'] += skyflux.mean() - skymod['flux'].mean()
+        skymod['flux'] += self['flux'].mean() - skymod['flux'].mean()
 
         """ Make the plot """
         wrange = waveobs.max() - waveobs.min()
         xmin = waveobs.min() - 0.05*wrange
         xmax = waveobs.max() + 0.05*wrange
-        plt.plot(waveobs, skyflux, 'k', ls='steps', label=skylab)
         skymod.plot(color='r', label='Model sky')
         plt.legend()
         plt.xlim(xmin, xmax)
 
         """ Clean up """
-        del waveobs, skyflux, skymod
+        del waveobs, skymod
 
     # -----------------------------------------------------------------------
 
@@ -2793,16 +2796,10 @@ def make_sky_model(wavelength, smoothKernel=25., doplot=False, verbose=True):
     of the input vector.
     """
 
-    # Get info from input wavelength vector
+    """ Get info from input wavelength vector """
     wstart = wavelength.min()
     wend = wavelength.max()
     disp = wavelength[1] - wavelength[0]
-    if verbose:
-        print "Making model sky"
-        print "--------------------------------------"
-        print "Model starting wavelength: %f" % wstart
-        print "Model ending wavelength:    %f" % wend
-        print "Model dispersion:             %f" % disp
 
     """
     Read in the appropriate skymodel:
@@ -2825,10 +2822,33 @@ def make_sky_model(wavelength, smoothKernel=25., doplot=False, verbose=True):
         modfile = '%s/Data/nirspec_skymodel.fits' % moddir
     else:
         modfile = '%s/Data/uves_skymodel.fits' % moddir
-    modspec = Spec1d(modfile, informat='fitstab')
-    if modspec is None:
-        return None
+    try:
+        modspec = Spec1d(modfile, informat='fitstab')
+    except:
+        raise IOError
     skymodel = (modspec['wav'], modspec['flux'], 3)
+
+    """
+    Make sure that the requested wavelength range does not exceed the range
+    in the model
+    """
+    redo_wav = False
+    if wstart < modspec['wav'][0]:
+        wstart = modspec['wav'][0] + 1.
+        redo_wav = True
+    if wend > modspec['wav'][-1]:
+        wend = modspec['wav'][-1] - 10.
+        redo_wav = True
+    if redo_wav:
+        print('Limiting wavelength range for model sky to %8.3f - %8.3f'
+              % (wstart, wend))
+
+    if verbose:
+        print "Making model sky"
+        print "--------------------------------------"
+        print "Model starting wavelength: %f" % wstart
+        print "Model ending wavelength:    %f" % wend
+        print "Model dispersion:             %f" % disp
 
     """
     Resample and smooth the model spectrum.
@@ -2839,16 +2859,20 @@ def make_sky_model(wavelength, smoothKernel=25., doplot=False, verbose=True):
     tmpskymod = interpolate.splev(wave, skymodel)
     tmpskymod = ndimage.gaussian_filter(tmpskymod, smoothKernel)
 
-    # Create a B-spline representation of the smoothed curve for use in
-    #  the wavecal optimization
+    """
+    Create a B-spline representation of the smoothed curve for use in
+    the wavecal optimization
+    """
     model = interpolate.splrep(wave, tmpskymod)
 
-    # Finally use the initial guess for the dispersion and evaluate the
-    #  model sky at those points, using the B-spline model
-    skyflux = interpolate.splev(wavelength, model)
+    """
+    Finally use the initial guess for the dispersion and evaluate the
+     model sky at those points, using the B-spline model
+    """
+    skyflux = interpolate.splev(wave, model)
 
     """ Create a Spec1d instance containing the sky model """
-    skymod = Spec1d(wav=wavelength, flux=skyflux)
+    skymod = Spec1d(wav=wave, flux=skyflux)
 
     """ Plot the output model if requested """
     if doplot:
@@ -2857,80 +2881,6 @@ def make_sky_model(wavelength, smoothKernel=25., doplot=False, verbose=True):
     # Clean up and return
     del skymodel, tmpskymod, wave
     return skymod
-
-# -----------------------------------------------------------------------
-
-
-def check_wavecal(infile, informat='text', modsmoothkernel=25.):
-    """
-    MOVE TO SPEC1D CLASS!
-
-    Plots the wavelength-calibrated sky information from the input file
-    on top of a smoothed model of the night sky emission so that
-    the quality of the wavelength calibration can be evaluated.
-
-    The input file can either be a fits file (fileformat='fits') that has
-    been produced by the niredux function or a text spectrum containing
-    three columns (wavelength, flux, variance).  The variance spectrum in
-    this case should contain clear sky line features if the exposure length
-    was long enough.
-    """
-
-    """ Read in the observed sky spectrum """
-    if informat == 'fits':
-        hdulist = pf.open(infile)
-        varspec = hdulist[1].data.copy()
-        skyobs = np.sqrt(np.median(varspec, axis=0))
-        skylab = "RMS Spectrum"
-        hdr = hdulist[0].header
-        crval1 = hdr['crval1']
-        cd11 = hdr['cd1_1']
-        waveobs = 1.0 * np.arange(varspec.shape[1])
-        waveobs *= cd11
-        waveobs += crval1
-    elif informat == 'fitsold':
-        hdulist = pf.open(infile)
-        waveobs = hdulist[1].data.copy()
-        skyobs = hdulist[2].data.copy()
-        skylab = "Observed Sky"
-    else:
-        try:
-            waveobs, varspec = np.loadtxt(infile, unpack=True, usecols=(0, 2))
-            skyobs = np.sqrt(varspec)
-        except:
-            print ""
-            print "Cannot get variance spectrum from input text file %s" \
-                % infile
-            print ""
-            return
-        skylab = "RMS Spectrum"
-
-    """ Create the sky spectrum, with the appropriate smoothing """
-    print ""
-    skymod = make_sky_model(waveobs, modsmoothkernel)
-
-    """
-    Scale the sky spectrum to roughly be 75% of the amplitude of the observed
-    spectrum
-    """
-
-    deltamod = skymod['flux'].max() - skymod['flux'].min()
-    deltaobs = skyobs.max() - skyobs.min()
-    skymod['flux'] *= 0.75*deltaobs/deltamod
-    skymod['flux'] += skyobs.mean() - skymod['flux'].mean()
-
-    """ Make the plot """
-    wrange = waveobs.max() - waveobs.min()
-    xmin = waveobs.min() - 0.05*wrange
-    xmax = waveobs.max() + 0.05*wrange
-    plt.plot(waveobs, skyobs, 'k', ls='steps', label=skylab)
-    skymod.plot(color='r', label='Model sky')
-    plt.legend()
-    plt.xlim(xmin, xmax)
-
-    del waveobs
-    del skyobs
-    del skymod
 
 # -----------------------------------------------------------------------
 
