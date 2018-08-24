@@ -501,7 +501,7 @@ class Spec1d(df.Data1d):
 
            myspec.smooth(7)
 
-         This will do a variance weighted boxcar smoothing with a 7-pixel 
+         This will do a variance weighted boxcar smoothing with a 7-pixel
           smoothing width, if the variance spectrum is available.  Otherwise
           it will do a uniformly-weighted boxcar smoothing
         """
@@ -689,10 +689,8 @@ class Spec1d(df.Data1d):
 
         """ Check linetype """
         if linetype == 'abs':
-            pm = -1.
             labva = 'top'
         elif linetype == 'em' or linetype == 'strongem':
-            pm = 1.
             labva = 'bottom'
         else:
             print ''
@@ -708,7 +706,7 @@ class Spec1d(df.Data1d):
             lammin = x0
         if x1 < lammax:
             lammax = x1
-        xdiff = x1 - x0
+        # xdiff = x1 - x0
         ydiff = y1 - y0
         # dlocwin = labww / 2.
 
@@ -835,9 +833,70 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
+    def check_wavecal(self, modsmoothkernel=25., verbose=True):
+        """
+
+        Plots the observed wavelength-calibrated sky spectrum on top of a
+        smoothed a priori model of the night sky emission so that
+        the quality of the wavelength calibration can be evaluated.
+
+        Inputs:
+          modsmoothkernel - Smoothing kernel for the model sky spectrum.  The
+                            default value is 25.0
+
+        """
+
+        """
+        For the observed sky spectrum use either:
+          1. The actual sky spectrum, if it exists (preferred)
+          2. The square root of the variance spectrum, if it exists
+        """
+        if self.sky:
+            skyflux = self['sky']
+            skylab = "Observed Sky"
+        elif self.hasvar:
+            skyflux = np.sqrt(self['var'])
+            skylab = "RMS Spectrum"
+        else:
+            if verbose:
+                print ''
+                print 'Cannot plot observed sky spectrum.'
+                print 'No sky or variance information in the spectrum'
+                print ''
+            return
+
+        """ Create the model sky spectrum, with the appropriate smoothing """
+        print('')
+        waveobs = self['wav'].copy()
+        skymod = make_sky_model(waveobs, modsmoothkernel)
+
+        """
+        Scale the sky spectrum to roughly be 75% of the amplitude of the
+        observed spectrum
+        """
+
+        deltaobs = skyflux.max() - skyflux.min()
+        deltamod = skymod['flux'].max() - skymod['flux'].min()
+        skymod['flux'] *= 0.75 * deltaobs / deltamod
+        skymod['flux'] += skyflux.mean() - skymod['flux'].mean()
+
+        """ Make the plot """
+        wrange = waveobs.max() - waveobs.min()
+        xmin = waveobs.min() - 0.05*wrange
+        xmax = waveobs.max() + 0.05*wrange
+        plt.plot(waveobs, skyflux, 'k', ls='steps', label=skylab)
+        skymod.plot(color='r', label='Model sky')
+        plt.legend()
+        plt.xlim(xmin, xmax)
+
+        """ Clean up """
+        del waveobs, skyflux, skymod
+
+    # -----------------------------------------------------------------------
+
     def resample(self, owave=None):
         """
-        Resample the spectrum onto a linearized wavelength grid.  The grid 
+        Resample the spectrum onto a linearized wavelength grid.  The grid
         can either be defined by the input wavelength range itself
         (the default) or by a wavelength vector that is passed to the function.
         """
@@ -862,17 +921,17 @@ class Spec1d(df.Data1d):
         """
         Saves a spectrum into the designated output file.
         Right now, there are only the followoing options:
-           1. 'text'     - produces a text file with columns for wavelength,
-                           flux, variance (if available), and sky (if available)
-           2. 'fits'     - produces a multiextension fits file with separate
-                           HDUs for wavelength, flux, variance (if available),
-                           and sky (if available).
-           3. 'fitsflux' - produces a single-extension fits file with a 1-dim
-                           data vector for the flux.  The wavelength information
-                           is stored in the crpix1 and cd1_1 keywords.
-                           NOTE: By storing the wavelength info in this way,
-                            the wavelength vector must be evenly spaced in
-                            wavelength (and not log(wavelength)).
+          1. 'text'     - produces a text file with columns for wavelength,
+                          flux, variance (if available), and sky (if available)
+          2. 'fits'     - produces a multiextension fits file with separate
+                          HDUs for wavelength, flux, variance (if available),
+                          and sky (if available).
+          3. 'fitsflux' - produces a single-extension fits file with a 1-dim
+                          data vector for the flux.  The wavelength information
+                          is stored in the crpix1 and cd1_1 keywords.
+                          NOTE: By storing the wavelength info in this way,
+                           the wavelength vector must be evenly spaced in
+                           wavelength (and not log(wavelength)).
         """
 
         """
@@ -1298,9 +1357,9 @@ class Spec2d(imf.Image):
             self.sky1d = Spec1d(wav=pix, flux=tmp1d)
 
         """ Turn the 1-dimension sky spectrum into a 2-dimensional form """
-        #sky2d = np.zeros(self.data.shape)
-        #for i in range(self.nspat):
-        #    sky2
+        # sky2d = np.zeros(self.data.shape)
+        # for i in range(self.nspat):
+        #     sky2
         sky2d = np.tile(self.sky1d['flux'].data,
                         (self.data.shape[spaceaxis], 1))
         skyhdu = pf.ImageHDU(sky2d, name='Sky')
