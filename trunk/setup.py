@@ -32,6 +32,12 @@ try:
 except:
     sys.exit('### Error: python module matplotlib not found')
 
+try:
+    find_module('CDFutils')
+except:
+    sys.exit('### Error: python module CDFutils not found. '
+             'Download and install from github cdfassnacht/CDFutils')
+
 
 #try: find_module('MySQLdb')
 #except: sys.exit('### Error: python module MySQLdb not found')
