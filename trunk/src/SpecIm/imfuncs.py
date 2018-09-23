@@ -564,6 +564,8 @@ class Image:
         self.pixscale = fileWCS.pixscale
         self.impa = fileWCS.impa
         self.radec = fileWCS.radec
+        self.raaxis = fileWCS.raaxis
+        self.decaxis = fileWCS.decaxis
 
     # -----------------------------------------------------------------------
 
