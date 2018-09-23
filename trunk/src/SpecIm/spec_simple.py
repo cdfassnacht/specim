@@ -623,9 +623,9 @@ class Spec1d(df.Data1d):
                 ('Ca triplet',   8662.14, 'CaII',    0.0, 0, True),
                 ('[S III]',      9069,    '[S III]', 0.0, 2, True),
                 ('[S III]',      9532,    '[S III]', 0.0, 2, True),
-                ('Pa-gamma',    10900.,   r'Pa-$\gamma$', 0.0, 4, True),
-                ('Pa-beta',     12800.,   r'Pa-$\beta$',  0.0, 4, True),
-                ('Pa-alpha',    18700.,   r'Pa-$\alpha$', 0.0, 4, True)
+                ('Pa-gamma',    10900.,   r'Pa$\gamma$', 0.0, 4, True),
+                ('Pa-beta',     12800.,   r'Pa$\beta$',  0.0, 4, True),
+                ('Pa-alpha',    18700.,   r'Pa$\alpha$', 0.0, 4, True)
                 ], dtype=linefmt)
 
     # -----------------------------------------------------------------------
