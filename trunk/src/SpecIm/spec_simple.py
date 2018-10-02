@@ -145,6 +145,7 @@ class Spec1d(df.Data1d):
         self.hasvar = False
         self.sky = False
         self.infile = None
+        self.dispave = None
         names0 = ['wav', 'flux', 'var']
         wav0 = None
         flux0 = None
@@ -357,6 +358,7 @@ class Spec1d(df.Data1d):
             print ""
 
         """ Return the data """
+        self.dispave = dispave
         return wav, flux, var, sky
 
     # -----------------------------------------------------------------------
@@ -842,7 +844,7 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def check_wavecal(self, modsmoothkernel=25., verbose=True):
+    def check_wavecal(self, modsmooth='default', verbose=True):
         """
 
         Plots the observed wavelength-calibrated sky spectrum on top of a
@@ -850,8 +852,14 @@ class Spec1d(df.Data1d):
         the quality of the wavelength calibration can be evaluated.
 
         Inputs:
-          modsmoothkernel - Smoothing kernel for the model sky spectrum.  The
-                            default value is 25.0
+          modsmooth - Smoothing kernel for the model sky spectrum in Angstrom??
+                       The default value is set under the assumption that
+                       the dispersion of the spectrum gives three pixels
+                       across the FWHM of the spectral resolution.  Therefore
+                       the smoothing kernel should be:
+                           sigma = fwhm / sqrt{2 ln 2} ~ fwhm / 1.177
+                       meaning that:
+                           sigma ~ 3. * dispersion / 1.177 ~ 2.55 * dispersion
 
         """
 
@@ -867,10 +875,27 @@ class Spec1d(df.Data1d):
         except KeyError:
             return
 
+        if self.sky:
+            skyflux = self['sky']
+        elif self.hasvar:
+            skyflux = np.sqrt(self['var'])
+            mask = np.isfinite(skyflux)
+            skyflux = skyflux[mask]
+
         """ Create the model sky spectrum, with the appropriate smoothing """
         print('')
+        if modsmooth == 'default':
+            modsmooth = 2.55 * self.dispave
+            print('Smoothing sky spectrum with default value of %6.3f Ang'
+                  % modsmooth)
+        elif isinstance(modsmooth, float):
+            print('Smoothing sky spectrum with passed value of %6.3f Ang'
+                  % modsmooth)
+        else:
+            print('ERROR: modsmooth parameter must be a float')
+            raise TypeError
         waveobs = self['wav'].copy()
-        skymod = make_sky_model(self['wav'], modsmoothkernel)
+        skymod = make_sky_model(self['wav'], smooth=modsmooth)
 
         """
         Scale the sky spectrum to roughly be 75% of the amplitude of the
@@ -881,8 +906,9 @@ class Spec1d(df.Data1d):
         deltaobs = ymax - ymin
         deltamod = skymod['flux'].max() - skymod['flux'].min()
         print deltaobs, deltamod
+        print skyflux.mean(), skymod['flux'].mean()
         skymod['flux'] *= 0.75 * deltaobs / deltamod
-        skymod['flux'] += self['flux'].mean() - skymod['flux'].mean()
+        skymod['flux'] += skyflux.mean() - skymod['flux'].mean()
 
         """ Make the plot """
         wrange = waveobs.max() - waveobs.min()
@@ -2789,7 +2815,7 @@ def combine_spectra(file_list, outfile, informat='text', xlabel='Pixels'):
 # -----------------------------------------------------------------------
 
 
-def make_sky_model(wavelength, smoothKernel=25., doplot=False, verbose=True):
+def make_sky_model(wavelength, smooth=25., doplot=False, verbose=True):
     """
     Given an input wavelength vector, creates a smooth model of the
     night sky emission that matches the wavelength range and stepsize
@@ -2857,7 +2883,7 @@ def make_sky_model(wavelength, smoothKernel=25., doplot=False, verbose=True):
     """
     wave = np.arange(wstart, wend, 0.2)
     tmpskymod = interpolate.splev(wave, skymodel)
-    tmpskymod = ndimage.gaussian_filter(tmpskymod, smoothKernel)
+    tmpskymod = ndimage.gaussian_filter(tmpskymod, smooth)
 
     """
     Create a B-spline representation of the smoothed curve for use in
@@ -3225,7 +3251,7 @@ def plot_atm_trans(w, fwhm=15., flux=None, scale=1.05, offset=0.0,
 # -----------------------------------------------------------------------
 
 
-def plot_model_sky_ir(z=None, wmin=10000., wmax=25651.):
+def plot_model_sky_ir(z=None, wmin=10000., wmax=25651., smooth=25.):
     """
     Calls plot_atm_trans and make_sky_model to make a combined plot for
     the NIR sky that can be used to judge whether expected spectral lines
@@ -3238,7 +3264,7 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651.):
     """
     wsky = np.arange(wmin, wmax)
     atm = atm_trans(wsky)
-    skymod = make_sky_model(wsky)
+    skymod = make_sky_model(wsky, smooth=smooth)
     skymod['flux'] /= skymod['flux'].max()
 
     """ Set limits to improve appearance of the plot """

@@ -1241,8 +1241,8 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def def_subim_radec(self, imcent, imsize, outscale=None,
-                        hext=0, dext=0, verbose=True):
+    def def_subim_radec(self, imcent, imsize, outscale=None, hext=0, dext=0,
+                        verbose=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
 
@@ -1400,9 +1400,9 @@ class Image:
             data = self.hdu[dext].data[0, 0, :, :].copy()
         else:
             data = self.hdu[dext].data.copy()
-        outhdr, self.subim_wcs = coords.make_header(self.radec, outscale,
-                                                    self.subsizex,
-                                                    self.subsizey)
+        outhdr, self.subim_wcs = \
+            coords.make_header(self.radec, outscale, self.subsizex,
+                               self.subsizey)
 
         """ Do the coordinate transform preparation """
         icoords = np.indices((self.subsizey, self.subsizex)).astype(np.float32)
