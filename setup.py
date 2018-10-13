@@ -46,7 +46,7 @@ except:
 verstr = "unknown"
 try:
     parentdir = os.getcwd()+'/'
-    verstrline = open(parentdir+'/src/SpecIm/_version.py', "rt").read()
+    verstrline = open(parentdir+'/SpecIm/_version.py', "rt").read()
 except EnvironmentError:
     pass # Okay, there is no version file.
 else:
@@ -55,7 +55,7 @@ else:
     if mo:
         verstr = mo.group(1)
     else:
-        raise RuntimeError("unable to find version in " + parentdir + "+src/agnkey/_version.py")
+        raise RuntimeError("unable to find version in " + parentdir + "+SpecIm/_version.py")
 
 
 setup(
@@ -64,13 +64,12 @@ setup(
     author = 'Chris Fassnacht',
     author_email = 'cdfassnacht@ucdavis.edu',
     scripts=[],
-    #url = 'lcogt.net',
     license = 'LICENSE.txt',
     description = 'Code for visualizing fits images and for'
     'extracting and plotting spectra',
-    long_description = open('README.txt').read(),
+    #long_description = open('README.txt').read(),
     requires = ['numpy','scipy','astropy','matplotlib'],
     packages = ['SpecIm'],
-    package_dir = {'':'src'},
+    #package_dir = {'':'src'},
     package_data = {'SpecIm' : ['Data/*fits']}
 )
