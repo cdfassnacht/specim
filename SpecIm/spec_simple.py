@@ -160,7 +160,7 @@ class Spec1d(df.Data1d):
             try:
                 wav0, flux0, var0, sky0 = self.read_from_file(informat,
                                                               debug=debug)
-            except:
+            except IOError:
                 print ''
                 print 'Could not read input file %s' % infile
                 print ''
@@ -365,6 +365,7 @@ class Spec1d(df.Data1d):
 
     def plot(self, xlabel='Wavelength (Angstroms)', ylabel='Relative Flux',
              title='default', docolor=True, color='b', linestyle='',
+             showzero=True,
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
              atmls='-', usesmooth=False, verbose=True):
@@ -385,7 +386,8 @@ class Spec1d(df.Data1d):
             rmscolor = 'k'
 
         """ Draw the flux=0 line"""
-        plt.axhline(color='k')
+        if showzero:
+            plt.axhline(color='k')
 
         """ Plot the spectrum """
         if usesmooth and self.ysmooth is not None:
@@ -523,7 +525,7 @@ class Spec1d(df.Data1d):
         The smoothing functions are inherited from the Data1d class
         """
         if smfunc == 'boxcar':
-            self.smooth_boxcar(filtwidth)
+            self.ysmooth, self.varsmooth = self.smooth_boxcar(filtwidth)
         else:
             print('')
             print('For smoothing, smfunc can only be one of the following:')
@@ -1119,6 +1121,7 @@ class Spec2d(imf.Image):
         self.skysub = None
         self.ssext = None
         self.spec1d = None
+        self.profile = None
         self.fitrange = None
         self.apmin = -4.
         self.apmax = 4.
@@ -1410,6 +1413,56 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
+    def szap(self, outfile, sigmax=5., boxsize=7):
+        """
+
+        Rejects cosmic rays from a 2D spectrum via the following
+        1. Creates the median sky from the spectrum
+        2. Subtracts the sky from the spectrum
+        3. Divides the subtracted spectrum by the square root of the sky, which
+           gives it a constant rms
+        4. Rejects pixels that exceed a certain number of sigma
+        5. Adds the sky back in
+
+        """
+
+        """ Subtract the sky  """
+        self.subtract_sky_2d()
+        skysub = self.skysub.copy()
+
+        """
+        Divide the result by the square root of the sky to get a rms image
+        """
+        ssrms = skysub / np.sqrt(self.sky2d)
+        m, s = df.sigclip(ssrms)
+
+        """ Now subtract a median-filtered version of the spectrum """
+        tmpsub = ssrms.data - filters.median_filter(ssrms, boxsize)
+
+        """
+        Make a bad pixel mask that contains pixels in tmpsub with
+         values > sigmax*s
+        """
+        mask = tmpsub > sigmax * s
+        tmpsub[mask] = m
+
+        """ Replace the bad pixels in skysub with a median-filtered value """
+        # m2, s2 = df.sigma_clip(self.skysub)
+        self.sigma_clip(hext=self.ssext)
+        skysub[mask] = self.mean_clip
+        ssfilt = filters.median_filter(skysub, boxsize)
+        skysub[mask] = ssfilt[mask]
+
+        """ Add the sky back in and save the final result """
+        szapped = skysub + self.sky2d
+        pf.PrimaryHDU(szapped).writeto(outfile)
+        print ' Wrote szapped data to %s' % outfile
+
+        """ Clean up """
+        del skysub, ssrms, tmpsub, szapped
+
+    # -----------------------------------------------------------------------
+
     def display_spec(self, doskysub=True):
         """
         Displays the two-dimensional spectrum and also, by default, the
@@ -1498,90 +1551,43 @@ class Spec2d(imf.Image):
         Compress the data along the dispersion axis and find the max value
         """
         if self.data.ndim < 2:
-            self.cdat = tmpdat
+            pflux = tmpdat
         else:
-            self.cdat = np.median(tmpdat, axis=self.specaxis)
+            pflux = np.median(tmpdat, axis=self.specaxis)
         if normalize:
-            cmax = self.cdat.max()
-            self.cdat /= cmax
-            print cmax
-        self.x = np.arange(self.cdat.shape[0])
+            pmax = pflux.max()
+            pflux /= pmax
+            print pmax
+
+        """ Save the profile as a Spec1d instance """
+        px = np.arange(pflux.shape[0])
+        profile = Spec1d(wav=px, flux=pflux)
 
         """
         Plot the compressed spectrum, showing the best-fit Gaussian if
         requested
         """
         if(showplot):
-            plt.plot(self.x, self.cdat, linestyle='steps', color=color)
-            plt.xlabel('Spatial direction (0-indexed)')
-            if fit is not None:
-                xmod = np.arange(1, self.cdat.shape[0]+1, 0.1)
-                """ Make sure that parameters are in a numpy array """
-                p = np.atleast_1d(fit)
-                ngauss = int((p.size-1)/3)
-                if p.size - (ngauss*3+1) != 0:
-                    print 'Fit not plotted: it has wrong number of parameters'
-                    pass
-                if normalize:
-                    p[0] /= cmax
-                    for j in range(ngauss):
-                        p[j*3+3] /= cmax
-                ymod = make_gauss(xmod, p)
-                plt.plot(xmod, ymod)
-                plt.axvline(fit[1]+self.apmin, color='k')
-                plt.axvline(fit[1]+self.apmax, color='k')
-            if title is not None:
-                plt.title(title)
+            xlab = 'Spatial direction (0-indexed)'
+            profile.plot(color=color, title=title, xlabel=xlab)
+            # if fit is not None:
+            #     xmod = np.arange(1, self.cdat.shape[0]+1, 0.1)
+            #     """ Make sure that parameters are in a numpy array """
+            #     p = np.atleast_1d(fit)
+            #     ngauss = int((p.size-1)/3)
+            #     if p.size - (ngauss*3+1) != 0:
+            #         print 'Fit not plotted: it has wrong number of parameters'
+            #         pass
+            #     if normalize:
+            #         p[0] /= cmax
+            #         for j in range(ngauss):
+            #             p[j*3+3] /= cmax
+            #     ymod = make_gauss(xmod, p)
+            #     plt.plot(xmod, ymod)
+            #     plt.axvline(fit[1]+self.apmin, color='k')
+            #     plt.axvline(fit[1]+self.apmax, color='k')
 
-    # -----------------------------------------------------------------------
-
-    def szap(self, outfile, sigmax=5., boxsize=7):
-        """
-
-        Rejects cosmic rays from a 2D spectrum via the following
-        1. Creates the median sky from the spectrum
-        2. Subtracts the sky from the spectrum
-        3. Divides the subtracted spectrum by the square root of the sky, which
-           gives it a constant rms
-        4. Rejects pixels that exceed a certain number of sigma
-        5. Adds the sky back in
-
-        """
-
-        """ Subtract the sky  """
-        self.subtract_sky_2d()
-        skysub = self.skysub.copy()
-
-        """
-        Divide the result by the square root of the sky to get a rms image
-        """
-        ssrms = skysub / np.sqrt(self.sky2d)
-        m, s = df.sigclip(ssrms)
-
-        """ Now subtract a median-filtered version of the spectrum """
-        tmpsub = ssrms.data - filters.median_filter(ssrms, boxsize)
-
-        """
-        Make a bad pixel mask that contains pixels in tmpsub with
-         values > sigmax*s
-        """
-        mask = tmpsub > sigmax * s
-        tmpsub[mask] = m
-
-        """ Replace the bad pixels in skysub with a median-filtered value """
-        # m2, s2 = df.sigma_clip(self.skysub)
-        self.sigma_clip(hext=self.ssext)
-        skysub[mask] = self.mean_clip
-        ssfilt = filters.median_filter(skysub, boxsize)
-        skysub[mask] = ssfilt[mask]
-
-        """ Add the sky back in and save the final result """
-        szapped = skysub + self.sky2d
-        pf.PrimaryHDU(szapped).writeto(outfile)
-        print ' Wrote szapped data to %s' % outfile
-
-        """ Clean up """
-        del skysub, ssrms, tmpsub, szapped
+        self.profile = profile
 
     # -----------------------------------------------------------------------
 
@@ -1602,109 +1608,10 @@ class Spec2d(imf.Image):
         self.spatial_profile(pixrange, showplot=False)
 
         """
-        Set up the container for the initial guesses for the parameter values
+        Fit a Gaussian (or multiple Guassians) plus background to the
+        spatial profile
         """
-        nparam = 3*ngauss + 1
-        p_init = np.zeros(nparam)
-
-        """
-        Put default choices, which may be overridden, into p_init
-        """
-        p_init[0] = np.median(self.data, axis=None)
-        for i in range(ngauss):
-            """
-            In this loop the parameters are set as follows:
-              p_init[ind] is either mu (if i==0) or an offset from p_init[1]
-              p_init[ind+1] is sigma
-              p_init[ind+2] is amplitude
-            """
-            ind = 3*i + 1
-            if i == 0:
-                tmp = self.cdat.argsort()
-                p_init[ind] = 1.0 * tmp[tmp.shape[0]-1]
-            else:
-                p_init[ind] = 5. * i * (-1.)**(i+1)
-            p_init[ind+1] = 3.
-            p_init[ind+2] = self.cdat.max() - p_init[0]
-
-        """
-        Override the default values if init has been set.
-        NOTE: the init parameter must be an array (or list) of length nparam
-         otherwise the method will quit
-        NOTE: A value of -999 in init means keep the default value
-        """
-        if init is not None:
-            if len(init) != nparam:
-                print ''
-                print('ERROR: locate_trace -- init parameter must have'
-                      'length %d' % nparam)
-                print('  (since ngauss=%d ==> nparam= 3*%d +1)' %
-                      (ngauss, ngauss))
-                print ''
-                return np.nan
-            for j in range(nparam):
-                if init[j] > -998.:
-                    p_init[j] = init[j]
-
-        """
-        Set up which parameters are fixed based on the fix parameter
-        The default value (fix=None) means that all of the parameters are
-         varied in the fitting process
-        """
-        fixstr = np.zeros(nparam, dtype='S3')
-        if fix is None:
-            fixvec = np.zeros(nparam)
-        else:
-            fixvec = np.atleast_1d(fix)
-            if fixvec.size != nparam:
-                print ''
-                print('ERROR: locate_trace - fix parameter must have length %d'
-                      % nparam)
-                print '  (since ngauss=%d ==> nparam= 3*%d +1)' % \
-                    (ngauss, ngauss)
-                print ''
-                return np.nan
-            fixstr[fixvec == 1] = 'Yes'
-        fitmask = fixvec == 0
-        fitind = np.arange(nparam)[fitmask]
-
-        """ Fit a Gaussian plus a background to the compressed spectrum """
-        mf = 100000
-        p = p_init[fitmask]
-        p_fit, ier = optimize.leastsq(fit_gauss, p,
-                                      (self.x, self.cdat, p_init, fitind),
-                                      maxfev=mf)
-        """
-        Create the full parameter list for the fit by combining the fitted
-        parameters and the fixed parameters
-        """
-        p_out = p_init.copy()
-        p_out[fitind] = p_fit
-
-        """ Give results """
-        if(verbose):
-            print ""
-            print "Profile fit results"
-            print "-------------------"
-            print '                                        Held'
-            print 'Parameter          Init Value  fixed? Final Value'
-            print '--------------    ----------  ------ -----------'
-            print "background         %9.3f     %3s     %9.3f"      \
-                % (p_init[0], fixstr[0], p_out[0])
-            for i in range(ngauss):
-                ind = 3 * i + 1
-                j = i + 1
-                if i == 0:
-                    mustr = 'mu_1'
-                else:
-                    mustr = 'offset_%d' % j
-                print "%-9s          %9.3f     %3s     %9.3f" \
-                    % (mustr, p_init[ind], fixstr[ind], p_out[ind])
-                print "sigma_%d            %9.3f    %3s    %9.3f" \
-                    % (j, p_init[ind+1], fixstr[ind+1], p_out[ind+1])
-                print "amp_%d              %9.3f    %3s    %9.3f" \
-                    % (j, p_init[ind+2], fixstr[ind+2], p_out[ind+2])
-            print ""
+        p_out = self.fit_gauss_old(init, fix, ngauss, verbose)
 
         """ Now plot the spatial profile, showing the best fit """
         if showplot:

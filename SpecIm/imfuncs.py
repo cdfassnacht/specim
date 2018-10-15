@@ -1404,6 +1404,10 @@ class Image:
             coords.make_header(self.radec, outscale, self.subsizex,
                                self.subsizey)
 
+        # NOTE: Here check for PAs that are essentially zero.  In those
+        # cases, don't transform the coords, just do essentially a xy cutout
+        # For the comparison, use numpy's isclose function
+
         """ Do the coordinate transform preparation """
         icoords = np.indices((self.subsizey, self.subsizex)).astype(np.float32)
         skycoords = self.subim_wcs.wcs_pix2world(icoords[1], icoords[0], 0)
@@ -1411,6 +1415,7 @@ class Image:
         icoords[0] = ccdcoords[1]
         icoords[1] = ccdcoords[0]
         self.coords = icoords.copy()
+        
 
         # *** Now need to deal with regions that extend outside the data
         # should be doable, since map_coordinates just takes coordinate pairs
