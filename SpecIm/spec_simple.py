@@ -161,9 +161,9 @@ class Spec1d(df.Data1d):
                 wav0, flux0, var0, sky0 = self.read_from_file(informat,
                                                               debug=debug)
             except IOError:
-                print ''
+                print('')
                 print 'Could not read input file %s' % infile
-                print ''
+                print('')
                 return None
         elif wav is not None and flux is not None:
             if self.logwav:
@@ -178,7 +178,7 @@ class Spec1d(df.Data1d):
                 sky0 = sky
                 self.sky = True
         else:
-            print ''
+            print('')
             print 'ERROR: Must provide either:'
             print '  1. A name of an input file containing the spectrum'
             print '  2. At minimum, both of the following:'
@@ -187,7 +187,7 @@ class Spec1d(df.Data1d):
             print '      and optionally one or both of the following'
             print '         C. a variance vector (var)'
             print '         D. a sky spectrum vector (sky)'
-            print ''
+            print('')
             return
 
         """
@@ -365,12 +365,20 @@ class Spec1d(df.Data1d):
 
     def plot(self, xlabel='Wavelength (Angstroms)', ylabel='Relative Flux',
              title='default', docolor=True, color='b', linestyle='',
-             showzero=True,
+             showzero=True, model=None, modcolor='g',
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
              atmls='-', usesmooth=False, verbose=True):
         """
         Plots the spectrum
+
+        Inputs:
+          model     - If not None, then plot a model on top of the spectrum. 
+                      NOTE: this model must be in the form of an
+                      astropy.modeling model
+          modcolor  - Color to use for the model plot
+          atmscale
+          usesmooth
         """
 
         """ Set the title """
@@ -408,6 +416,13 @@ class Spec1d(df.Data1d):
         plt.plot(self['wav'], flux, color, linestyle=ls, label=plabel)
         plt.tick_params(labelsize=fontsize)
         plt.xlabel(xlabel, fontsize=fontsize)
+
+        """
+        Plot the model, given as an astropy.modeling model, if requested
+        """
+        if model is not None:
+            fmod = model(self['wav'])
+            plt.plot(self['wav'], fmod, color=modcolor)
 
         """ Plot the RMS spectrum if the variance spectrum exists """
         if var is not None:
@@ -466,9 +481,9 @@ class Spec1d(df.Data1d):
             skylab = 'RMS spectrum'
         else:
             if verbose:
-                print ''
+                print('')
                 print 'Cannot plot sky spectrum.'
-                print ''
+                print('')
             raise KeyError('No sky or variance information in the spectrum')
 
         """ Set up for plotting """
@@ -656,9 +671,9 @@ class Spec1d(df.Data1d):
             pm = 1.
             labva = 'bottom'
         else:
-            print ''
+            print('')
             print "ERROR: linetype must be either 'abs', 'em', or 'strongem'"
-            print ''
+            print('')
             return None, None
 
         """ Set up the tick parameters"""
@@ -706,9 +721,9 @@ class Spec1d(df.Data1d):
         elif linetype == 'em' or linetype == 'strongem':
             labva = 'bottom'
         else:
-            print ''
+            print('')
             print "ERROR: linetype must be either 'abs', 'em', or 'strongem'"
-            print ''
+            print('')
             return
 
         """ Set the display limits """
@@ -736,7 +751,7 @@ class Spec1d(df.Data1d):
         mask = zmask & tmask
         tmplines = self.lineinfo[mask]
         zlines = (z + 1.0) * tmplines['wavelength']
-        print ''
+        print('')
         print 'Line        lambda_rest  lambda_obs'
         print '----------  -----------  -----------'
         for i in range(len(tmplines)):
@@ -747,12 +762,12 @@ class Spec1d(df.Data1d):
         """ Set the length of the ticks """
         ticklen = tickfrac * ydiff
 
-        print ''
+        print('')
         if (len(tmplines) == 0):
-            print ''
+            print('')
             print 'No lines of the requested type within the wavelength'
             print ' range covered by this spectrum.'
-            print ''
+            print('')
             return
 
         xarr = tmplines['wavelength'] * (z + 1.)
@@ -1195,9 +1210,9 @@ class Spec2d(imf.Image):
         self.ymin = ymin
         self.ymax = ymax
         if verbose:
-            print ''
+            print('')
             print '-----------------------------------------------------------'
-            print ''
+            print('')
             if self.infile is None:
                 print 'Read in 2-dimensional spectrum from HDU=%d' % hext
             else:
@@ -1231,10 +1246,10 @@ class Spec2d(imf.Image):
         self.npix = self.data.shape[self.specaxis]
         self.nspat = self.data.shape[self.spaceaxis]
         if verbose:
-            print ''
+            print('')
             print 'Current value of dispaxis:              %s' % self.dispaxis
             print 'Number of pixels along dispersion axis: %d' % self.npix
-            print ''
+            print('')
 
     # -----------------------------------------------------------------------
 
@@ -1264,18 +1279,18 @@ class Spec2d(imf.Image):
             else:
                 self.specaxis = 1
                 self.spaceaxis = 0
-            print ''
+            print('')
             print 'Old value of dispaxis: %s' % oldval
             self.get_dispaxis()
-            print ''
+            print('')
             return
         else:
-            print ''
+            print('')
             print "ERROR: dispaxis must be either 'x' or 'y'"
             print '%s is not a valid value' % dispaxis
-            print ''
+            print('')
             print 'Keeping current value for dispaxis:  %s' % self.dispaxis
-            print ''
+            print('')
             return
 
     # -----------------------------------------------------------------------
@@ -1380,7 +1395,7 @@ class Spec2d(imf.Image):
 
         """ Take the median along the spatial direction to estimate the sky """
         if self.data.ndim < 2:
-            print ''
+            print('')
             print 'ERROR: subtract_sky needs a 2 dimensional data set'
             return
         else:
@@ -1526,7 +1541,7 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def spatial_profile(self, pixrange=None, showplot=True, do_subplot=False,
-                        title='Spatial Profile', fit=None, normalize=False):
+                        title='Spatial Profile', model=None, normalize=False):
         """
         Compresses a 2d spectrum along the dispersion axis to create a spatial
          profile, and then plots it if requested
@@ -1569,7 +1584,8 @@ class Spec2d(imf.Image):
         """
         if(showplot):
             xlab = 'Spatial direction (0-indexed)'
-            profile.plot(color=color, title=title, xlabel=xlab)
+            profile.plot(color=color, title=title, xlabel=xlab, model=model,
+                         showzero=False)
             # if fit is not None:
             #     xmod = np.arange(1, self.cdat.shape[0]+1, 0.1)
             #     """ Make sure that parameters are in a numpy array """
@@ -1611,7 +1627,10 @@ class Spec2d(imf.Image):
         Fit a Gaussian (or multiple Guassians) plus background to the
         spatial profile
         """
-        p_out = self.fit_gauss_old(init, fix, ngauss, verbose)
+        # p_out = self.profile.fit_gauss_old(init, fix, ngauss, verbose)
+        mod = self.profile.fit_gauss()
+        # print(mod)
+        p_out = np.array([mod.c0_0, mod.mean_1, mod.stddev_1, mod.amplitude_1])
 
         """ Now plot the spatial profile, showing the best fit """
         if showplot:
@@ -1620,7 +1639,7 @@ class Spec2d(imf.Image):
             else:
                 plt.figure(1)
                 plt.clf()
-            self.spatial_profile(pixrange, showplot, do_subplot, fit=p_out)
+            self.spatial_profile(pixrange, showplot, do_subplot, model=mod)
 
         """
         Return the relevant parameters of the fit
@@ -1772,10 +1791,10 @@ class Spec2d(imf.Image):
 
         if fitmu or fitsig:
             """ Step through the data """
-            print ''
-            print "Running fit_trace"
-            print "-----------------------------------------------------------"
-            print("Finding the location and width of the trace at %d segments"
+            print('')
+            print('Running fit_trace')
+            print('---------------------------------------------------------')
+            print('Finding the location and width of the trace at %d segments'
                   % nsteps.shape[0])
             print "    of the 2D spectrum..."
             for i in nsteps:
@@ -1827,8 +1846,8 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def find_and_trace(self, ngauss=1, stepsize=25, muorder=3, sigorder=4,
-                       fitrange=None, doplot=True, do_subplot=True,
+    def find_and_trace(self, ngauss=1, bgorder=0, stepsize=25, muorder=3,
+                       sigorder=4, fitrange=None, doplot=True, do_subplot=True,
                        verbose=True):
 
         """
@@ -2036,7 +2055,7 @@ class Spec2d(imf.Image):
         Save the result as a Spec1d instance
         """
         # print '*** Number of nans: %d %d %d ***' % (nnans, nnanv, nnan)
-        print ''
+        print('')
         self.spec1d = Spec1d(wav=self.wavelength, flux=flux, var=var, sky=bkgd)
         self.apmask = apmask
 
@@ -2107,7 +2126,7 @@ def load_2d_spectrum(filename, hdu=0):
     NOTE: This has now been replaced by the Spec2d class.
     """
     data = Spec2d(filename, hext=hdu)
-    print ''
+    print('')
     print 'Loaded a 2-dimensional spectrum from %s' % filename
     print 'Data dimensions (x y): %dx%d' % (data.shape[1], data.shape[0])
     return data
@@ -2157,9 +2176,9 @@ def read_spectrum(filename, informat='text', varspec=True, verbose=True):
         flux = spec[:, 1]
         if varspec:
             if spec.shape[1] < 3:
-                print ''
+                print('')
                 print 'Warning: varspec=True but only 2 columns in input file'
-                print ''
+                print('')
             else:
                 var = spec[:, 2]
         del spec
@@ -2301,7 +2320,7 @@ def subtract_sky(data, outfile, outskyspec, dispaxis='x', doplot=True):
     print ' Wrote sky-subtracted data to %s' % outfile
     save_spectrum(outskyspec, x, sky1d)
     print ' Wrote median sky spectrum to %s' % outskyspec
-    print ''
+    print('')
 
     """ Clean up """
     del sky, sky1d, skysub
@@ -2339,10 +2358,10 @@ def make_gauss(x, p):
     """ Calculate the number of Gaussians in the model """
     ngauss = int((p.size-1)/3)
     if p.size - (ngauss*3+1) != 0:
-        print ''
+        print('')
         print('ERROR: Gaussian model contains the incorrect number of'
               'parameters')
-        print ''
+        print('')
         return np.nan
 
     """ Calculate y_mod using current parameter values """
