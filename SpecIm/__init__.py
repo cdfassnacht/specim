@@ -1,7 +1,5 @@
-# print 'import imfuncs'
-import imfuncs
-# print 'import spec_simple'
-import spec_simple
+from spec1d import Spec1d
+from spec2d import Spec2d
 
 __version__ = 'unknown'
 try:

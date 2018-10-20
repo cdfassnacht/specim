@@ -2100,9 +2100,9 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
-                      funits='sigma', fscale='linear', statsize=2048,
-                      title=None,  mode='xy', zeropos=None, verbose=False):
+    def _display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
+                       funits='sigma', fscale='linear', statsize=2048,
+                       title=None,  mode='xy', zeropos=None, verbose=False):
         """
         Sets parameters within the Image class that will be used to actually
          display the image or the requested part of it.
@@ -2140,7 +2140,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def display_implot(self, show_xyproj=False, axlabel=True, fontsize=None):
+    def _display_implot(self, show_xyproj=False, axlabel=True, fontsize=None):
         """
 
         NOTE: DO NOT USE this routine/method unless you know exactly what
@@ -2276,13 +2276,13 @@ class Image:
         self.set_subim(hext, mode, imcent, imsize, verbose=verbose)
 
         """ Set up the parameters that will be needed to display the image """
-        self.display_setup(hext=hext, cmap=cmap,
-                           fmin=fmin, fmax=fmax, funits=funits, fscale=fscale,
-                           statsize=statsize, title=title, mode=mode,
-                           zeropos=zeropos, verbose=verbose)
+        self._display_setup(hext=hext, cmap=cmap,
+                            fmin=fmin, fmax=fmax, funits=funits, fscale=fscale,
+                            statsize=statsize, title=title, mode=mode,
+                            zeropos=zeropos, verbose=verbose)
 
         """ Now display the data """
-        self.display_implot(show_xyproj, axlabel, fontsize)
+        self._display_implot(show_xyproj, axlabel, fontsize)
 
     # -----------------------------------------------------------------------
 
