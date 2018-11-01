@@ -21,20 +21,20 @@ except:
     
 try:
     find_module('astropy')
-except:
+except ImportError:
     try:
         find_module('pyfits')
-    except:
+    except ImportError:
         sys.exit('### Error: Neither astropy nor pyfits found.')
 
 try:
     find_module('matplotlib')
-except:
+except ImportError:
     sys.exit('### Error: python module matplotlib not found')
 
 try:
     find_module('CDFutils')
-except:
+except ImportError:
     sys.exit('### Error: python module CDFutils not found. '
              'Download and install from github cdfassnacht/CDFutils')
 
