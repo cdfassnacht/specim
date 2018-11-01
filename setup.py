@@ -8,34 +8,34 @@ for scheme in INSTALL_SCHEMES.values():
     scheme['data'] = scheme['purelib']
 
 """ Check for required modules """
-# try:
-#     find_module('numpy')
-# except:
-#     sys.exit('### Error: python module numpy not found')
-#     
-# try:
-#     find_module('scipy')
-# except:
-#     sys.exit('### Error: python module scipy not found')
-#     
-# try:
-#     find_module('astropy')
-# except ImportError:
-#     try:
-#         find_module('pyfits')
-#     except ImportError:
-#         sys.exit('### Error: Neither astropy nor pyfits found.')
-# 
-# try:
-#     find_module('matplotlib')
-# except ImportError:
-#     sys.exit('### Error: python module matplotlib not found')
-# 
-# try:
-#     find_module('CDFutils')
-# except ImportError:
-#     sys.exit('### Error: python module CDFutils not found. '
-#              'Download and install from github cdfassnacht/CDFutils')
+try:
+    find_module('numpy')
+except:
+    sys.exit('### Error: python module numpy not found')
+    
+try:
+    find_module('scipy')
+except:
+    sys.exit('### Error: python module scipy not found')
+    
+try:
+    find_module('astropy')
+except ImportError:
+    try:
+        find_module('pyfits')
+    except ImportError:
+        sys.exit('### Error: Neither astropy nor pyfits found.')
+
+try:
+    find_module('matplotlib')
+except ImportError:
+    sys.exit('### Error: python module matplotlib not found')
+
+try:
+    find_module('CDFutils')
+except ImportError:
+    sys.exit('### Error: python module CDFutils not found. '
+             'Download and install from github cdfassnacht/CDFutils')
 
 
 #try: find_module('MySQLdb')
@@ -67,7 +67,7 @@ setup(
     description = 'Code for visualizing fits images and for'
     'extracting and plotting spectra',
     #long_description = open('README.txt').read(),
-    install_requires = ['numpy','scipy','astropy','matplotlib','CDFutils'],
+    requires = ['numpy','scipy','astropy','matplotlib','CDFutils'],
     packages = ['SpecIm'],
     #package_dir = {'':'src'},
     package_data = {'SpecIm' : ['Data/*fits']}
