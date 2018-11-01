@@ -67,7 +67,7 @@ setup(
     description = 'Code for visualizing fits images and for'
     'extracting and plotting spectra',
     #long_description = open('README.txt').read(),
-    requires = ['numpy','scipy','astropy','matplotlib','CDFutils'],
+    install_requires = ['numpy','scipy','astropy','matplotlib','CDFutils'],
     packages = ['SpecIm'],
     #package_dir = {'':'src'},
     package_data = {'SpecIm' : ['Data/*fits']}
