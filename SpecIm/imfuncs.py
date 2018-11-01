@@ -33,7 +33,7 @@ Stand-alone functions
 """
 
 import os
-from math import log, log10, sqrt, pi, fabs, atan
+from math import log, log10, sqrt, pi, fabs
 from math import cos as mcos, sin as msin
 import numpy as np
 from scipy import ndimage
@@ -44,10 +44,6 @@ try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
-# try:
-#     from astropy.coordinates import SkyCoord
-# except ImportError:
-#     from astropy.coordinates import ICRS as SkyCoord
 try:
     from CDFutils import datafuncs as df
 except ImportError:
@@ -1415,7 +1411,6 @@ class Image:
         icoords[0] = ccdcoords[1]
         icoords[1] = ccdcoords[0]
         self.coords = icoords.copy()
-        
 
         # *** Now need to deal with regions that extend outside the data
         # should be doable, since map_coordinates just takes coordinate pairs

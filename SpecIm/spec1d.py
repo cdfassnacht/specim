@@ -5,15 +5,15 @@ This file contains the Spec1d class, which is used to process and plot
 1d spectroscopic data.
 """
 
+import os
 import numpy as np
-from scipy import interpolate
+from scipy import interpolate, ndimage
 import matplotlib.pyplot as plt
 try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
 from CDFutils import datafuncs as df
-import spec_simple as ss
 
 # ===========================================================================
 #
@@ -31,6 +31,7 @@ class Spec1d(df.Data1d):
                  wav=None, flux=None, var=None, sky=None, logwav=False,
                  debug=False):
         """
+
         Reads in the input 1-dimensional spectrum.
         This can be done in two mutually exclusive ways:
 
@@ -105,13 +106,11 @@ class Spec1d(df.Data1d):
         """ Initialize some variables """
         self.hasvar = False
         self.sky = False
+        self.atm_trans = None
         self.infile = None
         self.dispave = None
         names0 = ['wav', 'flux', 'var']
-        wav0 = None
-        flux0 = None
-        var0 = None
-        sky0 = None
+        spec0 = [None, None, None, None]
 
         self.logwav = logwav
 
@@ -119,8 +118,8 @@ class Spec1d(df.Data1d):
         if infile is not None:
             self.infile = infile
             try:
-                wav0, flux0, var0, sky0 = self.read_from_file(informat,
-                                                              debug=debug)
+                spec0, self.dispave, self.hasvar = \
+                    self.read_from_file(infile, informat, debug=debug)
             except IOError:
                 print('')
                 print 'Could not read input file %s' % infile
@@ -128,15 +127,15 @@ class Spec1d(df.Data1d):
                 return None
         elif wav is not None and flux is not None:
             if self.logwav:
-                wav0 = 10.**wav
+                spec0[0] = 10.**wav
             else:
-                wav0 = wav
-            flux0 = flux
+                spec0[0] = wav
+            spec0[1] = flux
             if var is not None:
-                var0 = var
+                spec0[2] = var
                 self.hasvar = True
             if sky is not None:
-                sky0 = sky
+                spec0[3] = sky
                 self.sky = True
         else:
             print('')
@@ -156,23 +155,25 @@ class Spec1d(df.Data1d):
         """
         if debug:
             print(names0)
-            print('Wavelength vector size: %d' % wav0.size)
-            print('Flux vector size: %d' % flux0.size)
-        if var0 is not None:
-            df.Data1d.__init__(self, wav0, flux0, var0, names=names0)
+            print('Wavelength vector size: %d' % spec0[0].size)
+            print('Flux vector size: %d' % spec0[1].size)
+        if spec0[2] is not None:
+            df.Data1d.__init__(self, spec0[0], spec0[1], spec0[2],
+                               names=names0)
         else:
             names = names0[:-1]
-            df.Data1d.__init__(self, wav0, flux0, names=names)
+            df.Data1d.__init__(self, spec0[0], spec0[1], names=names)
 
         """ Add the sky vector to the Table structure if it is not none """
-        if sky0 is not None:
-            self['sky'] = sky0
+        if spec0[3] is not None:
+            self['sky'] = spec0[3]
+
         """ Read in the list that may be used for marking spectral lines """
         self.load_linelist()
 
     # -----------------------------------------------------------------------
 
-    def read_from_file(self, informat, verbose=True, debug=False):
+    def read_from_file(self, infile, informat, verbose=True, debug=False):
         """
 
         Reads a 1-d spectrum from a file.  The file must have one of the
@@ -188,18 +189,19 @@ class Spec1d(df.Data1d):
 
         if verbose:
             print ""
-            print "Reading spectrum from %s" % self.infile
-            print "Input file has format: %s" % informat
+            print "Reading spectrum from %s" % infile
+            print "Expected file format: %s" % informat
 
         """ Set default parameters """
         wav = None
         flux = None
         var = None
         sky = None
+        hasvar = False
 
         """ Read in the input spectrum """
         if informat == 'fits':
-            hdu = pf.open(self.infile)
+            hdu = pf.open(infile)
             if self.logwav:
                 wav = 10.**(hdu[1].data)
             else:
@@ -207,26 +209,26 @@ class Spec1d(df.Data1d):
             flux = hdu[2].data.copy()
             if len(hdu) > 3:
                 var = hdu[3].data.copy()
-            self.hasvar = True
+            hasvar = True
             if len(hdu) > 4:
                 sky = hdu[4].data.copy()
             del hdu
         elif informat == 'fitstab':
-            hdu = pf.open(self.infile)
+            hdu = pf.open(infile)
             tdat = hdu[1].data
             wav = tdat.field(0)
             flux = tdat.field(1)
             if len(tdat[0]) > 2:
                 var = tdat.field(3)
-                self.hasvar = True
+                hasvar = True
             del hdu
         elif informat == 'fitsflux':
-            hdu = pf.open(self.infile)
+            hdu = pf.open(infile)
             if len(hdu[0].data.shape) == 2:
                 flux = hdu[0].data[0, :]
             else:
                 flux = hdu[0].data.copy()
-            self.hasvar = False
+            hasvar = False
             wav = np.arange(flux.size)
             hdr1 = hdu[0].header
             if debug:
@@ -245,7 +247,7 @@ class Spec1d(df.Data1d):
                 wav = hdr1['crval1'] + wav*hdr1['cd1_1']
             del hdu
         elif informat.lower() == 'deimos':
-            hdu = pf.open(self.infile)
+            hdu = pf.open(infile)
             tab1 = hdu[1].data
             tab2 = hdu[2].data
             bwav = tab1['lambda'][0, :]
@@ -260,19 +262,19 @@ class Spec1d(df.Data1d):
             wav = np.concatenate((bwav, rwav))
             var = np.concatenate((bvar, rvar))
             sky = np.concatenate((bsky, rsky))
-            self.hasvar = True
+            hasvar = True
         elif informat.lower() == 'esi':
-            hdu = pf.open(self.infile)
+            hdu = pf.open(infile)
             wav = 10.**(hdu[1].data)
             flux = hdu[2].data.copy()
             var = hdu[3].data.copy()
-            self.hasvar = True
+            hasvar = True
             del hdu
         elif informat == 'mwa':
-            hdu = pf.open(self.infile)
+            hdu = pf.open(infile)
             flux = hdu[1].data.copy()
             var = hdu[3].data.copy()
-            self.hasvar = True
+            hasvar = True
             wav = np.arange(flux.size)
             hdr1 = hdu[1].header
             if self.logwav:
@@ -281,7 +283,7 @@ class Spec1d(df.Data1d):
                 wav = hdr1['crval1'] + wav*hdr1['cd1_1']
             del hdu
         else:
-            spec = np.loadtxt(self.infile)
+            spec = np.loadtxt(infile)
             if self.logwav:
                 wav = 10.**(spec[:, 0])
             else:
@@ -289,14 +291,14 @@ class Spec1d(df.Data1d):
             flux = spec[:, 1]
             if spec.shape[1] > 2:
                 var = spec[:, 2]
-                self.hasvar = True
+                hasvar = True
             if spec.shape[1] > 3:
                 sky = spec[:, 3]
                 self.sky = True
             del spec
 
         """ Check for NaN's, which this code can't handle """
-        if self.hasvar:
+        if hasvar:
             mask = (np.isnan(flux)) | (np.isnan(var))
             varmax = var[~mask].max()
             var[mask] = varmax * 5.
@@ -319,8 +321,125 @@ class Spec1d(df.Data1d):
             print ""
 
         """ Return the data """
-        self.dispave = dispave
-        return wav, flux, var, sky
+        # self.dispave = dispave
+        return [wav, flux, var, sky], dispave, hasvar
+
+    # -----------------------------------------------------------------------
+
+    def make_atm_trans(self, fwhm=15., modfile='default'):
+        """
+        Creates an extension to the class that contains the
+        transmission of the Earth's atmosphere as a function of wavelength.
+        For now this is just for the near-infrared (NIR) part of the spectrum,
+        which is what the default gives, but there is some functionality for
+        a different transmission spectrum to be provided.
+        The transmission spectrum is stored as self.atm_trans
+
+        Inputs:
+          fwhm    - smoothing parameter for the output spectrum
+          modfile - the full path+name of the file containing the atmospheric
+                    transmission data.  The default location is in the Data
+                    subdirectory contained within the directory in which this
+                    code is found.
+        """
+
+        """ Read in the atmospheric transmission data"""
+        if modfile != 'default':
+            infile = modfile
+        else:
+            moddir = '%s' % (os.path.split(__file__)[0])
+            infile = '%s/Data/atm_trans_maunakea.fits' % moddir
+        print('Loading atmospheric data from %s' % infile)
+        try:
+            atm0, da, hv = self.read_from_file(infile, informat='fitstab')
+        except IOError:
+            print('ERROR: Cannot read atmospheric transmission data file')
+            raise IOError
+        atm0[0] *= 1.0e4
+
+        """
+        Only use the relevant part of the atmospheric transmission spectrum
+        """
+        w0 = atm0[0]
+        w = self['wav']
+        mask = (w0 >= w.min()) & (w0 <= w.max())
+        if mask.sum() == 0:
+            print('')
+            print('Warning: %s only has data outside the requested wavelength'
+                  'range' % infile)
+            print('   %8.2f - %8.2f' % (w.min(), w.max()))
+            self.atm_trans = None
+            del atm0
+            raise ValueError
+        else:
+            watm = atm0[0][mask]
+            trans = atm0[1][mask]
+
+        """ Smooth the spectrum """
+        trans = ndimage.gaussian_filter(trans, fwhm)
+
+        """ Resample the smoothed spectrum """
+        tmpspec = Spec1d(wav=watm, flux=trans)
+        tmpspec.resample(w)
+
+        """ Store result in the atm_trans holder """
+        self.atm_trans = tmpspec.rsflux
+
+        """ Clean up """
+        del atm0, watm, trans, tmpspec
+
+    # -----------------------------------------------------------------------
+
+    def plot_atm_trans(self, scale=1., offset=0., ls='-', color='g',
+                       fwhm=15., modfile='default', label='default',
+                       title=None, xlabel=None, ylabel=None):
+        """
+
+        Plots the atmospheric transmission for the wavelength range
+        corresponding to the spectrum contained in this Spec1d instance.
+        If the transmission spectrum does not yet exist, then the
+        make_atm_trans method gets called first.
+
+        """
+
+        """
+        Make the atmospheric transmission spectrum if it doesn't already
+        exist
+        """
+        if self.atm_trans is None:
+            try:
+                self.make_atm_trans(fwhm=fwhm, modfile=modfile)
+            except IOError:
+                return
+            except ValueError:
+                return
+
+        """ Set some plotting parameters """
+        if label == 'default':
+            plabel = 'atmTrans'
+        elif label is None:
+            plabel = None
+        pltls = "steps%s" % ls
+
+        """ Now do the plotting """
+        tmp = self.atm_trans.copy()
+        tmp *= self['flux'].max() * scale
+        tmp += offset
+        if plabel is not None:
+            plt.plot(self['wav'], tmp, color, linestyle=pltls, label=plabel)
+        else:
+            plt.plot(self['wav'], tmp, color, linestyle=pltls)
+
+        """ Label things if requested """
+        if xlabel:
+            plt.xlabel(xlabel)
+        if ylabel:
+            plt.ylabel(ylabel)
+        if title:
+            plt.title(title)
+
+        """ Clean up """
+        del tmp
 
     # -----------------------------------------------------------------------
 
@@ -329,7 +448,7 @@ class Spec1d(df.Data1d):
              showzero=True, model=None, modcolor='g',
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
-             atmls='-', usesmooth=False, verbose=True):
+             atmls='-', atmmodfile='default', usesmooth=False, verbose=True):
         """
         Plots the spectrum
 
@@ -414,9 +533,8 @@ class Spec1d(df.Data1d):
 
         """ Plot the atmospheric transmission if requested """
         if add_atm_trans:
-            ss.plot_atm_trans(self['wav'], atmfwhm, self['flux'],
-                              scale=atmscale, offset=atmoffset,
-                              linestyle=atmls)
+            self.plot_atm_trans(ls=atmls, scale=atmscale, offset=atmoffset,
+                                fwhm=atmfwhm, modfile=atmmodfile)
 
     # -----------------------------------------------------------------------
 
@@ -874,7 +992,7 @@ class Spec1d(df.Data1d):
             print('ERROR: modsmooth parameter must be a float')
             raise TypeError
         waveobs = self['wav'].copy()
-        skymod = ss.make_sky_model(self['wav'], smooth=modsmooth)
+        # skymod = ss.make_sky_model(self['wav'], smooth=modsmooth)
 
         """
         Scale the sky spectrum to roughly be 75% of the amplitude of the

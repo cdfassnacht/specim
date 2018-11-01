@@ -1,5 +1,5 @@
-from spec1d import Spec1d
-from spec2d import Spec2d
+from .spec1d import Spec1d
+from .spec2d import Spec2d
 
 __version__ = 'unknown'
 try:

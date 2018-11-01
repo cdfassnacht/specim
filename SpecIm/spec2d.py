@@ -289,17 +289,17 @@ class Spec2d(imf.Image):
         self.has_cdmatx = True
         try:
             dw = hdr[cdkey]
-        except:
+        except KeyError:
             self.has_cdmatx = False
             dw = 1
         try:
             wstart = hdr[crval]
-        except:
+        except KeyError:
             self.has_cdmatx = False
             wstart = 0
         try:
             wpix = hdr[crpix] - self.xmin - 1
-        except:
+        except KeyError:
             self.has_cdmatx = False
             wpix = 0
 

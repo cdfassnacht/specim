@@ -31,17 +31,15 @@ NOTE: More and more of the previous stand-alone functionality has been moved
 
 """
 
-from math import sqrt, pi
 import numpy as np
 from scipy import optimize, interpolate, ndimage
-from scipy.ndimage import filters
 import matplotlib.pyplot as plt
 try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
-from spec1d import Spec1d
-from spec2d import Spec2d
+from .spec1d import Spec1d
+from .spec2d import Spec2d
 
 # -----------------------------------------------------------------------
 
@@ -57,8 +55,6 @@ def clear_all():
 
 
 # ===========================================================================
-#
-# *** End of Spec2d class definition ***
 #
 # Below here are:
 #    1. a few stand-alone functions that do not fit particularly well into
@@ -734,7 +730,7 @@ def make_sky_model(wavelength, smooth=25., doplot=False, verbose=True):
         modfile = '%s/Data/uves_skymodel.fits' % moddir
     try:
         modspec = Spec1d(modfile, informat='fitstab')
-    except:
+    except IOError:
         raise IOError
     skymodel = (modspec['wav'], modspec['flux'], 3)
 
@@ -945,14 +941,14 @@ def response_correct(infile, respfile, outfile):
     # Read input files
     try:
         w, f, v = np.loadtxt(infile, unpack=True)
-    except:
+    except IOError:
         print ""
         print "ERROR: response_correct.  Unable to read input spectrum %s" \
             % infile
         return
     try:
         wr, resp = np.loadtxt(respfile, unpack=True)
-    except:
+    except IOError:
         print ""
         print "ERROR: response_correct.  Unable to read response spectrum %s" \
             % respfile
@@ -1045,92 +1041,40 @@ def normalize(infile, outfile, order=6, fitrange=None, filtwidth=11):
 # -----------------------------------------------------------------------
 
 
-def atm_trans(w, fwhm=15., flux=None, scale=1., offset=0.0, modfile='default'):
-    """
-    Creates a Spec1d instance (i.e., a 1-dimensional spectrum) containing the
-    transmission of the Earth's atmosphere as a function of wavelength in
-    the near-infrared (NIR) part of the spectrum.  The returned spectrum
-    is for the wavelength range specified by the required w parameter, which
-    is a wavelength vector.
-
-    Inputs:
-        w       - wavelength vector whose min and max values set the wavelength
-                  range of the returned atmospheric transmission spectrum
-        fwhm    - smoothing parameter for the output spectrum
-        modfile - the full path+name of the file containing the atmospheric
-                  transmission data.  The default location is in the Data
-                  subdirectory contained within the directory in which this
-                  code is found.
-    """
-
-    """ Read in the atmospheric transmission data"""
-    if modfile != 'default':
-        infile = modfile
-    else:
-        if __file__ == 'spec_simple.py':
-            moddir = '.'
-        else:
-            moddir = __file__.split('/spec_simple')[0]
-        infile = '%s/Data/atm_trans_maunakea.fits' % moddir
-    print "Loading atmospheric data from %s" % infile
-    atm0 = Spec1d(infile, informat='fitstab')
-    atm0['wav'] *= 1.0e4
-
-    """ Only use the relevant part of the atmospheric transmission spectrum"""
-    mask = np.where((atm0['wav'] >= w.min()) & (atm0['wav'] <= w.max()))
-    watm = atm0['wav'][mask]
-    trans = atm0['flux'][mask]
-    del atm0
-
-    """ Smooth the spectrum """
-    trans = ndimage.gaussian_filter(trans, fwhm)
-
-    """ Resample the smoothed spectrum """
-    tmpspec = Spec1d(wav=watm, flux=trans)
-    tmpspec.resample(w)
-
-    """ Store result as a Spec1d instance """
-    atm = Spec1d(wav=tmpspec.rswav, flux=tmpspec.rsflux)
-
-    """
-    If an input spectrum has been given, then rescale the trans spectrum
-    """
-    if flux is not None:
-        atm['flux'] *= scale * flux.max()
-    else:
-        atm['flux'] *= scale
-
-    """ Add any requested vertical offset """
-    atm['flux'] += offset
-
-    """ Return the transmission spectrum """
-    del watm, trans, tmpspec
-    return atm
-
-# -----------------------------------------------------------------------
-
-
-def plot_atm_trans(w, fwhm=15., flux=None, scale=1.05, offset=0.0,
-                   color='g', linestyle='-', return_atm=False,
-                   modfile='default', title=None):
+def plot_atm_trans(w, flux=None, return_atm=False, title=None, scale=1.,
+                   **kwargs):
     """
     Given an input spectrum, represented by the wavelength (w) and flux (spec)
     vectors, and a rough fwhm (in Angstrom), smooths and resamples the
     atmospheric transmission spectrum for the NIR and plots it.
+
+    kwargs
+      fwhm
+      modfile
+      scale
+      offset
+      color
+      linestyle
     """
 
-    """
-    Get the atmospheric spectrum that matches the input wavelength array
-    """
-    atm = atm_trans(w, flux=flux, scale=scale, offset=offset, modfile=modfile)
+    """ Make a spectrum based on the input wavelength and, perhaps, flux """
+    if flux is None:
+        flux = np.ones(w.size)
+    tmpspec = Spec1d(wav=w, flux=flux)
 
-    """ Plot the results """
-    atm.plot(color=color, linestyle=linestyle, title=title)
+    """
+    Plot the atmospheric transmission over the requested wavelength range
+    """
+    tmpspec.plot_atm_trans(scale=scale, **kwargs)
 
+    """ Clean up and return """
     if return_atm:
+        flux = tmpspec.atm_trans.copy()
+        atm = Spec1d(wav=w, flux=flux)
+        del tmpspec
         return atm
     else:
-        del atm
+        del tmpspec
 
 # -----------------------------------------------------------------------
 
@@ -1147,7 +1091,9 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651., smooth=25.):
     requested wavelength range
     """
     wsky = np.arange(wmin, wmax)
-    atm = atm_trans(wsky)
+    flux = np.ones(wsky.size)
+    tmpspec = Spec1d(wav=wsky, flux=flux)
+    # tmpspec.make_atm_trans()
     skymod = make_sky_model(wsky, smooth=smooth)
     skymod['flux'] /= skymod['flux'].max()
 
@@ -1163,12 +1109,14 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651., smooth=25.):
 
     """ Plot the atmospheric transmission spectrum """
     ax1 = plt.subplot(211)
-    atm.plot(color='g', title='Near IR Sky', ylabel='Transmission')
+    tmpspec.plot_atm_trans(title='Near IR Sky', ylabel='Transmission',
+                           scale=1.)
+
     """
     Plot the locations of bright emission features at the requested redshift
     """
     if z is not None:
-        atm.mark_lines('strongem', z, marktype='line', showz=False)
+        tmpspec.mark_lines('strongem', z, marktype='line', showz=False)
     plt.xlim(xmin, xmax)
     plt.ylim(-0.15, 1.1)
     plt.setp(ax1.get_xticklabels(), visible=False)
@@ -1176,14 +1124,18 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651., smooth=25.):
     """ Plot the night-sky emission lines """
     plt.subplot(212, sharex=ax1)
     skymod.plot(title=None, ylabel='Sky Emission')
+
     """
     Plot the locations of bright emission features at the requested redshift
     """
     if z is not None:
-        atm.mark_lines('strongem', z, marktype='line', zfs=12)
+        tmpspec.mark_lines('strongem', z, marktype='line', zfs=12)
     plt.xlim(xmin, xmax)
     dy = 0.05 * skymod['flux'].max()
     plt.ylim(-dy, (skymod['flux'].max()+dy))
+
+    """ Clean up """
+    del tmpspec, skymod
 
 
 # -----------------------------------------------------------------------
@@ -1243,4 +1195,3 @@ def calc_lineflux(wavelength, flux, bluemin, bluemax, redmin, redmax, var=None,
     print delwave
     intflux = (lineflux * delwave).sum()
     print intflux
-

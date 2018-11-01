@@ -48,3 +48,69 @@ def apply_wavecal(infile, outfile, lambda0, dlambda, varspec=True):
         plot_spectrum_array(wavelength, flux,
                             title="Wavelength-calibrated spectrum")
         save_spectrum(outfile, wavelength, flux)
+
+# -----------------------------------------------------------------------
+
+
+def atm_trans(w, fwhm=15., flux=None, scale=1., offset=0.0, modfile='default'):
+    """
+    Creates a Spec1d instance (i.e., a 1-dimensional spectrum) containing the
+    transmission of the Earth's atmosphere as a function of wavelength in
+    the near-infrared (NIR) part of the spectrum.  The returned spectrum
+    is for the wavelength range specified by the required w parameter, which
+    is a wavelength vector.
+
+    Inputs:
+        w       - wavelength vector whose min and max values set the wavelength
+                  range of the returned atmospheric transmission spectrum
+        fwhm    - smoothing parameter for the output spectrum
+        modfile - the full path+name of the file containing the atmospheric
+                  transmission data.  The default location is in the Data
+                  subdirectory contained within the directory in which this
+                  code is found.
+    """
+
+    """ Read in the atmospheric transmission data"""
+    if modfile != 'default':
+        infile = modfile
+    else:
+        if __file__ == 'spec_simple.py':
+            moddir = '.'
+        else:
+            moddir = __file__.split('/spec_simple')[0]
+        infile = '%s/Data/atm_trans_maunakea.fits' % moddir
+    print('Loading atmospheric data from %s' % infile)
+    atm0 = Spec1d(infile, informat='fitstab')
+    atm0['wav'] *= 1.0e4
+
+    """ Only use the relevant part of the atmospheric transmission spectrum"""
+    mask = np.where((atm0['wav'] >= w.min()) & (atm0['wav'] <= w.max()))
+    watm = atm0['wav'][mask]
+    trans = atm0['flux'][mask]
+    del atm0
+
+    """ Smooth the spectrum """
+    trans = ndimage.gaussian_filter(trans, fwhm)
+
+    """ Resample the smoothed spectrum """
+    tmpspec = Spec1d(wav=watm, flux=trans)
+    tmpspec.resample(w)
+
+    """ Store result as a Spec1d instance """
+    atm = Spec1d(wav=tmpspec.rswav, flux=tmpspec.rsflux)
+
+    """
+    If an input spectrum has been given, then rescale the trans spectrum
+    """
+    if flux is not None:
+        atm['flux'] *= scale * flux.max()
+    else:
+        atm['flux'] *= scale
+
+    """ Add any requested vertical offset """
+    atm['flux'] += offset
+
+    """ Return the transmission spectrum """
+    del watm, trans, tmpspec
+    return atm
+
