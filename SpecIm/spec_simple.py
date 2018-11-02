@@ -32,7 +32,7 @@ NOTE: More and more of the previous stand-alone functionality has been moved
 """
 
 import numpy as np
-from scipy import optimize, interpolate, ndimage
+from scipy import optimize, ndimage
 import matplotlib.pyplot as plt
 try:
     from astropy.io import fits as pf
@@ -691,102 +691,6 @@ def combine_spectra(file_list, outfile, informat='text', xlabel='Pixels'):
 
     """ Save the combined spectrum """
     outspec.save(outfile, outformat=informat)
-
-# -----------------------------------------------------------------------
-
-
-def make_sky_model(wavelength, smooth=25., doplot=False, verbose=True):
-    """
-    Given an input wavelength vector, creates a smooth model of the
-    night sky emission that matches the wavelength range and stepsize
-    of the input vector.
-    """
-
-    """ Get info from input wavelength vector """
-    wstart = wavelength.min()
-    wend = wavelength.max()
-    disp = wavelength[1] - wavelength[0]
-
-    """
-    Read in the appropriate skymodel:
-     * If the starting wavelength is > 9000 Ang, then use the NIR sky model
-     * Otherwise use the optical sky model
-    These are in a B-spline format, which is apparently what
-     the call to interpolate.splev needs (see code just below).
-    However, they used to be stored in a numpy savefile (for the NIR spectrum)
-     or a pickle save format (for the optical spectrum).
-     To make things more consistent with the rest of the code here, I converted
-     them to the 'fitstab' format (i.e., binary fits tables) and then will,
-     in the code below, convert them back into the appropriate B-spline tuple
-     format that interpolate.splev requires.
-    """
-    if __file__ == 'spec_simple.py':
-        moddir = '.'
-    else:
-        moddir = __file__.split('/spec_simple')[0]
-    if wstart >= 9000.:
-        modfile = '%s/Data/nirspec_skymodel.fits' % moddir
-    else:
-        modfile = '%s/Data/uves_skymodel.fits' % moddir
-    try:
-        modspec = Spec1d(modfile, informat='fitstab')
-    except IOError:
-        raise IOError
-    skymodel = (modspec['wav'], modspec['flux'], 3)
-
-    """
-    Make sure that the requested wavelength range does not exceed the range
-    in the model
-    """
-    redo_wav = False
-    if wstart < modspec['wav'][0]:
-        wstart = modspec['wav'][0] + 1.
-        redo_wav = True
-    if wend > modspec['wav'][-1]:
-        wend = modspec['wav'][-1] - 10.
-        redo_wav = True
-    if redo_wav:
-        print('Limiting wavelength range for model sky to %8.3f - %8.3f'
-              % (wstart, wend))
-
-    if verbose:
-        print "Making model sky"
-        print "--------------------------------------"
-        print "Model starting wavelength: %f" % wstart
-        print "Model ending wavelength:    %f" % wend
-        print "Model dispersion:             %f" % disp
-
-    """
-    Resample and smooth the model spectrum.
-    The call to splev does a spline interpolation of the sky model onto the
-     points defined by the "wave" array
-    """
-    wave = np.arange(wstart, wend, 0.2)
-    tmpskymod = interpolate.splev(wave, skymodel)
-    tmpskymod = ndimage.gaussian_filter(tmpskymod, smooth)
-
-    """
-    Create a B-spline representation of the smoothed curve for use in
-    the wavecal optimization
-    """
-    model = interpolate.splrep(wave, tmpskymod)
-
-    """
-    Finally use the initial guess for the dispersion and evaluate the
-     model sky at those points, using the B-spline model
-    """
-    skyflux = interpolate.splev(wave, model)
-
-    """ Create a Spec1d instance containing the sky model """
-    skymod = Spec1d(wav=wave, flux=skyflux)
-
-    """ Plot the output model if requested """
-    if doplot:
-        skymod.plot(title='Model Sky Spectrum')
-
-    # Clean up and return
-    del skymodel, tmpskymod, wave
-    return skymod
 
 # -----------------------------------------------------------------------
 

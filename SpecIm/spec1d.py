@@ -19,6 +19,9 @@ from CDFutils import datafuncs as df
 #
 # Start of Spec1d class
 #
+# NOTE: There is one stand-alone function defined at the end of this file.
+#       It will eventually be incorporated into the Spec1d class.
+#
 # ===========================================================================
 
 
@@ -122,7 +125,7 @@ class Spec1d(df.Data1d):
                     self.read_from_file(infile, informat, debug=debug)
             except IOError:
                 print('')
-                print 'Could not read input file %s' % infile
+                print('Could not read input file %s' % infile)
                 print('')
                 return None
         elif wav is not None and flux is not None:
@@ -139,14 +142,14 @@ class Spec1d(df.Data1d):
                 self.sky = True
         else:
             print('')
-            print 'ERROR: Must provide either:'
-            print '  1. A name of an input file containing the spectrum'
-            print '  2. At minimum, both of the following:'
-            print '         A. a wavelength vector (wav)'
-            print '         B. a flux vector (flux)'
-            print '      and optionally one or both of the following'
-            print '         C. a variance vector (var)'
-            print '         D. a sky spectrum vector (sky)'
+            print('ERROR: Must provide either:')
+            print('  1. A name of an input file containing the spectrum')
+            print('  2. At minimum, both of the following:')
+            print('         A. a wavelength vector (wav)')
+            print('         B. a flux vector (flux)')
+            print('      and optionally one or both of the following')
+            print('         C. a variance vector (var)')
+            print('         D. a sky spectrum vector (sky)')
             print('')
             return
 
@@ -188,9 +191,9 @@ class Spec1d(df.Data1d):
         """
 
         if verbose:
-            print ""
-            print "Reading spectrum from %s" % infile
-            print "Expected file format: %s" % informat
+            print('')
+            print('Reading spectrum from %s' % infile)
+            print('Expected file format: %s' % informat)
 
         """ Set default parameters """
         wav = None
@@ -308,17 +311,17 @@ class Spec1d(df.Data1d):
         disp0 = wav[1] - wav[0]
         dispave = (wav[-1] - wav[0]) / (wav.size - 1)
         if verbose:
-            print " Spectrum Start: %8.2f" % wav[0]
-            print " Spectrum End:    %8.2f" % wav[-1]
+            print(' Spectrum Start: %8.2f' % wav[0])
+            print(' Spectrum End:    %8.2f' % wav[-1])
             if disp0 < 0.01:
-                print " Dispersion (1st pixel): %g" % disp0
+                print(' Dispersion (1st pixel): %g' % disp0)
             else:
-                print " Dispersion (1st pixel): %6.2f" % disp0
+                print(' Dispersion (1st pixel): %6.2f' % disp0)
             if dispave < 0.01:
-                print " Dispersion (average):    %g" % dispave
+                print(' Dispersion (average):    %g' % dispave)
             else:
-                print " Dispersion (average):    %6.2f" % dispave
-            print ""
+                print(' Dispersion (average):    %6.2f' % dispave)
+            print('')
 
         """ Return the data """
         # self.dispave = dispave
@@ -562,7 +565,7 @@ class Spec1d(df.Data1d):
         else:
             if verbose:
                 print('')
-                print 'Cannot plot sky spectrum.'
+                print('Cannot plot sky spectrum.')
                 print('')
             raise KeyError('No sky or variance information in the spectrum')
 
@@ -639,7 +642,7 @@ class Spec1d(df.Data1d):
         #         save_spectrum(outfile, wavelength, outflux, outvar)
         #     else:
         #         save_spectrum(outfile, wavelength, outflux)
-        #     print ""
+        #     print('')
 
     # -----------------------------------------------------------------------
 
@@ -752,7 +755,7 @@ class Spec1d(df.Data1d):
             labva = 'bottom'
         else:
             print('')
-            print "ERROR: linetype must be either 'abs', 'em', or 'strongem'"
+            print("ERROR: linetype must be either 'abs', 'em', or 'strongem'")
             print('')
             return None, None
 
@@ -802,7 +805,7 @@ class Spec1d(df.Data1d):
             labva = 'bottom'
         else:
             print('')
-            print "ERROR: linetype must be either 'abs', 'em', or 'strongem'"
+            print("ERROR: linetype must be either 'abs', 'em', or 'strongem'")
             print('')
             return
 
@@ -832,12 +835,12 @@ class Spec1d(df.Data1d):
         tmplines = self.lineinfo[mask]
         zlines = (z + 1.0) * tmplines['wavelength']
         print('')
-        print 'Line        lambda_rest  lambda_obs'
-        print '----------  -----------  -----------'
+        print('Line        lambda_rest  lambda_obs')
+        print('----------  -----------  -----------')
         for i in range(len(tmplines)):
             line = tmplines[i]
-            print "%-10s   %8.2f      %8.2f" % \
-                (line['name'], line['wavelength'], zlines[i])
+            print('%-10s   %8.2f      %8.2f' %
+                  (line['name'], line['wavelength'], zlines[i]))
 
         """ Set the length of the ticks """
         ticklen = tickfrac * ydiff
@@ -845,8 +848,8 @@ class Spec1d(df.Data1d):
         print('')
         if (len(tmplines) == 0):
             print('')
-            print 'No lines of the requested type within the wavelength'
-            print ' range covered by this spectrum.'
+            print('No lines of the requested type within the wavelength')
+            print(' range covered by this spectrum.')
             print('')
             return
 
@@ -992,7 +995,7 @@ class Spec1d(df.Data1d):
             print('ERROR: modsmooth parameter must be a float')
             raise TypeError
         waveobs = self['wav'].copy()
-        # skymod = ss.make_sky_model(self['wav'], smooth=modsmooth)
+        skymod = make_sky_model(self['wav'], smooth=modsmooth)
 
         """
         Scale the sky spectrum to roughly be 75% of the amplitude of the
@@ -1121,14 +1124,110 @@ class Spec1d(df.Data1d):
                 fmtstring = '%7.2f %9.3f'
             outdata[:, 0] = wav
             outdata[:, 1] = flux
-            print ""
+            print('')
             np.savetxt(outfile, outdata, fmt=fmtstring)
             del outdata
 
         if verbose:
-            print "Saved spectrum to file %s in format %s" % \
-                (outfile, outformat)
+            print('Saved spectrum to file %s in format %s' %
+                  (outfile, outformat))
 
     # -----------------------------------------------------------------------
 
 # ===========================================================================
+
+# -----------------------------------------------------------------------
+
+
+def make_sky_model(wavelength, smooth=25., doplot=False, verbose=True):
+    """
+    Given an input wavelength vector, creates a smooth model of the
+    night sky emission that matches the wavelength range and stepsize
+    of the input vector.
+    """
+
+    """ Get info from input wavelength vector """
+    wstart = wavelength.min()
+    wend = wavelength.max()
+    disp = wavelength[1] - wavelength[0]
+
+    """
+    Read in the appropriate skymodel:
+     * If the starting wavelength is > 9000 Ang, then use the NIR sky model
+     * Otherwise use the optical sky model
+    These are in a B-spline format, which is apparently what
+     the call to interpolate.splev needs (see code just below).
+    However, they used to be stored in a numpy savefile (for the NIR spectrum)
+     or a pickle save format (for the optical spectrum).
+     To make things more consistent with the rest of the code here, I converted
+     them to the 'fitstab' format (i.e., binary fits tables) and then will,
+     in the code below, convert them back into the appropriate B-spline tuple
+     format that interpolate.splev requires.
+    """
+    if __file__ == 'spec_simple.py':
+        moddir = '.'
+    else:
+        moddir = __file__.split('/spec_simple')[0]
+    if wstart >= 9000.:
+        modfile = '%s/Data/nirspec_skymodel.fits' % moddir
+    else:
+        modfile = '%s/Data/uves_skymodel.fits' % moddir
+    try:
+        modspec = Spec1d(modfile, informat='fitstab')
+    except IOError:
+        raise IOError
+    skymodel = (modspec['wav'], modspec['flux'], 3)
+
+    """
+    Make sure that the requested wavelength range does not exceed the range
+    in the model
+    """
+    redo_wav = False
+    if wstart < modspec['wav'][0]:
+        wstart = modspec['wav'][0] + 1.
+        redo_wav = True
+    if wend > modspec['wav'][-1]:
+        wend = modspec['wav'][-1] - 10.
+        redo_wav = True
+    if redo_wav:
+        print('Limiting wavelength range for model sky to %8.3f - %8.3f'
+              % (wstart, wend))
+
+    if verbose:
+        print('Making model sky')
+        print('--------------------------------------')
+        print('Model starting wavelength: %f') % wstart
+        print('Model ending wavelength:    %f') % wend
+        print('Model dispersion:             %f') % disp
+
+    """
+    Resample and smooth the model spectrum.
+    The call to splev does a spline interpolation of the sky model onto the
+     points defined by the "wave" array
+    """
+    wave = np.arange(wstart, wend, 0.2)
+    tmpskymod = interpolate.splev(wave, skymodel)
+    tmpskymod = ndimage.gaussian_filter(tmpskymod, smooth)
+
+    """
+    Create a B-spline representation of the smoothed curve for use in
+    the wavecal optimization
+    """
+    model = interpolate.splrep(wave, tmpskymod)
+
+    """
+    Finally use the initial guess for the dispersion and evaluate the
+     model sky at those points, using the B-spline model
+    """
+    skyflux = interpolate.splev(wave, model)
+
+    """ Create a Spec1d instance containing the sky model """
+    skymod = Spec1d(wav=wave, flux=skyflux)
+
+    """ Plot the output model if requested """
+    if doplot:
+        skymod.plot(title='Model Sky Spectrum')
+
+    """ Clean up and return """
+    del skymodel, tmpskymod, wave
+    return skymod
