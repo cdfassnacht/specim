@@ -68,7 +68,7 @@ setup(
     'extracting and plotting spectra',
     #long_description = open('README.txt').read(),
     requires = ['numpy','scipy','astropy','matplotlib','CDFutils'],
-    packages = ['SpecIm'],
+    packages = ['SpecIm', 'SpecIm.imfuncs', 'SpecIm.specfuncs'],
     #package_dir = {'':'src'},
     package_data = {'SpecIm' : ['Data/*fits']}
 )

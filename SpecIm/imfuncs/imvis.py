@@ -2765,7 +2765,7 @@ def plot_cat(fitsfile, catfile, xcol=0, ycol=1, marksize=20., markcolor='g',
                       funits=funits)
     except:
         print('')
-        print "Image display failed when called from plot_cat."
+        print ('Image display failed when called from plot_cat.')
         print('')
         return
     nx = pf.getval(fitsfile, 'naxis1')

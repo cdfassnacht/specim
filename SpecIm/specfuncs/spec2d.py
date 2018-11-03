@@ -15,8 +15,8 @@ try:
 except ImportError:
     import pyfits as pf
 from CDFutils import datafuncs as df
-import imfuncs as imf
-from spec1d import Spec1d
+from .. import imfuncs as imf
+from .spec1d import Spec1d
 
 # ===========================================================================
 #
