@@ -4,6 +4,13 @@ spec1d.py
 This file contains the Spec2d class, which is used to process and plot
 two-dimensional spectroscopic data.  This processing includes sky subtraction
 and extracting a one-dimensional spectrum from the 2D spectrum.
+
+Typical methods that are used to do an extraction:
+   display_spec
+   spatial_profile
+   find_and_trace
+   extract
+
 """
 
 from math import sqrt, pi
@@ -449,12 +456,12 @@ class Spec2d(imf.Image):
         Displays the two-dimensional spectrum and also, by default, the
         same spectrum after a crude sky subtraction.  To show only the
         input spectrum without the additional sky-subtracted version,
-        just set show_skysub=False
+        just set doskysub=False
 
         Optional inputs:
-            show_skysub - If this is True (the default) then make a second
-                           plot, showing the 2-D spectrum after a crude
-                           sky-subtraction has been performed.
+            doskysub - If this is True (the default) then make a second
+                       plot, showing the 2-D spectrum after a crude
+                       sky-subtraction has been performed.
         """
 
         if doskysub:
@@ -475,7 +482,7 @@ class Spec2d(imf.Image):
 
         """ Plot the input spectrum """
         ax1 = plt.subplot(pltnum_main)
-        self.display()
+        self.display(mode='xy', axlabel=False)
 
         """ Plot the subtracted sky spectrum if desired """
         if doskysub:
@@ -487,14 +494,14 @@ class Spec2d(imf.Image):
             self.found_rms = False
             self.hdu.info()
             print(self.ssext)
-            self.display(hext=self.ssext)
+            self.display(hext=self.ssext, mode='xy')
             print('foo')
 
             """ Plot an estimate of the 1D sky spectrum """
             ax3 = plt.subplot(212, sharex=ax1)
             # print self.sky1d['wav']
             # print self.sky1d['flux']
-            self.sky1d.plot(title=None)
+            self.sky1d.plot(title=None, xlabel='x (pix)')
 
         """
         For ease of viewing, only display part of the spectrum if it is
@@ -505,7 +512,13 @@ class Spec2d(imf.Image):
             xmin = int(self.npix / 2. - (sfac/2.) * self.nspat)
             xmax = int(self.npix / 2. + (sfac/2.) * self.nspat)
             plt.xlim(xmin, xmax)
-        # plt.ylim(0, self.nspat)
+
+            """ Scale the portion of the spectrum that is being displayed """
+            w = self.sky1d['wav']
+            flux = self.sky1d['flux'][(w >= xmin) & (w <= xmax)]
+            ymin, ymax = plt.ylim()
+            ydiff = flux.max() - ymin
+            plt.ylim(ymin, (ymin + 1.05 * ydiff))
 
     # -----------------------------------------------------------------------
 

@@ -2,12 +2,7 @@
 spec_simple.py - A library of functions to do various basic spectroscopy
  processing and plotting operations
 
-Classes and their most useful methods (UNDER CONSTRUCTION, BUT GETTING THERE.)
-  Spec2d
-     display_spec
-     spatial_profile
-     find_and_trace
-     extract
+Classes and their most useful methods
   Spec1d
      plot
      smooth

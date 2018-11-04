@@ -226,9 +226,6 @@ class Image:
         Returns the sub-image variables to their initial, unset, state
         """
 
-        self.subim = None
-        self.subcentx = None
-        self.subcenty = None
         self.subsizex = None
         self.subsizey = None
 
@@ -579,6 +576,7 @@ class Image:
 
     def set_wcsextent(self, hext=0, zeropos=None):
         """
+
         For making plots with WCS information, it is necessary to define
         the boundaries in terms of RA and Dec offsets from the center, in
         arcsec.  For this purpose, the imshow and contour methods in
@@ -1207,14 +1205,14 @@ class Image:
             self.data = self.hdu[hext].data[y1:y2, x1:x2].copy()
         self.data[~np.isfinite(self.data)] = 0.
         self.subimhdr = self.hdu[hext].header.copy()
-        self.subcentx = 0.5 * (x1 + x2)
-        self.subcenty = 0.5 * (y1 + y2)
+        subcentx = 0.5 * (x1 + x2)
+        subcenty = 0.5 * (y1 + y2)
 
         """ Print out useful information """
         if verbose:
             print('')
             print('Cutout image center (x, y): (%d, %d)' %
-                  (self.subcentx, self.subcenty))
+                  (subcentx, subcenty))
             print('Cutout image size (x y): %dx%d' %
                   (self.subsizex, self.subsizey))
 
@@ -2012,11 +2010,7 @@ class Image:
 
         """ First check to see if any modification needs to be made """
         if imcent is None and imsize is None:
-            if self.data is None:
-                # NOTE: fix this to use set_data once that method is written
-                self.data = self.hdu[hext].data.copy()
-            else:
-                return
+            self.data = self.hdu[hext].data.copy()
 
         """
         The definition of the subimage depends on whether the requested
@@ -2071,7 +2065,6 @@ class Image:
              units are counts/s or e-/s, and should more closely match the
              display behavior that the user wants.
             """
-            # data = self.subim.copy() - self.subim.min()
             data = self.data.copy() - self.data.min()
 
             """ Now rescale from 1-255 in requested range """
@@ -2085,7 +2078,6 @@ class Image:
 
         else:
             """ Linear scaling is the default """
-            # data = self.subim
             data = self.data
             vmin = self.fmin
             vmax = self.fmax
