@@ -106,8 +106,10 @@ class Image:
         """ Set up pointers to the default data and header """
         self.data = None
         self.hdr = None
+        self.prevdext = None
         # self.data = self.hdu[datahext].data.copy()
         # self.hdr = self.hdu[hdrhext].header.copy()
+        # self.prevdext = datahext
 
         """ Do an initial import of the WCS information from the header """
         self.found_wcs = False
@@ -140,7 +142,6 @@ class Image:
         self.rms_clip = 0.0          # Value of the clipped rms
         self.fmin = None             # Lower flux limit used in image display
         self.fmax = None             # Upper flux limit used in image display
-        self.fscale = 'linear'       # Flux scaling for display
         self.statsize = 2048         # Stats region size if image is too big
         self.statsec = None          # Region to use for pixel statistics
         self.zoomsize = 31           # Size of postage-stamp zoom
@@ -1205,6 +1206,7 @@ class Image:
             self.data = self.hdu[hext].data[y1:y2, x1:x2].copy()
         self.data[~np.isfinite(self.data)] = 0.
         self.subimhdr = self.hdu[hext].header.copy()
+        self.prevdext = hext
         subcentx = 0.5 * (x1 + x2)
         subcenty = 0.5 * (y1 + y2)
 
@@ -1423,6 +1425,7 @@ class Image:
                                             order=5)
         self.data[np.isnan(self.data)] = 0.
         self.subimhdr = outhdr.copy()
+        self.prevdext = dext
 
         """ Clean up """
         del data, icoords, skycoords, ccdcoords
@@ -2010,7 +2013,10 @@ class Image:
 
         """ First check to see if any modification needs to be made """
         if imcent is None and imsize is None:
-            self.data = self.hdu[hext].data.copy()
+            if self.prevdext is None or hext != self.prevdext:
+                self.data = self.hdu[hext].data.copy()
+            else:
+                return
 
         """
         The definition of the subimage depends on whether the requested
@@ -2026,7 +2032,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def scale_data(self):
+    def scale_data(self, fscale='linear'):
         """
         Sets the scaling for the display, which depends on the fmin and fmax
         parameters _and_ the choice of scaling (for now either 'log' or
@@ -2040,7 +2046,7 @@ class Image:
         fdiff = fabs(self.fmax - self.fmin)
         bitscale = 255.  # For 8-bit display
 
-        if self.fscale == 'log':
+        if fscale == 'log':
             """
             For the log scaling, some thought needs to go into this.
             The classic approach is to choose the display range in the
@@ -2088,7 +2094,7 @@ class Image:
     # -----------------------------------------------------------------------
 
     def _display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
-                       funits='sigma', fscale='linear', statsize=2048,
+                       funits='sigma', statsize=2048,
                        title=None,  mode='xy', zeropos=None, verbose=False):
         """
         Sets parameters within the Image class that will be used to actually
@@ -2117,7 +2123,6 @@ class Image:
 
         """ Set the image flux display limits """
         self.set_display_limits(fmin, fmax, funits, hext=hext, verbose=verbose)
-        self.fscale = fscale
 
         """ Set the color map """
         self.set_cmap(cmap)
@@ -2127,7 +2132,8 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def _display_implot(self, show_xyproj=False, axlabel=True, fontsize=None):
+    def _display_implot(self, fscale='linear', axlabel=True, fontsize=None,
+                        show_xyproj=False):
         """
 
         NOTE: DO NOT USE this routine/method unless you know exactly what
@@ -2159,7 +2165,7 @@ class Image:
             self.ax1 = plt.gca()
 
         """ Set the actual range for the display """
-        data, vmin, vmax = self.scale_data()
+        data, vmin, vmax = self.scale_data(fscale)
 
         """ Display the image data """
         plt.imshow(data, origin='lower', cmap=self.cmap, vmin=vmin,
@@ -2264,12 +2270,12 @@ class Image:
 
         """ Set up the parameters that will be needed to display the image """
         self._display_setup(hext=hext, cmap=cmap,
-                            fmin=fmin, fmax=fmax, funits=funits, fscale=fscale,
+                            fmin=fmin, fmax=fmax, funits=funits,
                             statsize=statsize, title=title, mode=mode,
                             zeropos=zeropos, verbose=verbose)
 
         """ Now display the data """
-        self._display_implot(show_xyproj, axlabel, fontsize)
+        self._display_implot(fscale, axlabel, fontsize, show_xyproj)
 
     # -----------------------------------------------------------------------
 
