@@ -132,13 +132,13 @@ class Spec1d(df.Data1d):
             if self.logwav:
                 spec0[0] = 10.**wav
             else:
-                spec0[0] = wav
-            spec0[1] = flux
+                spec0[0] = wav.copy()
+            spec0[1] = flux.copy()
             if var is not None:
-                spec0[2] = var
+                spec0[2] = var.copy()
                 self.hasvar = True
             if sky is not None:
-                spec0[3] = sky
+                spec0[3] = sky.copy()
                 self.sky = True
         else:
             print('')
