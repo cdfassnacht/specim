@@ -123,12 +123,14 @@ class Spec2d(imf.Image):
         Image attributes (for now this superclass initialization only works if
         inpsec is a file name.
         """
-        test = str(type(inspec))
-        if test.rfind('hdu') > 0:
-            self.hdu = inspec
-        else:
-            imf.Image.__init__(self, inspec, datahext=hext, hdrhext=hext,
-                               verbose=verbose)
+        imf.Image.__init__(self, inspec, datahext=hext, hdrhext=hext,
+                           verbose=verbose) 
+        # test = str(type(inspec))
+        # if test.rfind('hdu') > 0:
+        #     self.hdu = inspec
+        # else:
+        #     imf.Image.__init__(self, inspec, datahext=hext, hdrhext=hext,
+        #                        verbose=verbose)
 
         """ Read in the external variance file if there is one """
         if extvar is not None:

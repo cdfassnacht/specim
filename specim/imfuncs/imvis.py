@@ -1222,7 +1222,7 @@ class Image:
         Update the header info, including updating the CRPIXn values if they
         are present.
         """
-        if self.infile:
+        if self.infile is not None:
             self.subimhdr['ORIG_IM'] = 'Copied from %s' % self.infile
         self.subimhdr['ORIG_REG'] = \
             'Region in original image [xrange, yrange]: [%d:%d,%d:%d]' % \
@@ -1468,7 +1468,7 @@ class Image:
         """ Write to the output file if requested """
         if outfile:
             print('')
-            if self.infile:
+            if self.infile is not None:
                 print('Input file:  %s' % self.infile)
             print 'Output file: %s' % outfile
             pf.PrimaryHDU(self.data, self.subimhdr).writeto(outfile,
@@ -1550,7 +1550,7 @@ class Image:
         """ Copy new WCS information from subimage into the output header """
         for key in self.subimhdr.keys():
             newhdr[key] = self.subimhdr[key]
-        if self.infile:
+        if self.infile is not None:
             newhdr['ORIG_IM'] = self.infile
 
         """ Write the postage stamp to the output file """
@@ -1597,7 +1597,7 @@ class Image:
         print('imcopy: Cutting out region between ((%d,%d)) and ((%d,%d))' %
               (x1, y1, x2, y2))
         outdat = self.hdu[hext].data[y1:y2, x1:x2].copy()
-        if self.infile:
+        if self.infile is not None:
             inhdr['ORIG_IM'] = 'Copied from %s with region[%d:%d,%d:%d]' % \
                 (self.infile, x1, x2, y1, y2)
         print('')
@@ -2258,7 +2258,7 @@ class Image:
           dispunits
         """
         print('')
-        if self.infile:
+        if self.infile is not None:
             print('Input file:  %s' % self.infile)
 
         """
