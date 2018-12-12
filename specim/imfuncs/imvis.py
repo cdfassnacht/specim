@@ -1839,7 +1839,7 @@ class Image:
     # -----------------------------------------------------------------------
 
     def set_display_limits(self, fmin=-1., fmax=10., funits='sigma', hext=0,
-                           verbose=False):
+                           mask=None, verbose=False):
         """
 
         The method used to set the flux limits for the image display.  The
@@ -1920,7 +1920,9 @@ class Image:
                 print "--------------------------"
                 print self.data.size
                 print self.data.shape
-                self.sigma_clip(hext=hext, verbose=verbose)
+                if mask is not None:
+                    print('Using a mask')
+                self.sigma_clip(hext=hext, verbose=verbose, mask=mask)
                 self.found_rms = True
 
             """ If disprange is not set, then query the user for the range """
@@ -2095,7 +2097,8 @@ class Image:
 
     def _display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
                        funits='sigma', statsize=2048,
-                       title=None,  mode='xy', zeropos=None, verbose=False):
+                       title=None,  mode='xy', zeropos=None, mask=None,
+                       verbose=False):
         """
         Sets parameters within the Image class that will be used to actually
          display the image or the requested part of it.
@@ -2122,7 +2125,8 @@ class Image:
             self.extval = None
 
         """ Set the image flux display limits """
-        self.set_display_limits(fmin, fmax, funits, hext=hext, verbose=verbose)
+        self.set_display_limits(fmin, fmax, funits, hext=hext, mask=mask,
+                                verbose=verbose)
 
         """ Set the color map """
         self.set_cmap(cmap)
@@ -2269,10 +2273,13 @@ class Image:
         self.set_subim(hext, mode, imcent, imsize, verbose=verbose)
 
         """ Set up the parameters that will be needed to display the image """
+        if mask is not None:
+            print('Using mask')
+            print(mask.sum())
         self._display_setup(hext=hext, cmap=cmap,
                             fmin=fmin, fmax=fmax, funits=funits,
-                            statsize=statsize, title=title, mode=mode,
-                            zeropos=zeropos, verbose=verbose)
+                            statsize=statsize, mask=mask, title=title,
+                            mode=mode, zeropos=zeropos, verbose=verbose)
 
         """ Now display the data """
         self._display_implot(fscale, axlabel, fontsize, show_xyproj)
