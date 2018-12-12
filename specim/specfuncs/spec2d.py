@@ -21,7 +21,7 @@ try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
-from CDFutils import datafuncs as df
+from cdfutils import datafuncs as df
 from .. import imfuncs as imf
 from .spec1d import Spec1d
 
