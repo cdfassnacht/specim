@@ -32,10 +32,10 @@ except ImportError:
     sys.exit('### Error: python module matplotlib not found')
 
 try:
-    find_module('CDFutils')
+    find_module('cdfutils')
 except ImportError:
-    sys.exit('### Error: python module CDFutils not found. '
-             'Download and install from github cdfassnacht/CDFutils')
+    sys.exit('### Error: python module cdfutils not found. '
+             'Download and install from github cdfassnacht/cdfutils')
 
 
 #try: find_module('MySQLdb')
@@ -67,7 +67,7 @@ setup(
     description = 'Code for visualizing fits images and for'
     'extracting and plotting spectra',
     #long_description = open('README.txt').read(),
-    requires = ['numpy','scipy','astropy','matplotlib','CDFutils'],
+    requires = ['numpy','scipy','astropy','matplotlib','cdfutils'],
     packages = ['specim', 'specim.imfuncs', 'specim.specfuncs'],
     #package_dir = {'':'src'},
     package_data = {'specim' : ['Data/*fits']}
