@@ -38,8 +38,17 @@ class Spec1d(df.Data1d):
         Reads in the input 1-dimensional spectrum.
         This can be done in two mutually exclusive ways:
 
-         1. By providing some 1-d arrays containing the wavelength array,
-            the flux array, and, optionally, the variance array and the sky .
+         1. By providing some 1-d arrays containing the following:
+               wavelength - required
+               flux       - "mostly required".  For nearly all applications
+                            the user will want both wavelength and flux.
+                            However, as a first step in generating, e.g.,
+                            a model spectrum, starting with only a
+                            wavelength array should be OK.  In that
+                            case a temporary flux array with all values
+                            set to 1.0 will be created.
+               variance   - optional
+               sky        - optional
 
                       ---- or ----
 
@@ -76,7 +85,8 @@ class Spec1d(df.Data1d):
                   Column 1 is the wavelength
                   Column 2 is the extracted spectrum
                   Column 3 (optional) is the variance spectrum
-                  Column 4 (optional) is the sky spectrum [NOT YET IMPLEMENTED]
+                  Column 4 (optional) is the sky spectrum
+                    [NOT YET IMPLEMENTED]
 
                   Thus, an input text file could have one of three formats:
                       A.  wavelength flux
@@ -86,24 +96,24 @@ class Spec1d(df.Data1d):
 
         Inputs (all inputs are optional, but at least one way of specifiying
         the input spectrum must be used):
-            infile   - Name of the input file.  If infile is None, then the
-                        spectrum must be provided via the wavelength and flux
-                        vectors.
-            informat - format of input file ('fits', 'fitstab', 'fitsflux',
-                        'mwa', or 'text').
-                        Default = 'text'
-            wav      - 1-dimensional array containing "wavelength" information,
-                        either as actual wavelength or in pixels
-            flux     - 1-dimensional array containing the flux information for
-                        the extracted spectrum
-            var      - 1-dimensional array containing the variance
-                        spectrum.  Remember: rms = sqrt(variance)
-            sky      - 1-dimensional array containing the sky spectrum
-            logwav   - if True then input wavelength is logarithmic, i.e., the
-                        numbers in the input wavelength vector are actually
-                        log10(wavelength)
-                       if False (the default), then the input wavelength vector
-                        is linear.
+          infile   - Name of the input file.  If infile is None, then the
+                      spectrum must be provided via the wavelength and flux
+                      vectors.
+          informat - format of input file ('fits', 'fitstab', 'fitsflux',
+                      'mwa', or 'text').
+                      Default = 'text'
+          wav      - 1-dimensional array containing "wavelength" information,
+                      either as actual wavelength or in pixels
+          flux     - 1-dimensional array containing the flux information for
+                      the extracted spectrum
+          var      - 1-dimensional array containing the variance
+                      spectrum.  Remember: rms = sqrt(variance)
+          sky      - 1-dimensional array containing the sky spectrum
+          logwav   - if True then input wavelength is logarithmic, i.e., the
+                      numbers in the input wavelength vector are actually
+                      log10(wavelength)
+                     if False (the default), then the input wavelength vector
+                      is linear.
         """
 
         """ Initialize some variables """
@@ -127,13 +137,17 @@ class Spec1d(df.Data1d):
                 print('')
                 print('Could not read input file %s' % infile)
                 print('')
-                return None
-        elif wav is not None and flux is not None:
+                raise (IOError)
+                # return None
+        elif wav is not None:
             if self.logwav:
                 spec0[0] = 10.**wav
             else:
                 spec0[0] = wav.copy()
-            spec0[1] = flux.copy()
+            if flux is not None:
+                spec0[1] = flux.copy()
+            else:
+                spec0[1] = np.ones(wav.size)
             if var is not None:
                 spec0[2] = var.copy()
                 self.hasvar = True
@@ -1164,10 +1178,9 @@ def make_sky_model(wavelength, smooth=25., doplot=False, verbose=True):
      in the code below, convert them back into the appropriate B-spline tuple
      format that interpolate.splev requires.
     """
-    if __file__ == 'spec_simple.py':
-        moddir = '.'
-    else:
-        moddir = __file__.split('/spec_simple')[0]
+    print('')
+    print((os.path.split(__file__))[0])
+    moddir = os.path.split(__file__)[0]
     if wstart >= 9000.:
         modfile = '%s/Data/nirspec_skymodel.fits' % moddir
     else:

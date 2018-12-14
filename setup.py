@@ -70,5 +70,5 @@ setup(
     requires = ['numpy','scipy','astropy','matplotlib','cdfutils'],
     packages = ['specim', 'specim.imfuncs', 'specim.specfuncs'],
     #package_dir = {'':'src'},
-    package_data = {'specim' : ['Data/*fits']}
+    package_data = {'specim.specfuncs' : ['Data/*']}
 )
