@@ -33,7 +33,7 @@ try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
-from .spec1d import Spec1d
+from .spec1d import Spec1d, make_sky_model
 from .spec2d import Spec2d
 
 # -----------------------------------------------------------------------
