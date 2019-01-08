@@ -634,7 +634,7 @@ def extract_wtsum_col(spatialdat, mu, apmin, apmax, weight='gauss', sig=1.0,
 # -----------------------------------------------------------------------
 
 
-def combine_spectra(file_list, outfile, informat='text', xlabel='Pixels'):
+def combine_spectra(file_list, outfile, informat='text', **kwargs):
     """
     Given a list of input spectra, reads in
     the files and does an inverse-variance weighted combination of the flux
@@ -682,7 +682,7 @@ def combine_spectra(file_list, outfile, informat='text', xlabel='Pixels'):
                      sky=outsky)
 
     """ Plot the combined spectrum """
-    outspec.plot(title='Combined spectrum', xlabel=xlabel)
+    outspec.plot(title='Combined spectrum', **kwargs)
 
     """ Save the combined spectrum """
     outspec.save(outfile, outformat=informat)

@@ -556,7 +556,7 @@ class Spec2d(imf.Image):
         if normalize:
             pmax = pflux.max()
             pflux /= pmax
-            print pmax
+            print(pmax)
 
         """ Save the profile as a Spec1d instance """
         px = np.arange(pflux.shape[0])
@@ -570,23 +570,6 @@ class Spec2d(imf.Image):
             xlab = 'Spatial direction (0-indexed)'
             profile.plot(color=color, title=title, xlabel=xlab, model=model,
                          showzero=False)
-            # if fit is not None:
-            #     xmod = np.arange(1, self.cdat.shape[0]+1, 0.1)
-            #     """ Make sure that parameters are in a numpy array """
-            #     p = np.atleast_1d(fit)
-            #     ngauss = int((p.size-1)/3)
-            #     if p.size - (ngauss*3+1) != 0:
-            #         print('Fit not plotted: it has wrong number of '
-            #               'parameters')
-            #         pass
-            #     if normalize:
-            #         p[0] /= cmax
-            #         for j in range(ngauss):
-            #             p[j*3+3] /= cmax
-            #     ymod = make_gauss(xmod, p)
-            #     plt.plot(xmod, ymod)
-            #     plt.axvline(fit[1]+self.apmin, color='k')
-            #     plt.axvline(fit[1]+self.apmax, color='k')
 
         self.profile = profile
 
@@ -613,7 +596,7 @@ class Spec2d(imf.Image):
         spatial profile
         """
         # p_out = self.profile.fit_gauss_old(init, fix, ngauss, verbose)
-        mod = self.profile.fit_gauss()
+        mod, fitinfo = self.profile.fit_gauss(verbose=verbose)
         # print(mod)
         p_out = np.array([mod.c0_0, mod.mean_1, mod.stddev_1, mod.amplitude_1])
 
@@ -910,15 +893,15 @@ class Spec2d(imf.Image):
         calibrated data, S is the sky, V is the pixel variance (based on counts
         and the detector gain and readnoise):
 
-                    Sum{ P * (D - S) / V}
+                  Sum{ P * (D - S) / V}
               f = ---------------------
-                        Sum{ P^2 / V}
+                     Sum{ P^2 / V}
 
         and the variance on the extracted flux, sigma_f^2, is
 
-                             Sum{ P }
+                        Sum{ P }
           sigma_f^2 = -------------
-                          Sum{ P^2 / V}
+                      Sum{ P^2 / V}
 
         NOTE: P must be normalized for each wavelength
         """
@@ -1048,7 +1031,7 @@ class Spec2d(imf.Image):
 
     def extract(self, weight='gauss', sky=None, gain=1.0, rdnoise=0.0,
                 doplot=True, do_subplot=True, outfile=None,
-                outformat='text'):
+                outformat='text', verbose=True):
         """
         Second step in reduction process.
 
@@ -1063,8 +1046,9 @@ class Spec2d(imf.Image):
 
         """ Plot the extracted spectrum if desired """
         if doplot:
-            print ""
-            print "Plotting the spectrum"
+            if verbose:
+                print('')
+                print('Plotting the spectrum')
             if(do_subplot):
                 plt.subplot(224)
             else:
