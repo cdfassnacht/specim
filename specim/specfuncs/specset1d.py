@@ -102,12 +102,12 @@ class SpecSet1d(list):
         wtsum = np.zeros(nx)
 
         """ Create the weighted sum """
-        print('')
         for spec in self:
             wt = np.zeros(nx)
-            wt[spec['var'] != 0] = 1.0 / spec['var']
+            mask = spec['var'] != 0
+            wt[mask] = 1.0 / spec['var'][mask]
             wtflux += wt * spec['flux']
-            if spec['sky'] is not None:
+            if spec.sky:
                 skysum += spec['sky']
             wtsum += wt
             del wt
