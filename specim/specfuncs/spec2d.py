@@ -109,8 +109,10 @@ class Spec2d(imf.Image):
         self.skysub = None
         self.ssext = None
         self.spec1d = None
-        self.profile = None
         self.fitrange = None
+        self.profile = None
+        self.profcent = None
+        self.ap = None
         self.apmin = -4.
         self.apmax = 4.
         self.muorder = 3
@@ -525,7 +527,8 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def spatial_profile(self, pixrange=None, showplot=True, do_subplot=False,
-                        title='Spatial Profile', model=None, normalize=False):
+                        title='Spatial Profile', model=None, normalize=False,
+                        showap=True, verbose=True):
         """
         Compresses a 2d spectrum along the dispersion axis to create a spatial
          profile, and then plots it if requested
@@ -553,10 +556,14 @@ class Spec2d(imf.Image):
             pflux = tmpdat
         else:
             pflux = np.median(tmpdat, axis=self.specaxis)
-        if normalize:
-            pmax = pflux.max()
-            pflux /= pmax
+        pmax = pflux.max()
+        if verbose:
             print(pmax)
+
+        """ Normalize the profile if requested """
+        if normalize:
+            pflux /= pmax
+            pmax = 1.0
 
         """ Save the profile as a Spec1d instance """
         px = np.arange(pflux.shape[0])
@@ -570,6 +577,10 @@ class Spec2d(imf.Image):
             xlab = 'Spatial direction (0-indexed)'
             profile.plot(color=color, title=title, xlabel=xlab, model=model,
                          showzero=False)
+            if showap:
+                if self.profcent is not None:
+                    plt.axvline(self.profcent + self.apmin, color='k')
+                    plt.axvline(self.profcent + self.apmax, color='k')
 
         self.profile = profile
 
@@ -592,13 +603,18 @@ class Spec2d(imf.Image):
         self.spatial_profile(pixrange, showplot=False)
 
         """
-        Fit a Gaussian (or multiple Guassians) plus background to the
-        spatial profile
+        Fit a shape -- most commonly a single Gaussian -- to the spatial
+        profile
         """
-        # p_out = self.profile.fit_gauss_old(init, fix, ngauss, verbose)
-        mod, fitinfo = self.profile.fit_gauss(verbose=verbose)
-        # print(mod)
-        p_out = np.array([mod.c0_0, mod.mean_1, mod.stddev_1, mod.amplitude_1])
+
+        modtype = 'gauss'
+
+        if modtype == 'gauss':
+            """  Fit a Gaussian plus background to the profile """
+            mod, fitinfo = self.profile.fit_gauss(verbose=verbose)
+            p_out = np.array([mod.c0_0, mod.mean_1, mod.stddev_1, 
+                              mod.amplitude_1])
+            self.profcent = mod.mean_1
 
         """ Now plot the spatial profile, showing the best fit """
         if showplot:
@@ -880,12 +896,12 @@ class Spec2d(imf.Image):
              the aperture and 0.0 if it is outside.
          3. The statistical errors associated with the detector, etc.,
              in the form of inverse variance weighting.
-             The variance can either be provided as an external variance image,
-              if the previous reduction / processing has provided this.
-             If no external variance spectrum is provided, then the variance
-              image will be constructed from the data counts (including counts
-              from a 2d sky spectrum if the sky has already been subtracted
-              from the data) plus the gain and readnoise of the detector.
+            The variance can either be provided as an external variance image,
+             if the previous reduction / processing has provided this.
+            If no external variance spectrum is provided, then the variance
+             image will be constructed from the data counts (including counts
+             from a 2d sky spectrum if the sky has already been subtracted
+             from the data) plus the gain and readnoise of the detector.
 
         According to the Horne paper, the optimal extraction of a spectrum
         that has a profile P and proper knowledge of the noise/variance
@@ -893,15 +909,15 @@ class Spec2d(imf.Image):
         calibrated data, S is the sky, V is the pixel variance (based on counts
         and the detector gain and readnoise):
 
-                  Sum{ P * (D - S) / V}
+                  Sum{ P * (D - S) / V }
               f = ---------------------
-                     Sum{ P^2 / V}
+                     Sum{ P^2 / V }
 
         and the variance on the extracted flux, sigma_f^2, is
 
-                        Sum{ P }
-          sigma_f^2 = -------------
-                      Sum{ P^2 / V}
+                           Sum{ P }
+             sigma_f^2 = -------------
+                         Sum{ P^2 / V }
 
         NOTE: P must be normalized for each wavelength
         """
