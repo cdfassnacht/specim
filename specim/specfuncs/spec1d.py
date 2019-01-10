@@ -615,7 +615,7 @@ class Spec1d(df.Data1d):
     # -----------------------------------------------------------------------
 
     def smooth(self, filtwidth, smfunc='boxcar', doplot=True, outfile=None,
-               color='b', title='default', xlabel='Wavelength (Angstroms)'):
+               **kwargs):
         """
 
         Smooths the spectrum using the requested function.  The smoothing
@@ -647,7 +647,7 @@ class Spec1d(df.Data1d):
 
         """ Plot the smoothed spectrum if desired """
         if doplot:
-            self.plot(usesmooth=True, title=title, xlabel=xlabel, color=color)
+            self.plot(usesmooth=True, **kwargs)
 
         # """ Save the output file if desired """
         # if(outfile):
