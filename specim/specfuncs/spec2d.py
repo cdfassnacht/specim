@@ -117,7 +117,7 @@ class Spec2d(imf.Image):
         self.apmax = 4.
         self.muorder = 3
         self.sigorder = 3
-        self.p0 = None  # Parameters of fit to the spatial profile
+        self.mod0 = None
         self.logwav = logwav
 
         """
@@ -526,7 +526,7 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def spatial_profile(self, pixrange=None, showplot=True, do_subplot=False,
+    def spatial_profile(self, pixrange=None, showplot=True, 
                         title='Spatial Profile', model=None, normalize=False,
                         showap=True, verbose=True):
         """
@@ -582,13 +582,13 @@ class Spec2d(imf.Image):
                     plt.axvline(self.profcent + self.apmin, color='k')
                     plt.axvline(self.profcent + self.apmax, color='k')
 
-        self.profile = profile
+        return profile
 
     # -----------------------------------------------------------------------
 
     def locate_trace(self, pixrange=None, init=None, fix=None,
                      showplot=True, do_subplot=False, ngauss=1,
-                     verbose=True):
+                     title='Spatial Profile', verbose=True, **kwargs):
         """
         Compresses a 2d spectrum along the dispersion axis so that
          the trace of the spectrum can be automatically located by fitting
@@ -600,21 +600,18 @@ class Spec2d(imf.Image):
         """
 
         """ Start by compressing the data, but don't show it yet """
-        self.spatial_profile(pixrange, showplot=False)
+        profile = self.spatial_profile(pixrange, showplot=False)
 
         """
         Fit a shape -- most commonly a single Gaussian -- to the spatial
         profile
         """
 
-        modtype = 'gauss'
+        modtype = '1gauss'
 
-        if modtype == 'gauss':
+        if modtype == '1gauss':
             """  Fit a Gaussian plus background to the profile """
-            mod, fitinfo = self.profile.fit_gauss(verbose=verbose)
-            p_out = np.array([mod.c0_0, mod.mean_1, mod.stddev_1, 
-                              mod.amplitude_1])
-            self.profcent = mod.mean_1
+            mod, fitinfo = profile.fit_gauss(mod0=init, verbose=verbose)
 
         """ Now plot the spatial profile, showing the best fit """
         if showplot:
@@ -623,16 +620,11 @@ class Spec2d(imf.Image):
             else:
                 plt.figure(1)
                 plt.clf()
-            self.spatial_profile(pixrange, showplot, do_subplot, model=mod)
+            xlab = 'Spatial direction (0-indexed)'
+            profile.plot(title=title, xlabel=xlab, model=mod, **kwargs)
 
-        """
-        Return the relevant parameters of the fit
-          p_out[0] = bkgd, the background level
-          p_out[1] = mu, the location of the peak of the fit to the trace
-          p_out[2] = sigma, the width of the fit to the trace
-          p_out[3] = amp, the amplitude of the fit
-        """
-        return p_out
+        """ Return the model """
+        return profile, mod
 
     # -----------------------------------------------------------------------
 
@@ -722,9 +714,9 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def trace_spectrum(self, ngauss=1, stepsize=25, muorder=3, sigorder=4,
-                       fitrange=None, doplot=True, do_subplot=False,
-                       verbose=True):
+    def trace_spectrum(self, mod0, ngauss=1, stepsize=25, muorder=3,
+                       sigorder=4, fitrange=None, doplot=True,
+                       do_subplot=False, verbose=True):
         """
         Fits a gaussian plus background to the spatial profile of the spectrum
          This is done in binned segments, because for nearly all cases the SNR
@@ -755,10 +747,12 @@ class Spec2d(imf.Image):
         fitmu = True
         fitsig = True
         if muorder == -1:
-            self.mu = np.ones(self.npix) * self.p0[1]
+            self.mu = np.ones(self.npix) * mod0.mean_1
+            mod0.mean_1.fixed = True
             fitmu = False
         if sigorder == -1:
-            self.sig = np.ones(self.npix) * self.p0[2]
+            self.sig = np.ones(self.npix) * mod0.stddev_1
+            mod0.stddev_1.fixed = True
             fitsig = False
 
         """
