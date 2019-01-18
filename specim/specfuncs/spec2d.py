@@ -616,7 +616,8 @@ class Spec2d(imf.Image):
                 plt.figure(1)
                 plt.clf()
             xlab = 'Spatial direction (0-indexed)'
-            profile.plot(title=title, xlabel=xlab, model=mod, **kwargs)
+            profile.plot(title=title, xlabel=xlab, model=mod, showzero=False,
+                         **kwargs)
 
         """ Return the model """
         return profile, mod
@@ -873,7 +874,7 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def extract_horne(self, gain=1.0, rdnoise=0.0):
+    def _extract_horne(self, gain=1.0, rdnoise=0.0):
         """
 
         STILL TO DO:
@@ -1061,7 +1062,7 @@ class Spec2d(imf.Image):
         """
 
         """ Extract the spectrum """
-        self.extract_horne(gain, rdnoise)
+        self._extract_horne(gain, rdnoise)
 
         """ Plot the extracted spectrum if desired """
         if doplot:
