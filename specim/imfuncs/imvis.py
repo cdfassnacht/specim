@@ -1824,8 +1824,10 @@ class Image:
          pixel.
         """
         cosdec = mcos(self.radec.dec.radian)
-        fovx0 = 3600. * cosdec * (ra - self.radec.ra.deg) - self.zeropos[0]
-        fovy0 = 3600. * (dec - self.radec.dec.deg) - self.zeropos[1]
+        imcentx = self.subimhdr['crval1']
+        imcenty = self.subimhdr['crval2']
+        fovx0 = 3600. * cosdec * (ra - imcentx) - self.zeropos[0]
+        fovy0 = 3600. * (dec - imcenty) - self.zeropos[1]
         fovx = fovx0 + dx
         fovy = fovy0 + dy
 
