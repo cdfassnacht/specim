@@ -122,8 +122,11 @@ class Spec1d(df.Data1d):
         self.atm_trans = None
         self.infile = None
         self.dispave = None
-        names0 = ['wav', 'flux', 'var']
+        self.names0 = ['wav', 'flux', 'var']
         spec0 = [None, None, None, None]
+        self.smospec = None
+        self.ysmooth = None
+        self.varsmooth = None
 
         self.logwav = logwav
 
@@ -171,14 +174,14 @@ class Spec1d(df.Data1d):
         Call the superclass initialization for useful Data1d attributes
         """
         if debug:
-            print(names0)
+            print(self.names0)
             print('Wavelength vector size: %d' % spec0[0].size)
             print('Flux vector size: %d' % spec0[1].size)
         if spec0[2] is not None:
             df.Data1d.__init__(self, spec0[0], spec0[1], spec0[2],
-                               names=names0)
+                               names=self.names0)
         else:
-            names = names0[:-1]
+            names = self.names0[:-1]
             df.Data1d.__init__(self, spec0[0], spec0[1], names=names)
 
         """ Add the sky vector to the Table structure if it is not none """
@@ -460,7 +463,47 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def plot(self, xlabel='Wavelength (Angstroms)', ylabel='Relative Flux',
+    def atm_corr(self, mode='input', airmass=1.0, atm='model', fwhm=15.,
+                 modfile='default'):
+        """
+
+        Does a correction for atmospheric transmission.
+        For now this is done via the model spectrum
+        
+        """
+
+        """ Make sure that there is an atmospheric spectrum to use """
+        if self.atm_trans is None:
+            if atm == 'model':
+                """ Make a model spectrum if one doesn't exist"""
+                try:
+                    self.make_atm_trans(fwhm=fwhm, modfile=modfile)
+                except IOError:
+                    return
+                except ValueError:
+                    return
+            else:
+                print('')
+                print('Warning: No atmospheric correction applied')
+                print('Right now atm="model" is the only option')
+                print('')
+                return
+
+        """ Scale the atmospheric transmission for airmass(???) """
+        atmflux = self.atm_trans**airmass
+
+        """ Divide the input spectrum by the transmission """
+        atmcorr = self['flux'] / atmflux
+        atmcvar = self['var'] / atmflux**2
+
+        """ Save the output in a Data1d container """
+        self.atmcorr = df.Data1d(self['wav'], atmcorr, atmcvar,
+                                 names=self.names0)
+
+    # -----------------------------------------------------------------------
+
+    def plot(self, mode='input',
+             xlabel='Wavelength (Angstroms)', ylabel='Relative Flux',
              title='default', docolor=True, color='b', linestyle='',
              showzero=True, model=None, modcolor='g',
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
@@ -478,6 +521,50 @@ class Spec1d(df.Data1d):
           usesmooth
         """
 
+        """
+        Set the flux and var arrays to use based on the passed mode variable.
+        The default is to just use the unmodified input spectrum
+         (mode='input')
+        """
+        if mode == 'input':
+            spec = self
+            # flux = self['flux']
+            # try:
+            #     var = self['var']
+            # except KeyError:
+            #     var = None
+        elif mode == 'smooth' or usesmooth:
+            spec = self.smospec
+            # if self.smospec is not None:
+            #     flux = self.smospec['flux']
+            # else:
+            #     print('')
+            #     print('Smoothed spectrum requested, but it does not exist')
+            #     print('Please smooth the spectrum first')
+            #     print('')
+            #     return
+            # if self.smospec.var is not None:
+            #     var = self.smospec['var']
+            # else:
+            #     var = None
+        elif mode == 'atmcorr':
+            spec = self.atmcorr
+        else:
+            spec = self
+            # flux = self['flux']
+            # try:
+            #     var = self['var']
+            # except KeyError:
+            #     var = None
+
+        """ Set the arrays to be plotted """
+        wav = spec['wav']
+        flux = spec['flux']
+        try:
+            var = spec['var']
+        except KeyError:
+            var = None
+
         """ Set the title """
         if title == 'default':
             if self.infile is None:
@@ -494,22 +581,14 @@ class Spec1d(df.Data1d):
         if showzero:
             plt.axhline(color='k')
 
-        """ Plot the spectrum """
-        if usesmooth and self.ysmooth is not None:
-            flux = self.ysmooth
-            if self.varsmooth is not None:
-                var = self.varsmooth
-        else:
-            flux = self['flux']
-            try:
-                var = self['var']
-            except KeyError:
-                var = None
-        ls = "steps%s" % linestyle
+        """ Set the label """
         if label is not None:
             plabel = label
         else:
             plabel = 'Flux'
+
+        """ Plot the spectrum """
+        ls = "steps%s" % linestyle
         plt.plot(self['wav'], flux, color, linestyle=ls, label=plabel)
         plt.tick_params(labelsize=fontsize)
         plt.xlabel(xlabel, fontsize=fontsize)
@@ -614,8 +693,8 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def smooth(self, filtwidth, smfunc='boxcar', doplot=True, outfile=None,
-               **kwargs):
+    def smooth(self, filtwidth, smfunc='boxcar', mode='input', doplot=True,
+               outfile=None, **kwargs):
         """
 
         Smooths the spectrum using the requested function.  The smoothing
@@ -631,13 +710,19 @@ class Spec1d(df.Data1d):
           it will do a uniformly-weighted boxcar smoothing
         """
 
+        """ Select the spectrum to be smoothed """
+        if mode == 'atmcorr':
+            spec = self.atmcorr
+        else:
+            spec = self
+
         """
         Smooth the spectrum using the requested smoothing function
          [For now, only boxcar smoothing is allowed]
         The smoothing functions are inherited from the Data1d class
         """
         if smfunc == 'boxcar':
-            self.ysmooth, self.varsmooth = self.smooth_boxcar(filtwidth)
+            ysmooth, varsmooth = spec.smooth_boxcar(filtwidth)
         else:
             print('')
             print('For smoothing, smfunc can only be one of the following:')
@@ -645,9 +730,18 @@ class Spec1d(df.Data1d):
             print('')
             raise ValueError
 
+        """ Put the smoothed spectrum into a Data1d container """
+        if varsmooth is None:
+            names = self.names0[:-1]
+        else:
+            names = self.names0
+        print(names)
+        self.smospec = df.Data1d(self['wav'], ysmooth, varsmooth,
+                                 names=names)
+
         """ Plot the smoothed spectrum if desired """
         if doplot:
-            self.plot(usesmooth=True, **kwargs)
+            self.plot(mode='smooth', **kwargs)
 
         # """ Save the output file if desired """
         # if(outfile):
@@ -756,7 +850,7 @@ class Spec1d(df.Data1d):
 
         """ Choose whether to use the smoothed flux or not """
         if usesmooth:
-            flux = self.ysmooth
+            flux = self.smospec['flux']
         else:
             flux = self['flux']
 
@@ -1037,26 +1131,99 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def resample(self, owave=None):
+    def resample(self, owave=None, verbose=True):
         """
-        Resample the spectrum onto a linearized wavelength grid.  The grid
-        can either be defined by the input wavelength range itself
-        (the default) or by a wavelength vector that is passed to the function.
+        Resample the spectrum onto a new wavelength grid.
+        There are two possibilities for the output wavelength vector that
+         sets where the interpolation happens.  They are:
+         1. owave = None [default]
+            A linearized set of spacings between the minimum and maximum
+            values in the input wavelength vector
+         2. owave is set to an array
+            A user-defined x array that has been passed through the owave
+            parameter
+
+        This is just a specialized call to the Data1d.resamp method
+
         """
 
-        if owave is None:
-            w0 = self['wav'][0]
-            w1 = self['wav'][-1]
-            owave = np.linspace(w0, w1, self['wav'].size)
+        self.rswav, self.rsflux = self.resamp(xout=owave, verbose=verbose)
 
-        specmod = interpolate.splrep(self['wav'], self['flux'])
-        outspec = interpolate.splev(owave, specmod)
+    # -----------------------------------------------------------------------
 
-        """ Store resampled spectrum """
-        print('resample: replacing input spectrum with resampled version')
-        print('resample: for now not resampling the variance')
-        self.rswav = owave
-        self.rsflux = outspec
+    def fit_continuum(self, mode='input', maskreg=None, smo=51,
+                      atm_corr=False, atm='model', airmass=1.0):
+        """
+
+        Fits a continuum to a spectrum.  The steps involved are:
+         1. Do an atmospheric transmission correction if requested
+         2. Smooth the spectrum, with a kernel width set by the smo parameter
+         3. Fit to the smoothed spectrum, excluding any regions set by
+            the maskreg parameter
+
+        Inputs:
+           mode     - which spectrum to use
+           maskreg  - region(s) of the spectrum that will NOT be used in
+                      the fitting.
+                      These regions are designated by (start, end) pairs.
+                      For example:
+                         maskreg = [(6850, 7000), (7540, 7610)]
+                         maskreg = [[6850, 7000], [7540, 7610]]
+           atm_corr - do an atmospheric correction before fitting to the
+           atm      - the atmopheric transmission to use for the correction
+        """
+
+        """ Do the atmospheric correction if requested """
+        if atm_corr:
+            self.atmcorr(airmass, atm)
+
+        """ Smooth the spectrum """
+        """ [NOT DONE YET] """
+        print('Warning: Not done yet')
+        return
+
+    # -----------------------------------------------------------------------
+
+    def normalize(self, mode='smooth', smo=25, mask=None):
+        """
+        Normalizes the spectrum via one of the following methods:
+          1. highly smoothing the spectrum and then dividing by that
+          2. NOT YET AVAILABLE
+        """
+
+        """
+        If the spectrum has been smoothed already, save the smoothed spectrum
+        """
+        if self.ysmooth is not None:
+            tmpsmooth = self.ysmooth.copy()
+        else:
+            tmpsmooth = None
+        if self.varsmooth is not None:
+            tmpvsmooth = self.varsmooth.copy()
+        else:
+            tmpvsmooth = None
+
+        """ Select the good data if a mask is set """
+        if mask is not None:
+            w = self['wav'][mask]
+            f = self['flux'][mask]
+            if self.hasvar:
+                v = self['var'][mask]
+            else:
+                v = None
+        else:
+            w = self['wav'].copy()
+            f = self['flux'].copy()
+            if self.hasvar:
+                v = self['var'].copy()
+            else:
+                v = None
+        data = df.Data1d(w, f, v)
+
+        """ Smooth the spectrum """
+        ry, rv = data.smooth_boxcar(smo)
+
+        return w, ry
 
     # -----------------------------------------------------------------------
 
