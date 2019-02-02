@@ -96,12 +96,18 @@ class Ech1d(list):
 
     # ------------------------------------------------------------------------
 
-    def save_multi(self, outformat='not_used_yet'):
+    def save_multi(self, outroot, outformat='not_used_yet'):
         """
 
-        Saves the echelle spectra in a single file but with multiple
-         extensions, one for each order.  The indiv
-        To save a single conjoined output spectrum use the (NOT YET WRITTEN)
-         save_single method
+        Saves the echelle spectra, contained in separate Spec1d instances
+         within this class, to one or more output files. 
+        The output options are:
+         1. 'multitab' - Writes a single output file, which is a 
+                         multiextention fits file.  Each extension contains
+                         a fits table ('fitstab' format in the Spec1d lingo)
+         2. 'text'     - Produces several output files, one for each order.
+                         The files are ascii text files, with columns for,
+                         at minimum, wavelength and flux, and possibly also
+                         variance and sky
 
         """

@@ -9,6 +9,7 @@ import os
 import numpy as np
 from scipy import interpolate, ndimage
 import matplotlib.pyplot as plt
+from astropy.io import ascii
 try:
     from astropy.io import fits as pf
 except ImportError:
@@ -290,6 +291,13 @@ class Spec1d(df.Data1d):
             var = hdu[3].data.copy()
             hasvar = True
             del hdu
+        elif informat.lower() == 'nsx':
+            tab = ascii.read(infile)
+            wav  = tab['angstrom'].copy()
+            flux = tab['object'].copy()
+            var  = (tab['error'].copy())**2
+            hasvar = True
+            del tab
         elif informat == 'mwa':
             hdu = pf.open(infile)
             flux = hdu[1].data.copy()
@@ -316,6 +324,11 @@ class Spec1d(df.Data1d):
                 sky = spec[:, 3]
                 self.sky = True
             del spec
+
+        """ Fix var=0 values, since they will cause things to crash """
+        if hasvar:
+            mask = var <= 0.
+            var[mask] = var.max() * 3.
 
         """ Check for NaN's, which this code can't handle """
         if hasvar:
@@ -528,34 +541,12 @@ class Spec1d(df.Data1d):
         """
         if mode == 'input':
             spec = self
-            # flux = self['flux']
-            # try:
-            #     var = self['var']
-            # except KeyError:
-            #     var = None
         elif mode == 'smooth' or usesmooth:
             spec = self.smospec
-            # if self.smospec is not None:
-            #     flux = self.smospec['flux']
-            # else:
-            #     print('')
-            #     print('Smoothed spectrum requested, but it does not exist')
-            #     print('Please smooth the spectrum first')
-            #     print('')
-            #     return
-            # if self.smospec.var is not None:
-            #     var = self.smospec['var']
-            # else:
-            #     var = None
         elif mode == 'atmcorr':
             spec = self.atmcorr
         else:
             spec = self
-            # flux = self['flux']
-            # try:
-            #     var = self['var']
-            # except KeyError:
-            #     var = None
 
         """ Set the arrays to be plotted """
         wav = spec['wav']
@@ -1242,6 +1233,8 @@ class Spec1d(df.Data1d):
                           NOTE: By storing the wavelength info in this way,
                            the wavelength vector must be evenly spaced in
                            wavelength (and not log(wavelength)).
+          4. 'fitstab'  - produces a fits file with the spectral data stored
+                          as a binary table in the FITSRec format.
         """
 
         """
@@ -1290,7 +1283,7 @@ class Spec1d(df.Data1d):
             phdu.writeto(outfile, overwrite=True)
 
         elif outformat == 'text':
-            # CONSIDER JUST USING THE WRITE() METHOD FOR THE TABLE HERE!
+            # CHANGE TO JUST USING THE WRITE() METHOD FOR THE TABLE HERE!
             if self.hasvar:
                 if self.sky:
                     outdata = np.zeros((vsize, 4))
@@ -1309,6 +1302,15 @@ class Spec1d(df.Data1d):
             np.savetxt(outfile, outdata, fmt=fmtstring)
             del outdata
 
+        elif outformat == 'fitstab':
+            self.write(outfile, format='fits')
+
+        else:
+            print('')
+            print('ERROR: outformat is not one of the recognized types')
+            print('')
+            raise ValueError
+            
         if verbose:
             print('Saved spectrum to file %s in format %s' %
                   (outfile, outformat))
