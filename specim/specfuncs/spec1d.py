@@ -31,13 +31,13 @@ class Spec1d(df.Data1d):
     A class to process and analyze 1-dimensional spectra.
     """
 
-    def __init__(self, infile=None, informat='text',
+    def __init__(self, infile=None, informat='text', hdu=None,
                  wav=None, flux=None, var=None, sky=None, logwav=False,
                  debug=False):
         """
 
         Reads in the input 1-dimensional spectrum.
-        This can be done in two mutually exclusive ways:
+        This can be done in three mutually exclusive ways:
 
          1. By providing some 1-d arrays containing the following:
                wavelength - required
@@ -53,7 +53,13 @@ class Spec1d(df.Data1d):
 
                       ---- or ----
 
-         2. By providing the name of a file that contains the spectrum.
+         2. By providing a HDU from a previously-read fits file, where the
+            HDU data is a binary fits table containing the wavelength,
+            flux, and possibly variance and sky information.
+
+                      ---- or ----
+
+         3. By providing the name of a file that contains the spectrum.
             There are several possible input file formats:
               fits: A multi-extension fits file
                  Extension 1 is the wavelength
@@ -135,14 +141,17 @@ class Spec1d(df.Data1d):
         if infile is not None:
             self.infile = infile
             try:
-                spec0, self.dispave, self.hasvar = \
+                spec0, self.hasvar = \
                     self.read_from_file(infile, informat, debug=debug)
             except IOError:
                 print('')
                 print('Could not read input file %s' % infile)
                 print('')
                 raise (IOError)
-                # return None
+
+        elif hdu is not None:
+            spec0 = self.read_hdu(hdu)
+            
         elif wav is not None:
             if self.logwav:
                 spec0[0] = 10.**wav
@@ -171,6 +180,9 @@ class Spec1d(df.Data1d):
             print('')
             return
 
+        """ Get average dispersion """
+        self.dispave = self.find_dispave(spec0[0])
+
         """
         Call the superclass initialization for useful Data1d attributes
         """
@@ -194,7 +206,8 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def read_from_file(self, infile, informat, verbose=True, debug=False):
+    def read_from_file(self, infile, informat, tabext=1, verbose=True,
+                       debug=False):
         """
 
         Reads a 1-d spectrum from a file.  The file must have one of the
@@ -236,11 +249,9 @@ class Spec1d(df.Data1d):
             del hdu
         elif informat == 'fitstab':
             hdu = pf.open(infile)
-            tdat = hdu[1].data
-            wav = tdat.field(0)
-            flux = tdat.field(1)
-            if len(tdat[0]) > 2:
-                var = tdat.field(3)
+            thdu = hdu[tabext]
+            wav, flux, var, sky = self.read_hdu(thdu)
+            if var is not None:
                 hasvar = True
             del hdu
         elif informat == 'fitsflux':
@@ -338,6 +349,64 @@ class Spec1d(df.Data1d):
         else:
             mask = (np.isnan(flux))
         flux[mask] = 0
+
+        """ Return the data """
+        return [wav, flux, var, sky], hasvar
+
+    # -----------------------------------------------------------------------
+
+    def read_hdu(self, hdu):
+        """
+
+        Read the spectrum from an previously loaded HDU, for which the
+        data block is a fits table.
+
+        """
+
+        """ Set up defaults """
+        wav = None
+        flux = None
+        var = None
+        sky = None
+
+        """ Read the data """
+        tdat = hdu.data
+        try:
+            wav = tdat['wav']
+        except KeyError:
+            wav = tdat.field(0)
+        try:
+            flux = tdat['flux']
+        except KeyError:
+            flux = tdat.field(1)
+        if len(tdat.columns) > 2:
+            try:
+                var = tdat['var']
+            except:
+                var = tdat.field(2)
+            hasvar = True
+
+        """
+        For the sky, only read in a column if it is actually called 'sky'
+        """
+        if len(tdat.columns) > 3:
+            try:
+                sky = tdat['sky']
+            except KeyError:
+                pass
+
+        """ Return the data """
+        return [wav, flux, var, sky]
+
+    # -----------------------------------------------------------------------
+
+    def find_dispave(self, wav, verbose=True):
+        """
+
+        Finds the average dispersion from the wavelength array
+
+        """
+
         disp0 = wav[1] - wav[0]
         dispave = (wav[-1] - wav[0]) / (wav.size - 1)
         if verbose:
@@ -353,9 +422,7 @@ class Spec1d(df.Data1d):
                 print(' Dispersion (average):    %6.2f' % dispave)
             print('')
 
-        """ Return the data """
-        # self.dispave = dispave
-        return [wav, flux, var, sky], dispave, hasvar
+        return dispave
 
     # -----------------------------------------------------------------------
 

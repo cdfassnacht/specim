@@ -9,6 +9,9 @@ code that are in the keckcode repository
 """
 
 from matplotlib import pyplot as plt
+from astropy.io import fits as pf
+from astropy.table import Table
+from specim import specfuncs as ss
 
 class Ech1d(list):
     """
@@ -26,7 +29,6 @@ class Ech1d(list):
           2. by providing a single filename, where the file contains the
              full set of single 1d spectra that are associated with a
              single echelle exposure for which the extraction has been done
-             [NOT YET IMPLEMENTED]
           3. by providing a filelist, where each file in the list contains
              a single 1d spectrum in one of the approved formats
              (see Spec1d for possible informat values)
@@ -34,20 +36,39 @@ class Ech1d(list):
 
         """
 
+        """
+        First see if the input spectra are being provided as a list of
+        Spec1d objects
+        """
         if speclist is not None:
             for spec in speclist:
+                if isinstance(spec, ss.Spec1d) is not True:
+                    print('')
+                    print('With speclist option the list must contain'
+                          ' Spec1d instances')
+                    print('')
+                    raise TypeError
+                self.append(spec)
+
+        elif echfile is not None:
+            try:
+                hdu = pf.open(echfile)
+            except:
+                raise IOError
+            norder = len(hdu) - 1
+            for i in range(1, len(hdu)):
+                spec = ss.Spec1d(hdu=hdu[i])
                 self.append(spec)
 
         else:
             print('')
-            print('NOTE: Right now only the speclist input option is'
-                  'implemented')
+            print('NOTE: filelist option is not implemented for input')
             print('')
 
     # ------------------------------------------------------------------------
 
     def plot_all(self, plotmode='single', mode='input', title=None, z=None,
-                 smo=None, linetype='strongem', **kwargs):
+                 smo=None, linetype='strongem', verbose=False, **kwargs):
         """
 
         Plots all the spectra in the echelle data set in a single plot.
@@ -73,7 +94,8 @@ class Ech1d(list):
 
             """ Plot the spectrum """
             if smo is not None:
-                spec.smooth(smo, mode=mode, title=title, **kwargs)
+                spec.smooth(smo, mode=mode, title=title, verbose=verbose,
+                            **kwargs)
             else:
                 spec.plot(mode=mode, title=title, **kwargs)
 
@@ -96,7 +118,7 @@ class Ech1d(list):
 
     # ------------------------------------------------------------------------
 
-    def save_multi(self, outroot, outformat='not_used_yet'):
+    def save_multi(self, outroot, outformat='multitab'):
         """
 
         Saves the echelle spectra, contained in separate Spec1d instances
@@ -111,3 +133,27 @@ class Ech1d(list):
                          variance and sky
 
         """
+
+        if outformat == 'multitab':
+
+            """
+            Set up the required, essentially empty, primary HDU and the
+            HDUList
+            """
+            phdu = pf.PrimaryHDU()
+            hdulist = pf.HDUList(phdu)
+
+            """ Make a separate HDU for each echelle order """
+            for spec in self:
+                tmpspec = Table([spec['wav'], spec['flux'], spec['var']])
+                thdu = pf.table_to_hdu(tmpspec)
+                hdulist.append(thdu)
+
+            """ Save the output """
+            outfile = '%s.fits' % outroot
+            hdulist.writeto(outfile)
+
+        else:
+            print('')
+            print('Not yet implemented yet')
+            print('')
