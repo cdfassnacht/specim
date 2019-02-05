@@ -1,2 +1,2 @@
-from .imvis import Image
+from .image import Image
 

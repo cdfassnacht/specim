@@ -56,7 +56,6 @@ except ImportError:
 # -----------------------------------------------------------------------
 
 
-# class Image(pf.HDUList):#
 class Image:
 
     def __init__(self, indat, datahext=0, hdrhext=0, wcshext=0, verbose=True):
