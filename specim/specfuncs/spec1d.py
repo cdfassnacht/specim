@@ -451,7 +451,7 @@ class Spec1d(df.Data1d):
             infile = '%s/Data/atm_trans_maunakea.fits' % moddir
         print('Loading atmospheric data from %s' % infile)
         try:
-            atm0, da, hv = self.read_from_file(infile, informat='fitstab')
+            atm0, hv = self.read_from_file(infile, informat='fitstab')
         except IOError:
             print('ERROR: Cannot read atmospheric transmission data file')
             raise IOError
@@ -556,12 +556,13 @@ class Spec1d(df.Data1d):
         if self.atm_trans is None:
             if atm == 'model':
                 """ Make a model spectrum if one doesn't exist"""
-                try:
-                    self.make_atm_trans(fwhm=fwhm, modfile=modfile)
-                except IOError:
-                    return
-                except ValueError:
-                    return
+                self.make_atm_trans(fwhm=fwhm, modfile=modfile)
+                # try:
+                #     self.make_atm_trans(fwhm=fwhm, modfile=modfile)
+                # except IOError:
+                #     raise IOError
+                # except ValueError:
+                #     raise ValueError
             else:
                 print('')
                 print('Warning: No atmospheric correction applied')

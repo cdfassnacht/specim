@@ -143,15 +143,15 @@ class Ech1d(list):
             phdu = pf.PrimaryHDU()
             hdulist = pf.HDUList(phdu)
 
-            """ Make a separate HDU for each echelle order """
-            for spec in self:
-                tmpspec = Table([spec['wav'], spec['flux'], spec['var']])
-                thdu = pf.table_to_hdu(tmpspec)
-                hdulist.append(thdu)
+            """
+            Make a separate HDU for each echelle order and then create a HDUList
+            """
+            lll = [pf.table_to_hdu(Table(spec)) for spec in self]
+            hdulist = pf.HDUList([phdu] + lll)
 
             """ Save the output """
             outfile = '%s.fits' % outroot
-            hdulist.writeto(outfile)
+            hdulist.writeto(outfile, overwrite=True)
 
         else:
             print('')
