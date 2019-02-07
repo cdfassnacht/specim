@@ -38,8 +38,9 @@ from math import cos as mcos, sin as msin
 import numpy as np
 from scipy import ndimage
 import matplotlib.pyplot as plt
-from astropy import wcs
-# from astropy import units as u
+from matplotlib.patches import Circle
+from astropy import wcs, coordinates
+from astropy import units as u
 try:
     from astropy.io import fits as pf
 except ImportError:
@@ -1746,6 +1747,36 @@ class Image:
 
     # -----------------------------------------------------------------------
 
+    def plot_circle(self, ra, dec, size, color='g', lw=1, **kwargs):
+        """
+
+        Draws one or more circles on the plot
+
+        Required inputs:
+          ra    - RA of the center of the circle
+          dec   - Dec of the center of the circle
+          size  - radius of the circle IN ARCSEC.
+
+        Optional inputs:
+          color - Line color for drawing the rectangle.  Default='g'
+          lw     - Line width for drawing the rectangle.  Default=1
+          **kwargs - any other parameter affecting patch properties
+        """
+
+        """
+        This function is meaningless if the input image does not have WCS
+        information in it.  Check on this before proceeding
+        """
+
+        if self.found_wcs is False:
+            print('')
+            print('ERROR: Requested a FOV plot, but input image'
+                  ' does not have WCS information in it.')
+            print('')
+            exit()
+
+    # -----------------------------------------------------------------------
+
     def mark_fov(self, ra, dec, size, pa=0.0, color='g', lw=1):
         """
         Draws a rectangle on the currently displayed image data.  This
@@ -1815,22 +1846,20 @@ class Image:
 
         """
         Find the center point of the FOV.
-        For now assume that it is close enough to the center point of the
-         image that we can use the small-angle approximation to calculate
-         the offsets.
         Note that we have to include the zeropos offset to get the alignment
          to be correct, since the origin of the axes may not be at the center
          pixel.
         """
-        cosdec = mcos(self.radec.dec.radian)
-        imcentx = self.subimhdr['crval1']
-        imcenty = self.subimhdr['crval2']
-        fovx0 = 3600. * cosdec * (ra - imcentx) - self.zeropos[0]
-        fovy0 = 3600. * (dec - imcenty) - self.zeropos[1]
-        fovx = fovx0 + dx
-        fovy = fovy0 + dy
+        imcent = coords.radec_to_skycoord(self.subimhdr['crval1'],
+                                          self.subimhdr['crval2'])
+        fovcent = coords.radec_to_skycoord(ra, dec)
+        offset = imcent.spherical_offsets_to(fovcent)
+        fovx0 = (offset[0].to(u.arcsec)).value - self.zeropos[0]
+        fovy0 = (offset[1].to(u.arcsec)).value - self.zeropos[1]
 
         """ Plot the FOV """
+        fovx = fovx0 + dx
+        fovy = fovy0 + dy
         xlim = plt.xlim()
         ylim = plt.ylim()
         plt.plot(fovx, fovy, color=color, lw=lw)

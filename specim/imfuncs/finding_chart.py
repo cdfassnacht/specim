@@ -1,11 +1,18 @@
+import numpy as np
 from matplotlib import pyplot as plt
+from astropy.io import ascii
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+from cdfutils import coords
 from . import image as imf
 
-def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile, zoomim=None,
-            slitsize=None, slitcent='default', slitpa=0., starpos=None,
-            rstar=1., **kwargs):
+def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
+            zoomim=None, slitsize=None, slitpa=0., posfile=None,
+            slitcent='default', starpos=None, rstar=1., **kwargs):
     """
+
     Makes a finding chart with both a wide-field and zoomed-in image
+
     """
 
     """ First make the wide-field image """
@@ -17,6 +24,28 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile, zoomim=None,
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
 
+    """ Get slit and star information from external file if requested """
+    if slitcent == 'file' or starpos == 'file':
+        if posfile is None:
+            print('')
+            print('ERROR: position file requested but none provided via the'
+                  'posfile parameter')
+            print('')
+            raise IOError
+        postab = ascii.read(posfile)
+        if len(postab.colnames) >= 7:
+            names = ['name', 'hr', 'min', 'sec', 'deg', 'amin', 'asec']
+            for nin, nout in zip(postab.colnames, names):
+                postab.rename_column(nin, nout)
+        ra = []
+        dec = []
+        for info in postab:
+            ra.append('%d %d %f' % (info['hr'], info['min'], info['sec']))
+            dec.append('%+d %d %f' % (info['deg'], info['amin'], info['asec']))
+        radec = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg))
+
+    """ Add a circle for the offset/TT star position """
+
     """ Make the zoomed-in image """
     if zoomim is not None:
         zim = imf.Image(zoomim)
@@ -27,15 +56,29 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile, zoomim=None,
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
     if slitsize is not None:
+        slitra = []
+        slitdec = []
         if slitcent == 'default':
-            slitra = imcent[0]
-            slitdec = imcent[1]
+            slitra.append((imcent[0]))
+            slitdec.append((imcent[1]))
+        elif slitcent == 'file':
+            for info, pos in zip(postab, radec):
+                name = info['name'].lower()
+                if name[:4] == 'star' or name[-4:] == 'star':
+                    pass
+                else:
+                    slitra.append(pos.ra.degree)
+                    slitdec.append(pos.dec.degree)
         else:
-            slitra = slitcent[0]
-            slitdec = slitcent[1]
-        zim.mark_fov(slitra, slitdec, slitsize, pa=slitpa)
+            slitra.append((slitcent[0]))
+            slitdec.append((slitcent[1]))
+        for sra, sdec in zip(slitra, slitdec):
+            zim.mark_fov(sra, sdec, slitsize, pa=slitpa)
 
     """ Print some useful info on the plot (still to come) """
 
     """ Save the result """
-    plt.savefig(outfile)
+    if outfile is not None:
+        plt.savefig(outfile)
+    else:
+        plt.show()
