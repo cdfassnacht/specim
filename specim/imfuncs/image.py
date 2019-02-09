@@ -1747,15 +1747,15 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def plot_circle(self, ra, dec, size, color='g', lw=1, **kwargs):
+    def plot_circle(self, ra, dec, radius, color='g', lw=1, **kwargs):
         """
 
         Draws one or more circles on the plot
 
         Required inputs:
-          ra    - RA of the center of the circle
-          dec   - Dec of the center of the circle
-          size  - radius of the circle IN ARCSEC.
+          ra      - RA of the center of the circle
+          dec     - Dec of the center of the circle
+          radius  - radius of the circle IN ARCSEC.
 
         Optional inputs:
           color - Line color for drawing the rectangle.  Default='g'
@@ -1767,13 +1767,30 @@ class Image:
         This function is meaningless if the input image does not have WCS
         information in it.  Check on this before proceeding
         """
-
         if self.found_wcs is False:
             print('')
-            print('ERROR: Requested a FOV plot, but input image'
+            print('ERROR: Input image'
                   ' does not have WCS information in it.')
             print('')
-            exit()
+            raise ValueError
+
+        """
+        Find the center point of the circle
+        Note that we have to include the zeropos offset to get the alignment
+         to be correct, since the origin of the axes may not be at the center
+         pixel.
+        """
+        imcent = coords.radec_to_skycoord(self.subimhdr['crval1'],
+                                          self.subimhdr['crval2'])
+        ccent = coords.radec_to_skycoord(ra, dec)
+        offset = imcent.spherical_offsets_to(ccent)
+        cx = (offset[0].to(u.arcsec)).value - self.zeropos[0]
+        cy = (offset[1].to(u.arcsec)).value - self.zeropos[1]
+
+        """ Set up the circle """
+        ax = plt.gca()
+        mark = Circle((cx, cy), radius, color=color, **kwargs)
+        ax.add_patch(mark)
 
     # -----------------------------------------------------------------------
 
@@ -1807,13 +1824,12 @@ class Image:
         This function is meaningless if the input image does not have WCS
         information in it.  Check on this before proceeding
         """
-
         if self.found_wcs is False:
             print('')
             print('ERROR: Requested a FOV plot, but input image'
                   ' does not have WCS information in it.')
             print('')
-            exit()
+            raise ValueError
 
         """ Set the rectangle size """
         imsize = np.atleast_1d(size)  # Converts size to a numpy array

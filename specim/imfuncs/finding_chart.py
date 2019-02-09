@@ -45,6 +45,22 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         radec = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg))
 
     """ Add a circle for the offset/TT star position """
+    if starpos is not None:
+        starra = []
+        stardec = []
+        if starpos == 'file':
+            for info, pos in zip(postab, radec):
+                name = info['name'].lower()
+                if name[:4] == 'star' or name[-4:] == 'star':
+                    starra.append(pos.ra.degree)
+                    stardec.append(pos.dec.degree)
+                else:
+                    pass
+        else:
+            starra.append((starpos[0]))
+            stardec.append((starpos[1]))
+        for sra, sdec in zip(starra, stardec):
+            fcim.plot_circle(sra, sdec, rstar)
 
     """ Make the zoomed-in image """
     if zoomim is not None:
