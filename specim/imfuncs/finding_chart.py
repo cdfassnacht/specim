@@ -80,7 +80,8 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         elif slitcent == 'file':
             for info, pos in zip(postab, radec):
                 name = info['name'].lower()
-                if name[:4] == 'star' or name[-4:] == 'star':
+                if name[:4] == 'star' or name[-4:] == 'star' or \
+                        name == 'center':
                     pass
                 else:
                     slitra.append(pos.ra.degree)

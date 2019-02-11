@@ -492,7 +492,8 @@ class Spec1d(df.Data1d):
 
     def plot_atm_trans(self, scale=1., offset=0., ls='-', color='g',
                        fwhm=15., modfile='default', label='default',
-                       title=None, xlabel=None, ylabel=None):
+                       title=None, xlabel=None, ylabel=None,
+                       mode='input'):
         """
 
         Plots the atmospheric transmission for the wavelength range
@@ -514,6 +515,21 @@ class Spec1d(df.Data1d):
             except ValueError:
                 return
 
+        """
+        Set the flux array to be used for the scaling based on the passed mode
+         variable.
+        The default is to just use the unmodified input spectrum
+         (mode='input')
+        """
+        if mode == 'input':
+            spec = self
+        elif mode == 'smooth' or usesmooth:
+            spec = self.smospec
+        elif mode == 'atmcorr':
+            spec = self.atmcorr
+        else:
+            spec = self
+
         """ Set some plotting parameters """
         if label == 'default':
             plabel = 'atmTrans'
@@ -523,7 +539,7 @@ class Spec1d(df.Data1d):
 
         """ Now do the plotting """
         tmp = self.atm_trans.copy()
-        tmp *= self['flux'].max() * scale
+        tmp *= spec['flux'].max() * scale
         tmp += offset
         if plabel is not None:
             plt.plot(self['wav'], tmp, color, linestyle=pltls, label=plabel)
@@ -544,7 +560,7 @@ class Spec1d(df.Data1d):
     # -----------------------------------------------------------------------
 
     def atm_corr(self, mode='input', airmass=1.0, atm='model', fwhm=15.,
-                 modfile='default'):
+                 model='default', airmass_std=1.0):
         """
 
         Does a correction for atmospheric transmission.
@@ -556,26 +572,35 @@ class Spec1d(df.Data1d):
         if self.atm_trans is None:
             if atm == 'model':
                 """ Make a model spectrum if one doesn't exist"""
-                self.make_atm_trans(fwhm=fwhm, modfile=modfile)
+                self.make_atm_trans(fwhm=fwhm, modfile=model)
+
+                """ Scale the atmospheric transmission for airmass(???) """
+                atmflux = self.atm_trans**airmass
+                atmvar = 0.
                 # try:
                 #     self.make_atm_trans(fwhm=fwhm, modfile=modfile)
                 # except IOError:
                 #     raise IOError
                 # except ValueError:
                 #     raise ValueError
+            elif atm == 'telluric':
+                atmflux = model['flux']
+                atmvar = model['var']
+                atmflux[atmflux == 0.] = 1.
+                mask = (atmflux == 0.) | (atmvar <= 0.)
+                atmvar[mask] = 5. * atmvar.max()
             else:
                 print('')
                 print('Warning: No atmospheric correction applied')
-                print('Right now atm="model" is the only option')
+                print('Right now "model" and "telluric" are the only options')
+                print(' for the atm parameter')
                 print('')
                 return
 
-        """ Scale the atmospheric transmission for airmass(???) """
-        atmflux = self.atm_trans**airmass
-
         """ Divide the input spectrum by the transmission """
         atmcorr = self['flux'] / atmflux
-        atmcvar = self['var'] / atmflux**2
+        atmcvar = atmcorr**2 * (self['var'] / self['flux']**2 + \
+                                    atmvar / atmflux**2)
 
         """ Save the output in a Data1d container """
         self.atmcorr = df.Data1d(self['wav'], atmcorr, atmcvar,
@@ -892,9 +917,22 @@ class Spec1d(df.Data1d):
                 ('Ca triplet',   8662.14, 'CaII',    0.0, 0, True),
                 ('[S III]',      9069,    '[S III]', 0.0, 2, True),
                 ('[S III]',      9532,    '[S III]', 0.0, 2, True),
-                ('Pa-gamma',    10900.,   r'Pa$\gamma$', 0.0, 4, True),
-                ('Pa-beta',     12800.,   r'Pa$\beta$',  0.0, 4, True),
-                ('Pa-alpha',    18700.,   r'Pa$\alpha$', 0.0, 4, True)
+                ('Pa-delta',    10050.,   r'Pa$\delta$', 0.0, 3, True),
+                ('Pa-gamma',    10940.,   r'Pa$\gamma$', 0.0, 3, True),
+                ('Pa-beta',     12820.,   r'Pa$\beta$',  0.0, 3, True),
+                ('Br-12',       15552.,   'Br12',        0.0, 3, True),
+                ('Br-11',       15696.,   'Br11',        0.0, 3, True),
+                ('Br-10',       15876.,   'Br10',        0.0, 3, True),
+                ('Br-9',        16105.,   'Br9',         0.0, 3, True),
+                ('Br-8',        16400.,   'Br8',         0.0, 3, True),
+                ('Br-7',        16800.,   'Br7',         0.0, 3, True),
+                ('Br-6',        17357.,   'Br6',         0.0, 3, True),
+                ('Br-5',        18170.,   'Br5',         0.0, 3, True),
+                ('Pa-alpha',    18750.,   r'Pa$\alpha$', 0.0, 3, True),
+                ('Br-delta',    19440.,   r'Br$\delta$', 0.0, 3, True),
+                ('Br-gamma',    21660.,   r'Br$\gamma$', 0.0, 3, True),
+                ('Br-beta',     26250.,   r'Br$\beta$',  0.0, 3, True),
+                ('Br-alpha',    40510.,   r'Br$\alpha$', 0.0, 3, True),
                 ], dtype=linefmt)
 
     # -----------------------------------------------------------------------
@@ -1207,6 +1245,74 @@ class Spec1d(df.Data1d):
         """
 
         self.rswav, self.rsflux = self.resamp(xout=owave, verbose=verbose)
+
+    # -----------------------------------------------------------------------
+
+    def mask_line(self, linereg, bkgdwidth, mode='input', atm_corr=False,
+                  **kwargs):
+        """
+
+        Replaces the region of a spectrum containing a spectral line with
+        a simple model of the continuum level in the location of that line.
+        This is done by fitting a 2nd order polynomial to small regions 
+        of the spectrum immediately to the blue and red sides of the line
+        regions.
+
+        Required inputs:
+          linereg   - A two-element list, array, or tuple that contains the
+                      starting and ending wavelenghts for the line region
+          bkgdwidth - Width, in wavelength units, of the regions of the
+                       spectrum immediately to the left and right of the line
+                       region that is used to estimate the continuum level.
+                      This can either be a single number (same width for
+                       the continuum region on both sides) or a pair of
+                       numbers in a list, array or tuple (one for the
+                       blue-side width and one for the red-side width)
+        """
+
+        """
+        Set the arrays to use based on the passed mode variable.
+        The default is to just use the unmodified input spectrum
+         (mode='input')
+        """
+        if mode == 'input':
+            spec = self
+        elif mode == 'smooth':
+            spec = self.smospec
+        elif mode == 'atmcorr':
+            spec = self.atmcorr
+        else:
+            spec = self
+
+        """ Set up short-cut names for the relevant arrays """
+        w = spec['wav']
+        f = spec['flux']
+
+        """
+        Make the continuum region width into a two-element quantity if
+        only a single width was provided
+        """
+        if isinstance(bkgdwidth, float) or isinstance(bkgdwidth, int):
+            cwidth = [bkgdwidth, bkgdwidth]
+        else:
+            cwidth = bkgdwidth
+
+        """ Select the regions that will be used to fit the continuum """
+        lmin = linereg[0]
+        lmax = linereg[1]
+        maskb = (w > lmin-cwidth[0]) & (w < lmin)
+        maskr = (w > lmax) & (w < lmax+cwidth[1])
+        mask = maskb | maskr
+
+        """ Fit a polynomial to the continuum """
+        ww = w[mask]
+        ff = f[mask]
+        mod = np.polyfit(ww, ff, 2)
+        fmod = np.polyval(mod, w)
+
+        """ Replace the line flux with the corresponding continuum values """
+        linemask = (w >= lmin) & (w <= lmax)
+        spec['flux'][linemask] = fmod[linemask]
 
     # -----------------------------------------------------------------------
 

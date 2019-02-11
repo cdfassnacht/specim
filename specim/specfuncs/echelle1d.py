@@ -21,7 +21,7 @@ class Ech1d(list):
     """
 
     def __init__(self, speclist=None, echfile=None, filelist=None,
-                 informat=None):
+                 informat=None, verbose=True):
         """
 
         Load the data.  This can be accomplished in one of three ways:
@@ -51,9 +51,11 @@ class Ech1d(list):
                 self.append(spec)
 
         elif echfile is not None:
+            if verbose:
+                print('Opening echelle spectrum file: %s' % echfile)
             try:
                 hdu = pf.open(echfile)
-            except:
+            except IOError:
                 raise IOError
             norder = len(hdu) - 1
             for i in range(1, len(hdu)):
@@ -68,7 +70,8 @@ class Ech1d(list):
     # ------------------------------------------------------------------------
 
     def plot_all(self, plotmode='single', mode='input', title=None, z=None,
-                 smo=None, linetype='strongem', verbose=False, **kwargs):
+                 showz=True, linetype='strongem', smo=None,
+                 verbose=False, **kwargs):
         """
 
         Plots all the spectra in the echelle data set in a single plot.
@@ -102,9 +105,15 @@ class Ech1d(list):
             """ Mark spectral lines if desired """
             if z is not None:
                 if smo is not None:
-                    spec.mark_lines(linetype, z, showz=showz, usesmooth=True)
+                    usesmooth = True
                 else:
-                    spec.mark_lines(linetype, z, showz=showz)
+                    usesmooth = False
+                try:
+                    spec.mark_lines(linetype, z, showz=showz, 
+                                    usesmooth=usesmooth)
+                except NameError:
+                    spec.mark_lines('strongem', z, showz=showz, 
+                                    usesmooth=usesmooth)
 
             """ Adjust the plot limits """
             if spec['wav'].min() < wmin:
