@@ -14,6 +14,7 @@ try:
     from astropy.io import fits as pf
 except ImportError:
     import pyfits as pf
+# from astropy.modeling.blackbody import blackbody_lambda
 from cdfutils import datafuncs as df
 
 # ===========================================================================
