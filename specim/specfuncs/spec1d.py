@@ -10,6 +10,7 @@ import numpy as np
 from scipy import interpolate, ndimage
 import matplotlib.pyplot as plt
 from astropy.io import ascii
+from astropy.table import Table
 try:
     from astropy.io import fits as pf
 except ImportError:
@@ -32,13 +33,14 @@ class Spec1d(df.Data1d):
     A class to process and analyze 1-dimensional spectra.
     """
 
-    def __init__(self, infile=None, informat='text', hdu=None,
+    def __init__(self, inspec=None, informat='text',
                  wav=None, flux=None, var=None, sky=None, logwav=False,
-                 debug=False):
+                 wavcol='wav', fluxcol='flux', varcol='var', skycol='sky',
+                 trimsec=None, verbose=True, debug=False):
         """
 
         Reads in the input 1-dimensional spectrum.
-        This can be done in three mutually exclusive ways:
+        This can be done in two mutually exclusive ways:
 
          1. By providing some 1-d arrays containing the following:
                wavelength - required
@@ -54,69 +56,84 @@ class Spec1d(df.Data1d):
 
                       ---- or ----
 
-         2. By providing a HDU from a previously-read fits file, where the
-            HDU data is a binary fits table containing the wavelength,
-            flux, and possibly variance and sky information.
+         2. By providing a single input which can be one of the following:
 
-                      ---- or ----
+            a. A filename, in which case the informat parameter is important
 
-         3. By providing the name of a file that contains the spectrum.
-            There are several possible input file formats:
-              fits: A multi-extension fits file
-                 Extension 1 is the wavelength
-                 Extension 2 is the extracted spectrum (flux)
-                 Extension 3 is the variance spectrum
-                 [OPTIONAL] Extension 4 is the sky spectrum
-              fitstab: A binary fits table, stored as a recarray, that has
-                 columns (or "fields" as they are referred to in a recarray
-                 structure) corresponding to, at a mininum, wavelength and
-                 flux.
-                 NOTE. The table is assumed to be in Extension 1 and the
-                 table is assumed to have wavelength in field 0 and flux in
-                 field 1
-              fitsflux:  A file with a single 1-dimensional HDU that contains
-                 the flux portion of the spectrum.  The associated
-                 wavelength array is described by the CRPIX1, CRVAL1, and
-                 CDELT1 (or CD1_1) keywords in the fits header.  This is
-                 the format, for example, for the template stellar spectra
-                 in the Indo-US set.
-              deimos: A multiextension fits file with the following setup:
-                 HDU1 - binary table with blue-side spectral info
-                 HDU2 - binary table with red-side spectral info
-                 In each table there are columns for wavelength, flux,
-                  variance, and sky (among many others)
-              mwa:  A multi-extension fits file with wavelength info in
-                 the fits header
-                 Extension 1 is the extracted spectrum (flux)
-                 Extension 3 is the variance spectrum
-              text: An ascii text file with information in columns:
-                  Column 1 is the wavelength
-                  Column 2 is the extracted spectrum
-                  Column 3 (optional) is the variance spectrum
-                  Column 4 (optional) is the sky spectrum
-                    [NOT YET IMPLEMENTED]
+            b. A astropy Table that contains, at a minimum, wavelength and
+               flux columns
 
-                  Thus, an input text file could have one of three formats:
-                      A.  wavelength flux
-                      B.  wavelength flux variance
-                      C.  wavelength flux variance sky
+            c. A  HDU from a previously-read fits file, where the
+               HDU data are in a binary fits table that contains the
+               wavelength, flux, and possibly variance and sky information.
+
+         ------
+
+         There are several possible input file formats:
+           fits: A multi-extension fits file
+              Extension 1 is the wavelength
+              Extension 2 is the extracted spectrum (flux)
+              Extension 3 is the variance spectrum
+              [OPTIONAL] Extension 4 is the sky spectrum
+           fitstab: A binary fits table, stored as a recarray, that has
+              columns (or "fields" as they are referred to in a recarray
+              structure) corresponding to, at a mininum, wavelength and
+              flux.
+              NOTE. The table is assumed to be in Extension 1 and the
+              table is assumed to have wavelength in field 0 and flux in
+              field 1
+           fitsflux:  A file with a single 1-dimensional HDU that contains
+              the flux portion of the spectrum.  The associated
+              wavelength array is described by the CRPIX1, CRVAL1, and
+              CDELT1 (or CD1_1) keywords in the fits header.  This is
+              the format, for example, for the template stellar spectra
+              in the Indo-US set.
+           deimos: A multiextension fits file with the following setup:
+              HDU1 - binary table with blue-side spectral info
+              HDU2 - binary table with red-side spectral info
+              In each table there are columns for wavelength, flux,
+               variance, and sky (among many others)
+           mwa:  A multi-extension fits file with wavelength info in
+              the fits header
+              Extension 1 is the extracted spectrum (flux)
+              Extension 3 is the variance spectrum
+           text: An ascii text file with information in columns:
+               Column 1 is the wavelength
+               Column 2 is the extracted spectrum
+               Column 3 (optional) is the variance spectrum
+               Column 4 (optional) is the sky spectrum
+                 [NOT YET IMPLEMENTED]
+
+               Thus, an input text file could have one of three formats:
+                   A.  wavelength flux
+                   B.  wavelength flux variance
+                   C.  wavelength flux variance sky
 
 
         Inputs (all inputs are optional, but at least one way of specifiying
         the input spectrum must be used):
-          infile   - Name of the input file.  If infile is None, then the
-                      spectrum must be provided via the wavelength and flux
-                      vectors.
-          informat - format of input file ('fits', 'fitstab', 'fitsflux',
-                      'mwa', or 'text').
+          inspec   - A single-parameter designation of the input spectrum,
+                     either:
+                       a. A filename (string)
+                       b. An astropy Table
+                       c. A HDU containing the spectrum as a binary table
+                     NOTE: If inspec is None, then the spectrum must be
+                      provided via the wavelength and flux vectors.
+
+          informat - format of input file (see above for possibilities)
                       Default = 'text'
+
           wav      - 1-dimensional array containing "wavelength" information,
                       either as actual wavelength or in pixels
+
           flux     - 1-dimensional array containing the flux information for
                       the extracted spectrum
+
           var      - 1-dimensional array containing the variance
                       spectrum.  Remember: rms = sqrt(variance)
+
           sky      - 1-dimensional array containing the sky spectrum
+
           logwav   - if True then input wavelength is logarithmic, i.e., the
                       numbers in the input wavelength vector are actually
                       log10(wavelength)
@@ -125,53 +142,72 @@ class Spec1d(df.Data1d):
         """
 
         """ Initialize some variables """
+        self.ordnum = None
         self.hasvar = False
         self.sky = False
-        self.atm_trans = None
         self.infile = None
         self.dispave = None
         self.names0 = ['wav', 'flux', 'var']
-        spec0 = [None, None, None, None]
+        spec0 = None
         self.smospec = None
         self.ysmooth = None
         self.varsmooth = None
+        self.atm_trans = None
+        self.atmcorr = None
+        self.respcorr = None
 
         self.logwav = logwav
 
-        """ Read in the spectrum """
-        if infile is not None:
-            self.infile = infile
-            try:
-                spec0, self.hasvar = \
-                    self.read_from_file(infile, informat, debug=debug)
-            except IOError:
-                print('')
-                print('Could not read input file %s' % infile)
-                print('')
-                raise (IOError)
+        """
+        Read in the spectrum.
+        First see if the spectrum is being passed by the inspec parameter
+        """
+        if inspec is not None:
 
-        elif hdu is not None:
-            spec0 = self.read_hdu(hdu)
-            
+            if isinstance(inspec, str):
+                """ Input as a filename """
+                self.infile = inspec
+                try:
+                    spec0 = self.read_file(inspec, informat, verbose=verbose,
+                                           debug=debug)
+                except IOError:
+                    print('')
+                    print('Could not read input file %s' % inspec)
+                    print('')
+                    raise IOError
+
+            elif isinstance(inspec, Table):
+                """ Input as a astropy Table """
+                spec0 = self.read_table(inspec, wavcol, fluxcol, varcol,
+                                        skycol)
+
+            elif isinstance(inspec, pf.BinTableHDU):
+                """ Input as a previously loaded HDU """
+                spec0 = self.read_hdu(inspec)
+
+            else:
+                print('')
+                print('ERROR: inspec parameter must be one of the following')
+                print('  1. A filename')
+                print('  2. An astropy Table')
+                print('  3. A previously loaded HDU (as a BinTableHDU)')
+                print('')
+                raise TypeError
+
         elif wav is not None:
-            if self.logwav:
-                spec0[0] = 10.**wav
-            else:
-                spec0[0] = wav.copy()
-            if flux is not None:
-                spec0[1] = flux.copy()
-            else:
-                spec0[1] = np.ones(wav.size)
-            if var is not None:
-                spec0[2] = var.copy()
-                self.hasvar = True
-            if sky is not None:
-                spec0[3] = sky.copy()
-                self.sky = True
+            spec0 = self.read_arrays(wav, flux, var, sky)
+
         else:
             print('')
             print('ERROR: Must provide either:')
-            print('  1. A name of an input file containing the spectrum')
+            print('  1. A single parameter that is one of the following:')
+            print('      A. the name of a file containing the spectrum')
+            print('      B. an astropy Table containing the spectrum')
+            print('      C. a previously-loaded HDU containing the spectrum')
+            print('         as a binary table')
+            print('')
+            print('             OR')
+            print('')
             print('  2. At minimum, both of the following:')
             print('         A. a wavelength vector (wav)')
             print('         B. a flux vector (flux)')
@@ -181,34 +217,52 @@ class Spec1d(df.Data1d):
             print('')
             return
 
+        """
+        Trim the spectra if requested
+        """
+        if trimsec is not None:
+            xmin = trimsec[0]
+            xmax = trimsec[1]
+            spec0 = spec0[xmin:xmax]
+            # spec0[0] = spec0[0][xmin:xmax]
+            # spec0[1] = spec0[1][xmin:xmax]
+            # if spec0[2] is not None:
+            #     spec0[2] = spec0[2][xmin:xmax]
+            # if spec0[3] is not None:
+            #     spec0[3] = spec0[3][xmin:xmax]
+
         """ Get average dispersion """
-        self.dispave = self.find_dispave(spec0[0])
+        self.dispave = self.find_dispave(spec0['wav'], verbose=verbose)
 
         """
         Call the superclass initialization for useful Data1d attributes
         """
         if debug:
             print(self.names0)
-            print('Wavelength vector size: %d' % spec0[0].size)
-            print('Flux vector size: %d' % spec0[1].size)
-        if spec0[2] is not None:
-            df.Data1d.__init__(self, spec0[0], spec0[1], spec0[2],
-                               names=self.names0)
+            print('Wavelength vector size: %d' % spec0['wav'].size)
+            print('Flux vector size: %d' % spec0['flux'].size)
+        if 'var' in spec0.colnames:
+            var = spec0['var']
+            names = self.names0
+            self.hasvar = True
         else:
+            var = None
             names = self.names0[:-1]
-            df.Data1d.__init__(self, spec0[0], spec0[1], names=names)
+        super(Spec1d, self).__init__(spec0['wav'], spec0['flux'], var,
+                                     names=names)
 
         """ Add the sky vector to the Table structure if it is not none """
-        if spec0[3] is not None:
-            self['sky'] = spec0[3]
+        if 'sky' in spec0.colnames:
+            self['sky'] = spec0['sky'].copy()
+            self.sky = True
 
         """ Read in the list that may be used for marking spectral lines """
         self.load_linelist()
 
     # -----------------------------------------------------------------------
 
-    def read_from_file(self, infile, informat, tabext=1, verbose=True,
-                       debug=False):
+    def read_file(self, infile, informat, tabext=1, verbose=True,
+                  debug=False):
         """
 
         Reads a 1-d spectrum from a file.  The file must have one of the
@@ -251,10 +305,15 @@ class Spec1d(df.Data1d):
         elif informat == 'fitstab':
             hdu = pf.open(infile)
             thdu = hdu[tabext]
-            wav, flux, var, sky = self.read_hdu(thdu)
-            if var is not None:
+            tmp = self.read_hdu(thdu)
+            wav = tmp['wav'].copy()
+            flux = tmp['flux'].copy()
+            if 'var' in tmp.colnames:
+                var = tmp['var'].copy()
                 hasvar = True
-            del hdu
+            if 'sky' in tmp.colnames:
+                sky = tmp['sky'].copy()
+            del hdu, tmp
         elif informat == 'fitsflux':
             hdu = pf.open(infile)
             if len(hdu[0].data.shape) == 2:
@@ -305,9 +364,9 @@ class Spec1d(df.Data1d):
             del hdu
         elif informat.lower() == 'nsx':
             tab = ascii.read(infile)
-            wav  = tab['angstrom'].copy()
+            wav = tab['angstrom'].copy()
             flux = tab['object'].copy()
-            var  = (tab['error'].copy())**2
+            var = (tab['error'].copy())**2
             hasvar = True
             del tab
         elif informat == 'mwa':
@@ -352,7 +411,45 @@ class Spec1d(df.Data1d):
         flux[mask] = 0
 
         """ Return the data """
-        return [wav, flux, var, sky], hasvar
+        spec0 = Table([wav, flux], names=(['wav', 'flux']))
+        if var is not None:
+            spec0['var'] = var
+        if sky is not None:
+            spec0['sky'] = sky
+        return spec0
+
+    # -----------------------------------------------------------------------
+
+    def read_table(self, inspec, wavcol='wav', fluxcol='flux', varcol='var',
+                   skycol='sky'):
+        """
+
+        Read the spectrum from an astropy Table
+
+        """
+
+        """ Set some default values """
+        var = None
+        sky = None
+
+        """ Read the relevant columns of the input table """
+        wav = inspec[wavcol]
+        if fluxcol not in inspec.colnames:
+            flux = np.ones(len(inspec))
+        else:
+            flux = inspec[fluxcol]
+        if varcol in inspec.colnames:
+            var = inspec[varcol]
+        if skycol in inspec.colnames:
+            sky = inspec[skycol]
+
+        """ Save the columns in a new table and return """
+        spec0 = Table([wav, flux], names=(['wav', 'flux']))
+        if var is not None:
+            spec0['var'] = var
+        if sky is not None:
+            spec0['sky'] = sky
+        return spec0
 
     # -----------------------------------------------------------------------
 
@@ -383,9 +480,8 @@ class Spec1d(df.Data1d):
         if len(tdat.columns) > 2:
             try:
                 var = tdat['var']
-            except:
+            except KeyError:
                 var = tdat.field(2)
-            hasvar = True
 
         """
         For the sky, only read in a column if it is actually called 'sky'
@@ -396,8 +492,40 @@ class Spec1d(df.Data1d):
             except KeyError:
                 pass
 
-        """ Return the data """
-        return [wav, flux, var, sky]
+        """ Save the arrays in a table and return """
+        spec0 = Table([wav, flux], names=(['wav', 'flux']))
+        if var is not None:
+            spec0['var'] = var
+        if sky is not None:
+            spec0['sky'] = sky
+        return spec0
+
+    # -----------------------------------------------------------------------
+
+    def read_arrays(self, wav, flux, var, sky):
+        """
+
+        Reads the spectrum from individual arrays
+
+        """
+
+        """ Get the wavelength vector into linear units """
+        if self.logwav:
+            w = 10.**wav
+        else:
+            w = wav.copy()
+
+        """ Make the flux identically 1.0 if it has not been given """
+        if flux is None:
+            flux = np.ones(wav.size)
+
+        """ Save the arrays in a table and return """
+        spec0 = Table([w, flux], names=(['wav', 'flux']))
+        if var is not None:
+            spec0['var'] = var
+        if sky is not None:
+            spec0['sky'] = sky
+        return spec0
 
     # -----------------------------------------------------------------------
 
@@ -427,6 +555,43 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
+    def select_mode(self, mode):
+        """
+
+        Selects the "mode" of the spectrum that is used for subsequent
+        actions such as plotting or saving.
+
+        These modes can be produced by various processing steps within the
+         class and include the following
+
+          'input'    - just the spectrum as it was read in
+          'smooth'   - the smoothed spectrum
+          'atmcorr'  - the spectrum after applying an atmospheric absorption
+                        correction
+          'respcorr' - the spectrum after applying a response correction
+
+        Inputs:
+          mode - one of the values listed above ('input', 'smooth', etc.)
+        """
+
+        if mode == 'input':
+            spec = self
+        elif mode == 'smooth':
+            spec = self.smospec
+        elif mode == 'atmcorr':
+            spec = self.atmcorr
+        elif mode == 'respcorr':
+            spec = self.respcorr
+        else:
+            print('')
+            errstr = 'Invalid mode (%s) for select_mode. See help for ' % mode
+            errstr += 'allowed values\n\n'
+            raise ValueError(errstr)
+
+        return spec
+
+    # -----------------------------------------------------------------------
+
     def make_atm_trans(self, fwhm=15., modfile='default'):
         """
         Creates an extension to the class that contains the
@@ -452,16 +617,16 @@ class Spec1d(df.Data1d):
             infile = '%s/Data/atm_trans_maunakea.fits' % moddir
         print('Loading atmospheric data from %s' % infile)
         try:
-            atm0, hv = self.read_from_file(infile, informat='fitstab')
+            atm0 = self.read_file(infile, informat='fitstab')
         except IOError:
             print('ERROR: Cannot read atmospheric transmission data file')
             raise IOError
-        atm0[0] *= 1.0e4
+        atm0['wav'] *= 1.0e4
 
         """
         Only use the relevant part of the atmospheric transmission spectrum
         """
-        w0 = atm0[0]
+        w0 = atm0['wav']
         w = self['wav']
         mask = (w0 >= w.min()) & (w0 <= w.max())
         if mask.sum() == 0:
@@ -473,8 +638,8 @@ class Spec1d(df.Data1d):
             del atm0
             raise ValueError
         else:
-            watm = atm0[0][mask]
-            trans = atm0[1][mask]
+            watm = atm0['wav'][mask]
+            trans = atm0['flux'][mask]
 
         """ Smooth the spectrum """
         trans = ndimage.gaussian_filter(trans, fwhm)
@@ -522,14 +687,7 @@ class Spec1d(df.Data1d):
         The default is to just use the unmodified input spectrum
          (mode='input')
         """
-        if mode == 'input':
-            spec = self
-        elif mode == 'smooth' or usesmooth:
-            spec = self.smospec
-        elif mode == 'atmcorr':
-            spec = self.atmcorr
-        else:
-            spec = self
+        spec = self.select_mode(mode)
 
         """ Set some plotting parameters """
         if label == 'default':
@@ -566,7 +724,7 @@ class Spec1d(df.Data1d):
 
         Does a correction for atmospheric transmission.
         For now this is done via the model spectrum
-        
+
         """
 
         """ Make sure that there is an atmospheric spectrum to use """
@@ -600,12 +758,43 @@ class Spec1d(df.Data1d):
 
         """ Divide the input spectrum by the transmission """
         atmcorr = self['flux'] / atmflux
-        atmcvar = atmcorr**2 * (self['var'] / self['flux']**2 + \
-                                    atmvar / atmflux**2)
+        atmcvar = atmcorr**2 * (self['var'] / self['flux']**2 +
+                                atmvar / atmflux**2)
 
         """ Save the output in a Data1d container """
         self.atmcorr = df.Data1d(self['wav'], atmcorr, atmcvar,
                                  names=self.names0)
+
+    # -----------------------------------------------------------------------
+
+    def resp_corr(self, response, mode='input', action='multiply'):
+        """
+
+        Given a response curve, corrects the spectrum by either multiplying
+         (the default) or dividing the spectrum by the response curve.  The
+         version of the spectrum to correct is set by the mode parameter.
+        The result is stored in the respcorr version of the spectrum.
+
+        """
+
+        """
+        Set the arrays to use based on the passed mode variable.
+        The default is to just use the unmodified input spectrum
+         (mode='input')
+        """
+        spec = self.select_mode(mode)
+
+        """ Correct the spectrum """
+        if action == 'divide':
+            spec['flux'] /= response
+            spec['var'] /= response**2
+        else:
+            spec['flux'] *= response
+            spec['var'] *= response**2
+
+        """ Save the result """
+        self.respcorr = df.Data1d(self['wav'], spec['flux'], spec['var'],
+                                  names=self.names0)
 
     # -----------------------------------------------------------------------
 
@@ -633,14 +822,9 @@ class Spec1d(df.Data1d):
         The default is to just use the unmodified input spectrum
          (mode='input')
         """
-        if mode == 'input':
-            spec = self
-        elif mode == 'smooth' or usesmooth:
-            spec = self.smospec
-        elif mode == 'atmcorr':
-            spec = self.atmcorr
-        else:
-            spec = self
+        if usesmooth:
+            mode = 'smooth'
+        spec = self.select_mode(mode)
 
         """ Set the arrays to be plotted """
         wav = spec['wav']
@@ -682,8 +866,8 @@ class Spec1d(df.Data1d):
         Plot the model, given as an astropy.modeling model, if requested
         """
         if model is not None:
-            fmod = model(self['wav'])
-            plt.plot(self['wav'], fmod, color=modcolor)
+            fmod = model(wav)
+            plt.plot(wav, fmod, color=modcolor)
 
         """ Plot the RMS spectrum if the variance spectrum exists """
         if var is not None:
@@ -706,16 +890,17 @@ class Spec1d(df.Data1d):
         plt.ylabel(ylabel, fontsize=fontsize)
         if(title):
             plt.title(title)
-        if(self['wav'][0] > self['wav'][-1]):
-            plt.xlim([self['wav'][-1], self['wav'][0]])
+        if(wav[0] > wav[-1]):
+            plt.xlim([wav[-1], wav[0]])
         else:
-            plt.xlim([self['wav'][0], self['wav'][-1]])
+            plt.xlim([wav[0], wav[-1]])
         # print self['wav'][0], self['wav'][-1]
 
         """ Plot the atmospheric transmission if requested """
         if add_atm_trans:
-            self.plot_atm_trans(ls=atmls, scale=atmscale, offset=atmoffset,
-                                fwhm=atmfwhm, modfile=atmmodfile)
+            self.plot_atm_trans(mode=mode, ls=atmls, scale=atmscale,
+                                offset=atmoffset, fwhm=atmfwhm,
+                                modfile=atmmodfile)
 
     # -----------------------------------------------------------------------
 
@@ -796,10 +981,7 @@ class Spec1d(df.Data1d):
         """
 
         """ Select the spectrum to be smoothed """
-        if mode == 'atmcorr':
-            spec = self.atmcorr
-        else:
-            spec = self
+        spec = self.select_mode(mode)
 
         """
         Smooth the spectrum using the requested smoothing function
@@ -807,7 +989,7 @@ class Spec1d(df.Data1d):
         The smoothing functions are inherited from the Data1d class
         """
         if smfunc == 'boxcar':
-            ysmooth, varsmooth = spec.smooth_boxcar(filtwidth)
+            ysmooth, varsmooth = spec.smooth_boxcar(filtwidth, verbose=False)
         else:
             print('')
             print('For smoothing, smfunc can only be one of the following:')
@@ -820,22 +1002,12 @@ class Spec1d(df.Data1d):
             names = self.names0[:-1]
         else:
             names = self.names0
-        print(names)
         self.smospec = df.Data1d(self['wav'], ysmooth, varsmooth,
                                  names=names)
 
         """ Plot the smoothed spectrum if desired """
         if doplot:
             self.plot(mode='smooth', **kwargs)
-
-        # """ Save the output file if desired """
-        # if(outfile):
-        #     print "Saving smoothed spectrum to %s" % outfile
-        #     if varwt:
-        #         save_spectrum(outfile, wavelength, outflux, outvar)
-        #     else:
-        #         save_spectrum(outfile, wavelength, outflux)
-        #     print('')
 
     # -----------------------------------------------------------------------
 
@@ -1255,7 +1427,7 @@ class Spec1d(df.Data1d):
 
         Replaces the region of a spectrum containing a spectral line with
         a simple model of the continuum level in the location of that line.
-        This is done by fitting a 2nd order polynomial to small regions 
+        This is done by fitting a 2nd order polynomial to small regions
         of the spectrum immediately to the blue and red sides of the line
         regions.
 
@@ -1276,14 +1448,7 @@ class Spec1d(df.Data1d):
         The default is to just use the unmodified input spectrum
          (mode='input')
         """
-        if mode == 'input':
-            spec = self
-        elif mode == 'smooth':
-            spec = self.smospec
-        elif mode == 'atmcorr':
-            spec = self.atmcorr
-        else:
-            spec = self
+        spec = self.select_mode(mode)
 
         """ Set up short-cut names for the relevant arrays """
         w = spec['wav']
@@ -1485,7 +1650,7 @@ class Spec1d(df.Data1d):
             print('ERROR: outformat is not one of the recognized types')
             print('')
             raise ValueError
-            
+
         if verbose:
             print('Saved spectrum to file %s in format %s' %
                   (outfile, outformat))

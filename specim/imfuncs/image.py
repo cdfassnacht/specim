@@ -1216,7 +1216,7 @@ class Image:
             print('Cutout image center (x, y): (%d, %d)' %
                   (subcentx, subcenty))
             print('Cutout image size (x y): %dx%d' %
-                  (self.subsizex, self.subsizey))
+                  ((x2-x1), (y2-y1)))
 
         """
         Update the header info, including updating the CRPIXn values if they

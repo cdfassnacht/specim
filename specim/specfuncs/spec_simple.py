@@ -1014,6 +1014,7 @@ def plot_model_sky_ir(z=None, wmin=10000., wmax=25651., smooth=25.):
     """
     Plot the locations of bright emission features at the requested redshift
     """
+    print(z)
     if z is not None:
         tmpspec.mark_lines('strongem', z, marktype='line', showz=False)
     plt.xlim(xmin, xmax)
