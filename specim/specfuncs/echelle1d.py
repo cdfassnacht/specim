@@ -120,7 +120,7 @@ class Ech1d(list):
     # -----------------------------------------------------------------------
 
     def plot_all(self, plotmode='single', mode='input', title=None, z=None,
-                 showz=True, linetype='strongem', smo=None,
+                 showz=True, linetype='strongem', smo=None, pltylim=None,
                  verbose=False, **kwargs):
         """
 
@@ -129,21 +129,28 @@ class Ech1d(list):
         """
 
         """ Set starting values """
-        i = 0
         wmin = 1.e12
         wmax = 0.
 
+        print(len(self))
         """ Plot the spectra """
         for count, spec in enumerate(self):
 
             """ Set plot labeling """
-            if count == len(spec) - 1:
+            if count == (len(self) - 1):
                 if title is None:
                     title = 'Extracted Spectrum'
                 showz = True
+                print('Bang')
             else:
-                title = False
+                tmptitle = title
+                title = None
                 showz = False
+
+            if title is not None:
+                print(count, title)
+            else:
+                print(count, 'None')
 
             """ Plot the spectrum """
             if smo is not None:
@@ -151,8 +158,25 @@ class Ech1d(list):
                             **kwargs)
             else:
                 spec.plot(mode=mode, title=title, **kwargs)
+            title = tmptitle
 
-            """ Mark spectral lines if desired """
+            """ Adjust the plot limits """
+            if spec['wav'].min() < wmin:
+                wmin = spec['wav'].min()
+            if spec['wav'].max() > wmax:
+                wmax = spec['wav'].max()
+
+        """ Set final plot limits """
+        plt.xlim(wmin, wmax)
+        if pltylim is not None:
+            plt.ylim(pltylim)
+
+        """
+        Mark spectral lines if desired
+        Do this in a separate loop since the tickmark length depends
+         on the y-axis range of the display
+        """
+        for spec in self:
             if z is not None:
                 if smo is not None:
                     usesmooth = True
@@ -164,16 +188,6 @@ class Ech1d(list):
                 except NameError:
                     spec.mark_lines('strongem', z, showz=showz, 
                                     usesmooth=usesmooth)
-
-            """ Adjust the plot limits """
-            if spec['wav'].min() < wmin:
-                wmin = spec['wav'].min()
-            if spec['wav'].max() > wmax:
-                wmax = spec['wav'].max()
-            i += 1
-
-        """ Set final plot limits """
-        plt.xlim(wmin, wmax)
 
     # ------------------------------------------------------------------------
 

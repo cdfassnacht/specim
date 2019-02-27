@@ -888,7 +888,7 @@ class Spec1d(df.Data1d):
 
         """ More plot labels """
         plt.ylabel(ylabel, fontsize=fontsize)
-        if(title):
+        if title is not None:
             plt.title(title)
         if(wav[0] > wav[-1]):
             plt.xlim([wav[-1], wav[0]])
