@@ -21,7 +21,8 @@ class SpecSet1d(list):
     # ------------------------------------------------------------------------
 
     def __init__(self, inlist=None, informat=None, spec1dlist=None,
-                 wavlist=None, fluxlist=None, varlist=None, skylist=None):
+                 wavlist=None, fluxlist=None, varlist=None, skylist=None,
+                 verbose=True):
         """
 
         There are three ways to create a SpecSet1d instance, all of which
@@ -54,7 +55,8 @@ class SpecSet1d(list):
             if informat is not None:
                 for i in inlist:
                     try:
-                        spec = Spec1d(infile=i, informat=informat)
+                        spec = Spec1d(infile=i, informat=informat,
+                                      verbose=verbose)
                     except IOError:
                         raise IOError
                     self.append(spec)
@@ -88,7 +90,7 @@ class SpecSet1d(list):
 
     # ------------------------------------------------------------------------
 
-    def coadd(self, doplot=True, outfile=None, **kwargs):
+    def coadd(self, doplot=True, outfile=None, verbose=True, **kwargs):
         """
 
         Do a variance-weighted sum of the spectra
@@ -129,7 +131,7 @@ class SpecSet1d(list):
 
         """ Create a Spec1d structure for the output spectrum """
         outspec = Spec1d(wav=self[0]['wav'], flux=outflux, var=outvar,
-                         sky=outsky)
+                         sky=outsky, verbose=verbose)
 
         """ Plot the combined spectrum """
         if doplot:
