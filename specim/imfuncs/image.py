@@ -1036,7 +1036,7 @@ class Image:
         are multiples of (1) the rms, and (2) the contour base level
         (contbase), which has a default value of sqrt(3).  Thus:
 
-         clev = [-contbase**2, contbase**2, contbase**3, contbase**4,...] * rms
+         clev = [-contbase**2, contbase**2, contbase**3,...] * rms
 
         Optional inputs:
          rms      - If rms is None (the default), then use the data to
@@ -1102,6 +1102,72 @@ class Image:
         else:
             plt.contour(self.data, self.clevs, colors=color,
                         extent=self.extval, origin='lower')
+
+    # -----------------------------------------------------------------------
+
+    def blkavg(self, factor, mode='sum', outfile=None):
+        """
+
+        Code to block average the image data, taken from Matt Auger's
+        indexTricks library
+        This method replicates (more or less) the blkavg task
+        within iraf/pyraf.  The purpose is to take the image data and
+        create an output data array that is smaller by an integer factor
+        (N). 
+        The code takes NxN blocks of pixels from the input array and
+        creates 1 pixel in the output array.  Therefore, unlike
+        ndimage.zoom or ndimage.map_coordinates, there is no interpolation
+        and therefore no introduction of correlated noise between the
+        pixels.
+
+        NOTE: This code has taken the resamp function directly from Matt
+        Auger's indexTricks library.  Right now there is NO ERROR CHECKING
+        in that part of the code.  User beware!
+
+        Inputs:
+          factor - block averaging / summing factor
+          mode   - either 'sum' (default) or 'average'
+        """
+
+        """
+        Make a copy of the input data, just to be on the safe side
+        """
+        arr = self.data.copy()
+        
+        """ 
+        Cut off rows and columns to get an integer multiple of the factor
+        in each dimension
+        """
+        dx = arr.shape[1] % factor
+        dy = arr.shape[0] % factor
+        if dx>0:
+            arr = arr[:,:-dx]
+        if dy>0:
+            arr = arr[:-dy,:]
+
+        """ Set the output dimensions """
+        x = arr.shape[1]/factor
+        y = arr.shape[0]/factor
+
+        """ Fill the output array with the block-averaged values """
+        out = n.zeros((y,x))
+        for i in range(factor):
+            for j in range(factor):
+                out += arr[i::factor,j::factor]
+
+        """ Average if requested, otherwise leave as sum """
+        if mode == 'average':
+            out /= factor**2
+
+        """
+        If an output file is requested, then any WCS information has to
+        be modified to take into account the block factor that has been
+        used.
+        """
+        if outfile is not None:
+            print('Need to implement output file writing')
+        else:
+            return out
 
     # -----------------------------------------------------------------------
 
@@ -1405,7 +1471,8 @@ class Image:
         # For the comparison, use numpy's isclose function
 
         """ Do the coordinate transform preparation """
-        icoords = np.indices((self.subsizey, self.subsizex)).astype(np.float32)
+        icoords = np.indices((self.subsizey, self.subsizex),
+                             dtype=np.float32)
         skycoords = self.subim_wcs.wcs_pix2world(icoords[1], icoords[0], 0)
         ccdcoords = w.wcs_world2pix(skycoords[0], skycoords[1], 0)
         icoords[0] = ccdcoords[1]
@@ -1489,24 +1556,24 @@ class Image:
         Some modifications have been made by Chris Fassnacht.
 
         Inputs:
-          imcent   - center of the subimage to be displayed, either in
-                      decimal degrees (if mode='radec') or in pixels
-                      (if mode='xy').
-                     The default value, designated by imcent=None, will just
-                      use the center of the input image.
-                     The imcent parameter can take any of the following formats
-                        1. A 2-element numpy array
-                        2. A 2-element list:  [xsize, ysize]
-                        3. A 2-element tuple: (xsize, ysize)
-          imsize   - size of the subimage to be displayed, either in arcsec
-                      (if mode='radec')or pixels (if mode='xy').
-                     The default, designated by imsize=None, is to display
-                      the entire image.
-                     The imsize parameter can take any of the following formats
-                        1. A single number (which will produce a square image)
-                        2. A 2-element numpy array
-                        3. A 2-element list:  [xsize, ysize]
-                        4. A 2-element tuple: (xsize, ysize)
+          imcent - center of the subimage to be displayed, either in
+                    decimal degrees (if mode='radec') or in pixels
+                    (if mode='xy').
+                   The default value, designated by imcent=None, will just
+                    use the center of the input image.
+                   The imcent parameter can take any of the following formats
+                      1. A 2-element numpy array
+                      2. A 2-element list:  [xsize, ysize]
+                      3. A 2-element tuple: (xsize, ysize)
+          imsize - size of the subimage to be displayed, either in arcsec
+                    (if mode='radec')or pixels (if mode='xy').
+                   The default, designated by imsize=None, is to display
+                    the entire image.
+                   The imsize parameter can take any of the following formats
+                      1. A single number (which will produce a square image)
+                      2. A 2-element numpy array
+                      3. A 2-element list:  [xsize, ysize]
+                      4. A 2-element tuple: (xsize, ysize)
 
          Optional inputs:
           outscale - Output image pixel scale, in arcsec/pix.
@@ -1642,22 +1709,22 @@ class Image:
         center (centpos parameter) and its size (size parameter).
 
         Inputs:
-            centpos - (x, y) coordinates of the center of the region, in pixels
-                      centpos can take any of the following formats:
-                       1. A 2-element numpy array
-                       2. A 2-element list:  [xsize, ysize]
-                       3. A 2-element tuple: (xsize, ysize)
-                       4. centpos=None.  In this case, the center of the cutout
-                          is just the center of the full image
-            size    - size of cutout (postage stamp) image, in pixels
-                      size can take any of the following formats:
-                       1. A single number (which will produce a square image)
-                       2. A 2-element numpy array
-                       3. A 2-element list:  [xsize, ysize]
-                       4. A 2-element tuple: (xsize, ysize)
-                       5. size=None.  In this case, the full image is used
-            hext    - HDU containing the image data in the input image
-                      (default=0)
+          centpos - (x, y) coordinates of the center of the region, in pixels
+                    centpos can take any of the following formats:
+                     1. A 2-element numpy array
+                     2. A 2-element list:  [xsize, ysize]
+                     3. A 2-element tuple: (xsize, ysize)
+                     4. centpos=None.  In this case, the center of the cutout
+                        is just the center of the full image
+          size    - size of cutout (postage stamp) image, in pixels
+                    size can take any of the following formats:
+                     1. A single number (which will produce a square image)
+                     2. A 2-element numpy array
+                     3. A 2-element list:  [xsize, ysize]
+                     4. A 2-element tuple: (xsize, ysize)
+                     5. size=None.  In this case, the full image is used
+          hext    - HDU containing the image data in the input image
+                    (default=0)
         """
 
         """
@@ -1688,40 +1755,40 @@ class Image:
         otherwise the numpy array containing the SNR information is returned.
 
         Inputs:
-            centpos  - (x, y) coordinates of cutout center, in pixels
-                       centpos can take any of the following formats:
-                         1. A 2-element numpy array
-                         2. A 2-element list:  [xsize, ysize]
-                         3. A 2-element tuple: (xsize, ysize)
-                         4. centpos=None.  In this case, the center of the
-                            cutout is just the center of the full image
-            imsize   - size of cutout (postage stamp) image, in pixels
-                       imsize can take any of the following formats:
-                         1. A single number (which will produce a square image)
-                         2. A 2-element numpy array
-                         3. A 2-element list:  [xsize, ysize]
-                         4. A 2-element tuple: (xsize, ysize)
-                         5. imsize=None.  In this case, the full image is used
-            statcent - (x, y) coordinates of the center of the region to be
-                        used to compute the image statistics.
-                       statcent can take any of the following formats:
-                        1. A 2-element numpy array
-                        2. A 2-element list:  [xsize, ysize]
-                        3. A 2-element tuple: (xsize, ysize)
-                        4. statcent=None.  In this case, the statcent defaults
-                           to the value of centpos
-            statsize - size, in pixels, of the region to be used to compute the
-                        image statistics
-                        statsize can take any of the following formats:
-                         1. A single number (which will produce a square image)
-                         2. A 2-element numpy array
-                         3. A 2-element list:  [xsize, ysize]
-                         4. A 2-element tuple: (xsize, ysize)
-                         5. statsize=None.  In this case, the statsize defaults
-                            to the value of imsize
-            outfile  - name of optional output file (default=None)
-            hext     - HDU containing the image data in the input image
-                          (default=0)
+          centpos  - (x, y) coordinates of cutout center, in pixels
+                     centpos can take any of the following formats:
+                       1. A 2-element numpy array
+                       2. A 2-element list:  [xsize, ysize]
+                       3. A 2-element tuple: (xsize, ysize)
+                       4. centpos=None.  In this case, the center of the
+                          cutout is just the center of the full image
+          imsize   - size of cutout (postage stamp) image, in pixels
+                     imsize can take any of the following formats:
+                       1. A single number (which will produce a square image)
+                       2. A 2-element numpy array
+                       3. A 2-element list:  [xsize, ysize]
+                       4. A 2-element tuple: (xsize, ysize)
+                       5. imsize=None.  In this case, the full image is used
+          statcent - (x, y) coordinates of the center of the region to be
+                      used to compute the image statistics.
+                     statcent can take any of the following formats:
+                      1. A 2-element numpy array
+                      2. A 2-element list:  [xsize, ysize]
+                      3. A 2-element tuple: (xsize, ysize)
+                      4. statcent=None.  In this case, the statcent defaults
+                         to the value of centpos
+          statsize - size, in pixels, of the region to be used to compute the
+                      image statistics
+                      statsize can take any of the following formats:
+                       1. A single number (which will produce a square image)
+                       2. A 2-element numpy array
+                       3. A 2-element list:  [xsize, ysize]
+                       4. A 2-element tuple: (xsize, ysize)
+                       5. statsize=None.  In this case, the statsize defaults
+                          to the value of imsize
+          outfile  - name of optional output file (default=None)
+          hext     - HDU containing the image data in the input image
+                        (default=0)
         """
 
         """ First get the rms in the requested region """
