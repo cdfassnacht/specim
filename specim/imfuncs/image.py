@@ -108,11 +108,12 @@ class Image:
         self.hdr = None
         self.prevdext = None
         # self.data = self.hdu[datahext].data.copy()
-        # self.hdr = self.hdu[hdrhext].header.copy()
+        self.hdr = self.hdu[hdrhext].header.copy()
         # self.prevdext = datahext
 
         """ Do an initial import of the WCS information from the header """
         self.found_wcs = False
+        self.wcsinfo = None
         self.radec = None
         self.pixscale = None
         try:
@@ -1105,69 +1106,58 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def blkavg(self, factor, mode='sum', outfile=None):
+    def make_hdr_wcs(self, inhdr, wcsinfo, keeplist=None, debug=False):
         """
 
-        Code to block average the image data, taken from Matt Auger's
-        indexTricks library
-        This method replicates (more or less) the blkavg task
-        within iraf/pyraf.  The purpose is to take the image data and
-        create an output data array that is smaller by an integer factor
-        (N). 
-        The code takes NxN blocks of pixels from the input array and
-        creates 1 pixel in the output array.  Therefore, unlike
-        ndimage.zoom or ndimage.map_coordinates, there is no interpolation
-        and therefore no introduction of correlated noise between the
-        pixels.
-
-        NOTE: This code has taken the resamp function directly from Matt
-        Auger's indexTricks library.  Right now there is NO ERROR CHECKING
-        in that part of the code.  User beware!
+        Creates a new header that includes (possibly updated) wcs
+        information to use for an output file/HDU.
 
         Inputs:
-          factor - block averaging / summing factor
-          mode   - either 'sum' (default) or 'average'
+          inhdr    - Input header.  This could be just the header of the
+                     HDU that was used to create this Image object, but it
+                     could also be some modification of that header or even
+                     a brand-new header
+          wcsinfo  - WCS information, which may be just the information in
+                     the input file, but may be a modification
+          keeplist - If set to None (the default) then keep all of the
+                     header cards in inhdr.  If not, then just keep the
+                     header cards -- designated as strings -- in keeplist
+
         """
 
         """
-        Make a copy of the input data, just to be on the safe side
+        Eliminate, as much as possible, the WCS header keywords from
+         the original header.  This is done to avoid possibly conflicting
+         information, e.g., a CD matrix in the original header and then
+         a CDELT + PC matrix from the cutout.
         """
-        arr = self.data.copy()
-        
-        """ 
-        Cut off rows and columns to get an integer multiple of the factor
-        in each dimension
-        """
-        dx = arr.shape[1] % factor
-        dy = arr.shape[0] % factor
-        if dx>0:
-            arr = arr[:,:-dx]
-        if dy>0:
-            arr = arr[:-dy,:]
+        hdr = inhdr.copy()
+        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
+                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
+                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
+        for key in wcskeys:
+            if key.upper() in hdr.keys():
+                del hdr[key]
+                if debug:
+                    print('Deleting original %s keyword' % key.upper())
 
-        """ Set the output dimensions """
-        x = arr.shape[1]/factor
-        y = arr.shape[0]/factor
-
-        """ Fill the output array with the block-averaged values """
-        out = n.zeros((y,x))
-        for i in range(factor):
-            for j in range(factor):
-                out += arr[i::factor,j::factor]
-
-        """ Average if requested, otherwise leave as sum """
-        if mode == 'average':
-            out /= factor**2
-
-        """
-        If an output file is requested, then any WCS information has to
-        be modified to take into account the block factor that has been
-        used.
-        """
-        if outfile is not None:
-            print('Need to implement output file writing')
+        """ Create a new output header, according to keeplist """
+        if keeplist is not None:
+            tmphdu = pf.PrimaryHDU()
+            outhdr = tmphdu.header.copy()
+            for key in keeplist:
+                if key.upper() in hdr.keys():
+                    outhdr[key] = hdr[key]
         else:
-            return out
+            outhdr = hdr
+
+        """ Add the WCS information to the header """
+        if self.found_wcs:
+            wcshdr = self.wcsinfo.to_header()
+            for key in wcshdr.keys():
+                outhdr[key] = wcshdr[key]
+
+        return outhdr
 
     # -----------------------------------------------------------------------
 
@@ -1300,6 +1290,51 @@ class Image:
 
         if 'crpix2' in self.subimhdr.keys():
             self.subimhdr['CRPIX2'] -= self.y1
+
+    # -----------------------------------------------------------------------
+
+    def poststamp_xy(self, centpos, imsize, outfile=None, hext=0,
+                     verbose=True):
+        """
+        Creates a subimage that is a cutout of the original image.  For
+         this method, the image center is defined by its (x, y) coordinate
+         rather than (ra, dec).
+        The image is written to an output fits file if the outfile parameter
+         is set.
+
+        Inputs:
+            centpos - (x, y) coordinates of cutout center, in pixels
+                       centpos can take any of the following formats:
+                        1. A 2-element numpy array
+                        2. A 2-element list:  [xsize, ysize]
+                        3. A 2-element tuple: (xsize, ysize)
+                        4. centpos=None.  In this case, the center of the
+                           cutout is just the center of the full image
+            imsize  - size of cutout (postage stamp) image, in pixels
+                      imsize can take any of the following formats:
+                       1. A single number (which will produce a square image)
+                       2. A 2-element numpy array
+                       3. A 2-element list:  [xsize, ysize]
+                       4. A 2-element tuple: (xsize, ysize)
+                       5. imsize=None.  In this case, the full image is used
+            outfile - name of optional output file (default=None)
+            hext    - HDU containing the image data in the input image
+                      (default=0)
+        """
+
+        """ Make the cutout """
+        x1, y1, x2, y2, = self.get_subim_bounds(centpos, imsize, hext)
+        self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
+
+        """ Write to the output file if requested """
+        if outfile:
+            print('')
+            if self.infile is not None:
+                print('Input file:  %s' % self.infile)
+            print 'Output file: %s' % outfile
+            pf.PrimaryHDU(self.data, self.subimhdr).writeto(outfile,
+                                                            overwrite=True)
+            print "Wrote postage stamp cutout to %s" % outfile
 
     # -----------------------------------------------------------------------
 
@@ -1499,51 +1534,6 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def poststamp_xy(self, centpos, imsize, outfile=None, hext=0,
-                     verbose=True):
-        """
-        Creates a subimage that is a cutout of the original image.  For
-         this method, the image center is defined by its (x, y) coordinate
-         rather than (ra, dec).
-        The image is written to an output fits file if the outfile parameter
-         is set.
-
-        Inputs:
-            centpos - (x, y) coordinates of cutout center, in pixels
-                       centpos can take any of the following formats:
-                        1. A 2-element numpy array
-                        2. A 2-element list:  [xsize, ysize]
-                        3. A 2-element tuple: (xsize, ysize)
-                        4. centpos=None.  In this case, the center of the
-                           cutout is just the center of the full image
-            imsize  - size of cutout (postage stamp) image, in pixels
-                      imsize can take any of the following formats:
-                       1. A single number (which will produce a square image)
-                       2. A 2-element numpy array
-                       3. A 2-element list:  [xsize, ysize]
-                       4. A 2-element tuple: (xsize, ysize)
-                       5. imsize=None.  In this case, the full image is used
-            outfile - name of optional output file (default=None)
-            hext    - HDU containing the image data in the input image
-                      (default=0)
-        """
-
-        """ Make the cutout """
-        x1, y1, x2, y2, = self.get_subim_bounds(centpos, imsize, hext)
-        self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
-
-        """ Write to the output file if requested """
-        if outfile:
-            print('')
-            if self.infile is not None:
-                print('Input file:  %s' % self.infile)
-            print 'Output file: %s' % outfile
-            pf.PrimaryHDU(self.data, self.subimhdr).writeto(outfile,
-                                                            overwrite=True)
-            print "Wrote postage stamp cutout to %s" % outfile
-
-    # -----------------------------------------------------------------------
-
     def poststamp_radec(self, imcent, imsize, outscale=None, outfile=None,
                         docdmatx=False, hext=0, dext=0, verbose=True,
                         debug=False):
@@ -1699,6 +1689,109 @@ class Image:
         print "imcopy: Writing to output file %s" % outfile
         outhdu.writeto(outfile, overwrite=True)
         del outdat
+
+    # -----------------------------------------------------------------------
+
+    def blkavg(self, factor, mode='sum', outfile=None, verbose=True, hext=0):
+        """
+
+        Code to block average the image data, taken from Matt Auger's
+        indexTricks library
+        This method replicates (more or less) the blkavg task
+        within iraf/pyraf.  The purpose is to take the image data and
+        create an output data array that is smaller by an integer factor
+        (N). 
+        The code takes NxN blocks of pixels from the input array and
+        creates 1 pixel in the output array.  Therefore, unlike
+        ndimage.zoom or ndimage.map_coordinates, there is no interpolation
+        and therefore no introduction of correlated noise between the
+        pixels.
+
+        NOTE: This code has taken the resamp function directly from Matt
+        Auger's indexTricks library.  Right now there is NO ERROR CHECKING
+        in that part of the code.  User beware!
+
+        Inputs:
+          factor - block averaging / summing factor
+          mode   - either 'sum' (default) or 'average'
+        """
+
+        """
+        Make a copy of the input data, just to be on the safe side
+        """
+        arr = self.hdu[hext].data.copy()
+        # arr = self.data.copy()
+        
+        """ 
+        Cut off rows and columns to get an integer multiple of the factor
+        in each dimension
+        """
+        dx = arr.shape[1] % factor
+        dy = arr.shape[0] % factor
+        if dx>0:
+            arr = arr[:,:-dx]
+        if dy>0:
+            arr = arr[:-dy,:]
+
+        """ Set the output dimensions """
+        x = arr.shape[1]/factor
+        y = arr.shape[0]/factor
+
+        """ Fill the output array with the block-averaged values """
+        out = np.zeros((y,x))
+        for i in range(factor):
+            for j in range(factor):
+                out += arr[i::factor,j::factor]
+
+        """ Average if requested, otherwise leave as sum """
+        if mode == 'average':
+            out /= factor**2
+
+        """
+        If an output file is requested, then any WCS information has to
+        be modified to take into account the block factor that has been
+        used.
+        """
+        if outfile is not None:
+            if self.wcsinfo is not None:
+
+                outhdr = self.make_hdr_wcs(self.hdr, self.wcsinfo)
+                rak = self.raaxis
+                dek = self.decaxis
+
+                """ First adjust the pixel scale in the output image """
+                if self.wcsinfo.wcs.has_cd():
+                    """
+                    If the original file had a CD matrix, then the conversion
+                    via the wcs to_header() function saves the CDELTn as just
+                    1.0 and puts the CD matrix into an output PC matrix.
+                    """
+                    keylist = ['pc%d_%d' % (rak, rak), 
+                               'pc%d_%d' % (rak, dek),
+                               'pc%d_%d' % (dek, rak),
+                               'pc%d_%d' % (dek, dek)]
+                elif self.wcsinfo.wcs.has_pc():
+                    keylist = ['cdelt%d' % rak, 'cdelt%d' % dek]
+                else:
+                    raise AttributeError
+                for key in keylist:
+                    if key.upper() in outhdr.keys():
+                        outhdr[key] *= factor
+
+                """ Also adjust the crpix values """
+                for key in ['crpix%d' % rak, 'crpix%d' % dek]:
+                    if key.upper() in outhdr.keys():
+                        outhdr[key] /= (1.0 * factor)
+                
+            else:
+                outhdr = self.hdr.copy()
+
+            pf.PrimaryHDU(out, outhdr).writeto(outfile, overwrite=True)
+            if verbose:
+                print('Wrote block-averaged data to %s' % outfile)
+
+        else:
+            return out
 
     # -----------------------------------------------------------------------
 
