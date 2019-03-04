@@ -173,8 +173,8 @@ class Image:
         """
         if verbose:
             print('')
-            print "Loading file %s" % infile
-            print "-----------------------------------------------"
+            print('Loading file %s' % infile)
+            print('-----------------------------------------------')
 
         if os.path.isfile(infile):
             try:
@@ -333,6 +333,17 @@ class Image:
 
     # -----------------------------------------------------------------------
 
+    def fix_nans(self, nanval='clipmean', mode='input', hext=0, verbose=True):
+        """
+
+        Replaces any NaNs in the input data
+
+        """
+
+        print('fix_nans is not yet implemented')
+
+    # -----------------------------------------------------------------------
+
     def make_var(self, objmask=None, returnvar=True, hext=0, verbose=True):
         """
         Make a variance image under the assumption that the data in the
@@ -434,7 +445,8 @@ class Image:
         self.xclick = event.xdata
         self.yclick = event.ydata
         print('')
-        print 'Mouse click x, y:    %7.1f %7.1f' % (self.xclick, self.yclick)
+        print('Mouse click x, y:    %7.1f %7.1f' % 
+              (self.xclick, self.yclick))
 
         """
         Also show the (RA, dec) of the clicked position if the input file has
@@ -457,8 +469,8 @@ class Image:
                     (self.xclick + self.zeropos[0]) / (3600. * cosdec)
                 self.decclick = self.radec.dec.degree + self.yclick/3600. + \
                     self.zeropos[1]
-            print 'Mouse click ra, dec: %11.7f %+11.7f' % \
-                (self.raclick, self.decclick)
+            print('Mouse click ra, dec: %11.7f %+11.7f' % 
+                  (self.raclick, self.decclick))
         return
 
     # -----------------------------------------------------------------------
@@ -522,7 +534,7 @@ class Image:
 
         if event.key == 'q':
             print('')
-            print 'Closing down'
+            print('Closing down')
             print('')
             if self.fig1:
                 self.fig1.canvas.mpl_disconnect(self.cid_mouse)
@@ -670,7 +682,8 @@ class Image:
             if self.found_rms is False:
                 self.sigma_clip(verbose=verbose)
                 self.found_rms = True
-            print self.mean_clip, self.rms_clip
+            if verbose:
+                print(self.mean_clip, self.rms_clip)
             f = data[pixmask] - self.mean_clip
         self.imex_x = x[pixmask]
         self.imex_y = y[pixmask]
@@ -695,8 +708,10 @@ class Image:
         self.imex_sigxx = (fgood * xgood**2).sum() / fsum - mux**2
         self.imex_sigyy = (fgood * ygood**2).sum() / fsum - muy**2
         self.imex_sigxy = (fgood * xgood*ygood).sum() / fsum - mux*muy
-        print self.imex_mux, self.imex_muy
-        print sqrt(self.imex_sigxx), sqrt(self.imex_sigyy), self.imex_sigxy
+        if verbose:
+            print(self.imex_mux, self.imex_muy)
+            print(sqrt(self.imex_sigxx), sqrt(self.imex_sigyy),
+                  self.imex_sigxy)
 
     # -----------------------------------------------------------------------
 
@@ -826,9 +841,9 @@ class Image:
         self.fit_gauss_1d_r(r2, f2)
 
         if verbose:
-            print self.rcirc
-            print self.fcirc
-            print self.rprof_amp, self.rprof_sig
+            print(self.rcirc)
+            print(self.fcirc)
+            print(self.rprof_amp, self.rprof_sig)
 
     # -----------------------------------------------------------------------
 
@@ -930,7 +945,7 @@ class Image:
         if zp or (runit == 'arcsec'):
             if self.pixscale is None:
                 self.set_pixscale()
-            print 'Using pixel scale of %6.3f arcsec/pix' % self.pixscale
+            print('Using pixel scale of %6.3f arcsec/pix' % self.pixscale)
 
         """ Select the points within rmax and convert to mags if desired """
         ii = np.argsort(r)
@@ -1078,8 +1093,8 @@ class Image:
             self.clevs = np.concatenate(([-self.contbase**2], poslevs))
 
         if verbose:
-            print "Contour levels: %f *" % rms
-            print self.clevs
+            print('Contour levels: %f *' % rms)
+            print(self.clevs)
         self.clevs *= rms
 
     # -----------------------------------------------------------------------
@@ -1148,14 +1163,18 @@ class Image:
             for key in keeplist:
                 if key.upper() in hdr.keys():
                     outhdr[key] = hdr[key]
+                    if debug:
+                        print(key.upper())
         else:
             outhdr = hdr
 
         """ Add the WCS information to the header """
         if self.found_wcs:
-            wcshdr = self.wcsinfo.to_header()
+            wcshdr = wcsinfo.to_header()
             for key in wcshdr.keys():
                 outhdr[key] = wcshdr[key]
+                if debug:
+                    print(key.upper(), wcshdr[key], outhdr[key])
 
         return outhdr
 
@@ -1257,11 +1276,11 @@ class Image:
         """
         hdr = self.hdu[hext].header
         if hdr['naxis'] == 4:
-            self.data = self.hdu[hext].data[0, 0, y1:y2, x1:x2].copy()
+            data = self.hdu[hext].data[0, 0, y1:y2, x1:x2].copy()
         else:
-            self.data = self.hdu[hext].data[y1:y2, x1:x2].copy()
-        self.data[~np.isfinite(self.data)] = 0.
-        self.subimhdr = self.hdu[hext].header.copy()
+            data = self.hdu[hext].data[y1:y2, x1:x2].copy()
+        data[~np.isfinite(data)] = 0.
+        subim = pf.PrimaryHDU(data, self.hdu[hext].header)
         self.prevdext = hext
         subcentx = 0.5 * (x1 + x2)
         subcenty = 0.5 * (y1 + y2)
@@ -1279,17 +1298,17 @@ class Image:
         are present.
         """
         if self.infile is not None:
-            self.subimhdr['ORIG_IM'] = 'Copied from %s' % self.infile
-        self.subimhdr['ORIG_REG'] = \
+            subim.header['ORIG_IM'] = 'Copied from %s' % self.infile
+        subim.header['ORIG_REG'] = \
             'Region in original image [xrange, yrange]: [%d:%d,%d:%d]' % \
             (x1, x2, y1, y2)
+        if 'CRPIX1' in subim.header.keys():
+            subim.header['CRPIX1'] -= x1
+        if 'CRPIX2' in subim.header.keys():
+            subim.header['CRPIX2'] -= y1
 
-        """ Update the headers to reflect the cutout center"""
-        if 'crpix1' in self.subimhdr.keys():
-            self.subimhdr['CRPIX1'] -= self.x1
-
-        if 'crpix2' in self.subimhdr.keys():
-            self.subimhdr['CRPIX2'] -= self.y1
+        """ Return the new HDU """
+        return subim
 
     # -----------------------------------------------------------------------
 
@@ -1324,22 +1343,57 @@ class Image:
 
         """ Make the cutout """
         x1, y1, x2, y2, = self.get_subim_bounds(centpos, imsize, hext)
-        self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
+        outhdu = self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
             print('')
             if self.infile is not None:
                 print('Input file:  %s' % self.infile)
-            print 'Output file: %s' % outfile
-            pf.PrimaryHDU(self.data, self.subimhdr).writeto(outfile,
-                                                            overwrite=True)
-            print "Wrote postage stamp cutout to %s" % outfile
+            print('Output file: %s' % outfile)
+            outhdu.writeto(outfile, overwrite=True)
+            print('Wrote postage stamp cutout to %s' % outfile)
+
+        else:
+            return outhdu
+
+    # -----------------------------------------------------------------------
+
+    def imcopy(self, x1, x2, y1, y2, outfile, hext=0):
+        """
+        Description: Given the x and y coordinates of
+        the lower left corner and the upper right corner, creates a new
+        fits file that is a cutout of the original image.
+
+        Inputs:
+          x1:      x coordinate of the lower left corner of desired region
+          x2:      x coordinate of the upper right corner of desired region
+          y1:      y coordinate of the lower left corner of desired region
+          y2:      y coordinate of the upper right corner of desired region
+          outfile: file name of output image
+          hext:    HDU containing the image data in the input image
+                   (default=0)
+        """
+
+        """ Make the cutout """
+        outhdu = self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
+
+        """ Write to the output file if requested """
+        if outfile:
+            print('')
+            if self.infile is not None:
+                print('Input file:  %s' % self.infile)
+            print('Output file: %s' % outfile)
+            outhdu.writeto(outfile, overwrite=True)
+            print('Wrote postage stamp cutout to %s' % outfile)
+
+        else:
+            return outhdu
 
     # -----------------------------------------------------------------------
 
     def def_subim_radec(self, imcent, imsize, outscale=None, hext=0, dext=0,
-                        verbose=True):
+                        epsilon=1.e-5, nanval=0., verbose=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
 
@@ -1372,22 +1426,20 @@ class Image:
         The following assignments get used whether a subimage has been
         requested or not
         """
-        self.subimhdr = self.hdu[hext].header.copy()
+        hdr = self.hdu[hext].header.copy()
         nx = self.hdu[hext].data.shape[1]
         ny = self.hdu[hext].data.shape[0]
 
         """ Check to make sure that a subimage is even requested """
-        if (imcent is None) and imsize is None:
-            self.data = self.hdu[hext].data.copy()
-            self.subsizex = nx
-            self.subsizey = ny
-            return
+        if imsize is None:
+            subim = pf.PrimaryHDU(self.hdu[hext].data, hdr)
+            return subim
 
         """
         If a sub-image is required, set up an astropy WCS structure that will
         be used for the calculations
         """
-        w = wcs.WCS(self.subimhdr)
+        w = wcs.WCS(hdr)
 
         """
         If the passed imcent is None, then just take the central pixel
@@ -1405,110 +1457,91 @@ class Image:
             The first step is to convert ra and dec into astropy.coordinates
              SkyCoord format
             """
-            self.radec = coords.radec_to_skycoord(imcent[0], imcent[1])
+            # radec = coords.radec_to_skycoord(imcent[0], imcent[1])
 
             """
             Calculate the (x, y) that is associated with the requested center
             """
-            radec = np.zeros(self.subimhdr['naxis'])
-            radec[0] = self.radec.ra.degree
-            radec[1] = self.radec.dec.degree
-            xy = w.wcs_world2pix([radec], 0)[0]
+            centradec = np.zeros(hdr['naxis'])
+            # centradec[0] = radec.ra.degree
+            # centradec[1] = radec.dec.degree
+            centradec[0] = imcent[0]
+            centradec[1] = imcent[1]
+            xy = w.wcs_world2pix([centradec], 0)[0]
             x = xy[0]
             y = xy[1]
-        """
-        Get rough image size in pixels for the segment of input image, since
-        the pixel scale for the output image does not necessarily match that
-        of the input image.
-        """
 
-        """ Set the display size """
-        if imsize is None:
-            xsize = None
-            ysize = None
+        """ Set the cutout size """
+        xysize = np.atleast_1d(imsize)  # Converts imsize to a np array
+        xsize = xysize[0]
+        if xysize.size > 1:
+            ysize = xysize[1]
         else:
-            xysize = np.atleast_1d(imsize)  # Converts imsize to a np array
-            xsize = xysize[0]
-            if xysize.size > 1:
-                ysize = xysize[1]
-            else:
-                ysize = xysize[0]
+            ysize = xysize[0]
         inpixxsize = int(xsize / self.pixscale)
         inpixysize = int(ysize / self.pixscale)
-        if outscale is None:
-            outscale = self.pixscale
-        self.subsizex = int(xsize / outscale)
-        self.subsizey = int(ysize / outscale)
 
         """ Summarize the request """
         if verbose:
+            radec = coords.radec_to_skycoord(imcent[0], imcent[1])
             print('')
             rastr = '%02d %02d %06.3f' % \
-                (self.radec.ra.hms.h, self.radec.ra.hms.m,
-                 self.radec.ra.hms.s)
+                (radec.ra.hms.h, radec.ra.hms.m,
+                 radec.ra.hms.s)
             decstr = '%+03d %02d %05.2f' % \
-                (self.radec.dec.dms.d, self.radec.dec.dms.m,
-                 self.radec.dec.dms.s)
-            print " Requested center (RA, dec): %11.7f    %+10.6f" % \
-                (self.radec.ra.deg, self.radec.dec.deg)
-            print " Requested center (RA, dec):  %s %s" % (rastr, decstr)
-            print " Requested center (x, y):     %8.2f %8.2f" % (x, y)
-            print " Requested image size (arcsec): %6.2f %6.2f" % \
-                (xsize, ysize)
-            print " Requested size in input pixels: %d %d" % \
-                (inpixxsize, inpixysize)
+                (radec.dec.dms.d, radec.dec.dms.m,
+                 radec.dec.dms.s)
+            print(' Requested center (RA, dec): %11.7f    %+10.6f' % 
+                  (radec.ra.deg, radec.dec.deg))
+            print(' Requested center (RA, dec):  %s %s' % (rastr, decstr))
+            print(' Requested center (x, y):     %8.2f %8.2f' % (x, y))
+            print(' Requested image size (arcsec): %6.2f %6.2f' % 
+                   (xsize, ysize))
+            print(' Requested size in input pixels: %d %d' % 
+                  (inpixxsize, inpixysize))
 
-        # """
-        # In order to account for rotations, etc., when cutting out the
-        # desired image section, start with a region that is larger
-        # (by a factor of 2, if the image is large enough).
-        # """
-        # x0 = max(0, int(x-inpixxsize))
-        # x1 = min(self.subimhdr['naxis1'], int(x+inpixxsize))
-        # y0 = max(0, int(y-inpixysize))
-        # y1 = min(self.subimhdr['naxis2'], int(y+inpixysize))
-        # if verbose:
-        #     print(" Cutting out image with x=%d--%d, y=%d--%d" %
-        #             (x0, x1, y0, y1)
-        #
-        # """ Actually get the data in the large region """
-        # if  self.subimhdr['naxis'] == 4:
-        #     #data = self.hdu[dext].data[0, 0, y0:y1, x0:x1].copy()
-        #     data = self.hdu[dext].data[0, 0,:,:].copy()
-        # else:
-        #     #data = self.hdu[dext].data[y0:y1, x0:x1].copy()
-        #     data = self.hdu[dext].data.copy()
-        # data[~np.isfinite(data)] = 0.
-        #
-        # """ Update the headers to reflect the cutout center"""
-        # try:
-        #     self.subimhdr['CRPIX1'] -= x0
-        # except:
-        #     print 'Warning: CRPIX1 header not found in %s' % self.infile
-        #     pass
-        # try:
-        #     self.subimhdr['CRPIX2'] -= y0
-        # except:
-        #     print 'Warning: CRPIX2 header not found in %s' % self.infile
-        #     pass
 
-        """ Set up the output header """
-        if self.subimhdr['naxis'] == 4:
-            data = self.hdu[dext].data[0, 0, :, :].copy()
-        else:
-            data = self.hdu[dext].data.copy()
-        outhdr, self.subim_wcs = \
-            coords.make_header(self.radec, outscale, self.subsizex,
-                               self.subsizey)
+        """
+        The simple approach -- only valid in some cases
 
-        # NOTE: Here check for PAs that are essentially zero.  In those
-        # cases, don't transform the coords, just do essentially a xy cutout
-        # For the comparison, use numpy's isclose function
+        At this point, see if the following are satisified:
+          1. input image PA is zero, or close enough to it (defined by the
+              value of epsilon).  
+          2. outscale is None
+
+        If they are then just do a pixel-based cutout rather than the more
+         complex interpolation that is required otherwise.
+        """
+        if fabs(self.impa) < epsilon and outscale is None:
+            if verbose:
+                print('')
+                print('Image PA is effectively zero, so doing pixel-based '
+                      'cutout')
+            subim = self.poststamp_xy((x, y), (inpixxsize, inpixysize))
+            return subim
+
+        """
+
+        The more complex case -- if outscale is not None or the input image
+        does not have the standard rotation, or both
+
+        First set the output scale and number of output pixels
+        """
+        if outscale is None:
+            outscale = self.pixscale
+        nx_out = int(xsize / outscale)
+        ny_out = int(ysize / outscale)
+            
+        """
+        Set up the output wcs information.
+
+        Note that the output image will have the standard orientatio with PA=0
+        """
+        whdr, subwcs = coords.make_header(imcent, outscale, nx_out, ny_out)
 
         """ Do the coordinate transform preparation """
-        icoords = np.indices((self.subsizey, self.subsizex),
-                             dtype=np.float32)
-        skycoords = self.subim_wcs.wcs_pix2world(icoords[1], icoords[0], 0)
+        icoords = np.indices((ny_out, nx_out), dtype=np.float32)
+        skycoords = subwcs.wcs_pix2world(icoords[1], icoords[0], 0)
         ccdcoords = w.wcs_world2pix(skycoords[0], skycoords[1], 0)
         icoords[0] = ccdcoords[1]
         icoords[1] = ccdcoords[0]
@@ -1518,19 +1551,29 @@ class Image:
         # should be doable, since map_coordinates just takes coordinate pairs
         # so masking the inputte ccdcoords arrays should be possible for
         # coordinates < 0 or > nx, ny
-        #
-        # Also, still need to try doing the integer pixel cutout for subimages
-        #  that are both large enough and have PA=0.
+
+        """ Get the data to be resampled """
+        if hdr['naxis'] == 4:
+            data = self.hdu[dext].data[0, 0, :, :].copy()
+        else:
+            data = self.hdu[dext].data.copy()
 
         """ Transform the coordinates """
-        self.data = ndimage.map_coordinates(data, icoords, output=np.float64,
-                                            order=5)
-        self.data[np.isnan(self.data)] = 0.
-        self.subimhdr = outhdr.copy()
+        outdata = ndimage.map_coordinates(data, icoords, output=np.float64,
+                                          order=5)
+        outdata[np.isnan(outdata)] = nanval
+
+        """ Save the output as a PHDU object """
+        outhdr = self.make_hdr_wcs(hdr, subwcs, debug=False)
+        if self.infile is not None:
+            outhdr['ORIG_IM'] = 'Copied from %s' % self.infile
+        subim = pf.PrimaryHDU(outdata, outhdr)
+
         self.prevdext = dext
 
-        """ Clean up """
+        """ Clean up and exit """
         del data, icoords, skycoords, ccdcoords
+        return subim
 
     # -----------------------------------------------------------------------
 
@@ -1581,114 +1624,19 @@ class Image:
         """
 
         """ Create the postage stamp data """
-        self.def_subim_radec(imcent, imsize, outscale, hext,
-                             dext, verbose)
+        subim = self.def_subim_radec(imcent, imsize, outscale, hext,
+                                     dext, verbose)
 
-        """
-        Set up the header for the output image to be the full image header
-        """
-        newhdr = self.hdu[hext].header.copy()
-
-        """
-        Now eliminate, as much as possible, the WCS header keywords from
-         the original header.  This is done to avoid possibly conflicting
-         information, e.g., a CD matrix in the original header and then
-         a CDELT + PC matrix from the cutout.
-        """
-        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
-                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
-                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
-        for key in wcskeys:
-            if key.upper() in newhdr.keys():
-                del newhdr[key]
-                if debug:
-                    print('Deleting original %s keyword' % key.upper())
-
-        """ Copy new WCS information from subimage into the output header """
-        for key in self.subimhdr.keys():
-            newhdr[key] = self.subimhdr[key]
-        if self.infile is not None:
-            newhdr['ORIG_IM'] = self.infile
-
-        """ Write the postage stamp to the output file """
-        pf.PrimaryHDU(self.data, newhdr).writeto(outfile, overwrite=True)
-        print "Wrote postage stamp cutout to %s" % outfile
-
-    # -----------------------------------------------------------------------
-
-    def imcopy(self, x1, x2, y1, y2, outfile, hext=0):
-        """
-        Description: Given the x and y coordinates of
-        the lower left corner and the upper right corner, creates a new
-        fits file that is a cutout of the original image.
-
-        Inputs:
-          x1:      x coordinate of the lower left corner of desired region
-          x2:      x coordinate of the upper right corner of desired region
-          y1:      y coordinate of the lower left corner of desired region
-          y2:      y coordinate of the upper right corner of desired region
-          outfile: file name of output image
-          hext:    HDU containing the image data in the input image
-                   (default=0)
-        """
-
-        """ Get info about input image """
-        inhdr = self.hdu[hext].header.copy()
-        xmax = inhdr['naxis1']
-        ymax = inhdr['naxis2']
-        print('')
-        print "imcopy: Input image has dimensions %d x %d" % \
-            (xmax, ymax)
-
-        """Check to make sure that requested corners are inside the image"""
-
-        """ Make sure that everything is in integer format """
-        x1 = int(x1)
-        y1 = int(y1)
-        x2 = int(x2)
-        y2 = int(y2)
-
-        """
-        Cut the file, and then update the CRPIXn header cards if they're there
-        """
-        print('imcopy: Cutting out region between ((%d,%d)) and ((%d,%d))' %
-              (x1, y1, x2, y2))
-        outdat = self.hdu[hext].data[y1:y2, x1:x2].copy()
-        if self.infile is not None:
-            inhdr['ORIG_IM'] = 'Copied from %s with region[%d:%d,%d:%d]' % \
-                (self.infile, x1, x2, y1, y2)
-        print('')
-        print "Updating CRPIXn header cards if they exist"
-        print "------------------------------------------"
-        try:
-            crpix1 = inhdr['crpix1']
-        except:
-            print "    No CRPIX1 header found"
-            crpix1 = np.nan
-        try:
-            crpix2 = inhdr['crpix2']
-        except:
-            print "    No CRPIX2 header found"
-            crpix2 = np.nan
-        if np.isnan(crpix1):
-            pass
+        """ Write to the output file if requested """
+        if outfile:
+            print('')
+            if self.infile is not None:
+                print('Input file:  %s' % self.infile)
+            print('Output file: %s' % outfile)
+            subim.writeto(outfile, overwrite=True)
+            print('Wrote postage stamp cutout to %s' % outfile)
         else:
-            inhdr['crpix1'] -= x1
-            print "    Updating CRPIX1:  %8.2f --> %8.2f" % \
-                (crpix1, inhdr['crpix1'])
-        if np.isnan(crpix2):
-            pass
-        else:
-            inhdr['crpix2'] -= y1
-            print "    Updating CRPIX2:  %8.2f --> %8.2f" % \
-                (crpix2, inhdr['crpix2'])
-
-        """ Write to output file and clean up """
-        outhdu = pf.PrimaryHDU(data=outdat, header=inhdr)
-        outhdu.verify('fix')
-        print "imcopy: Writing to output file %s" % outfile
-        outhdu.writeto(outfile, overwrite=True)
-        del outdat
+            return subim
 
     # -----------------------------------------------------------------------
 
@@ -1826,12 +1774,12 @@ class Image:
         """
         statsec = self.get_subim_bounds(centpos, size, hext)
         print('')
-        print statsec
+        print(statsec)
 
         """ Get the pixel statistics """
         self.sigma_clip(statsec=statsec)
         if verbose:
-            print 'RMS = %f' % self.rms_clip
+            print('RMS = %f' % self.rms_clip)
         return self.rms_clip
 
     # -----------------------------------------------------------------------
@@ -1896,14 +1844,13 @@ class Image:
         imrms = self.get_rms(xytmp, sztmp, hext=hext, verbose=verbose)
 
         """ Now create the SNR image """
-        self.poststamp_xy(centpos, imsize, hext=hext, outfile=None,
-                          verbose=verbose)
-        self.data /= imrms
+        subim = self.poststamp_xy(centpos, imsize, hext=hext, outfile=None,
+                                  verbose=verbose)
+        subim.data /= imrms
         if outfile is not None:
             if verbose:
                 print('Output SNR file: %s' % outfile)
-            pf.PrimaryHDU(self.data, self.subimhdr).writeto(outfile,
-                                                            overwrite=True)
+            subim.writeto(outfile, overwrite=True)
 
     # -----------------------------------------------------------------------
 
@@ -2110,8 +2057,8 @@ class Image:
                                 % tmpmax)
                 if len(tmp) > 0:
                     self.fmax = float(tmp)
-            print 'fmin:  %f' % self.fmin
-            print 'fmax:  %f' % self.fmax
+            print('fmin:  %f' % self.fmin)
+            print('fmax:  %f' % self.fmax)
 
         else:
             """
@@ -2122,10 +2069,10 @@ class Image:
 
             """ Start by calculating the clipped statistics if needed """
             if self.found_rms is False:
-                print "Calculating display limits"
-                print "--------------------------"
-                print self.data.size
-                print self.data.shape
+                print('Calculating display limits')
+                print('--------------------------')
+                print(self.data.size)
+                print(self.data.shape)
                 if mask is not None:
                     print('Using a mask')
                 self.sigma_clip(hext=hext, verbose=verbose, mask=mask)
@@ -2147,8 +2094,8 @@ class Image:
             """ Set fmin and fmax in terms of clipped mean and sigma"""
             self.fmin = self.mean_clip + fmin * self.rms_clip
             self.fmax = self.mean_clip + fmax * self.rms_clip
-            print " Clipped mean: %f" % self.mean_clip
-            print " Clipped rms:  %f" % self.rms_clip
+            print(' Clipped mean: %f' % self.mean_clip)
+            print(' Clipped rms:  %f' % self.rms_clip)
             s1 = '-' if fmin < 0. else '+'
             s2 = '-' if fmax < 0. else '+'
             print(' fmin (mean %s %3d sigma):  %f' %
@@ -2186,7 +2133,8 @@ class Image:
         elif cmap == 'jet':
             self.cmap = plt.cm.jet
         else:
-            print ' WARNING - Requested unknown color map.  Using gaia colors'
+            print(' WARNING - Requested unknown color map.  Using gaia'
+                  ' colors')
             self.cmap = plt.cm.YlOrBr_r
 
     # -----------------------------------------------------------------------
@@ -2235,7 +2183,7 @@ class Image:
         if mode == 'radec':
             self.def_subim_radec(imcent, imsize, hext=hext, verbose=verbose)
         else:
-            self.poststamp_xy(imcent, imsize, hext=hext)
+            self.plotim = self.poststamp_xy(imcent, imsize, hext=hext)
         print('')
 
     # -----------------------------------------------------------------------
@@ -2287,8 +2235,8 @@ class Image:
             vmax = log10(bitscale)
             data[data <= 0.] = 1.
             data = np.log10(data)
-            print 'Using log scaling: vmin = %f, vmax = %f' % (vmin, vmax)
-            print data.min(), data.max()
+            print('Using log scaling: vmin = %f, vmax = %f' % (vmin, vmax))
+            print(data.min(), data.max())
 
         else:
             """ Linear scaling is the default """
@@ -2319,9 +2267,9 @@ class Image:
         if self.mode == 'radec':
             if not self.found_wcs:
                 print('')
-                print("WARNING: mode='radec' but no WCS info in image"
-                      "header")
-                print 'Using pixels instead'
+                print('WARNING: mode="radec" but no WCS info in image'
+                      'header')
+                print('Using pixels instead')
                 print('')
                 self.mode = 'xy'
                 self.extval = None
@@ -2527,15 +2475,15 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, hext=0, outfile=None,
 
     im = Image(infile, verbose=verbose)
     if ysize is not None:
-        im.poststamp_xy((xcent, ycent), (xsize, ysize), hext=hext,
-                        verbose=verbose)
+        imsize = [xsize, ysize]
     else:
-        im.poststamp_xy((xcent, ycent), xsize, hext=hext, verbose=verbose)
-    im.sigma_clip()
+        imsize = xsize
+    x1, y1, x2, y2 = im.get_subim_bounds((xcent, ycent), imsize, hext=hext)
+    im.sigma_clip(statsec=[x1, y1, x2, y2])
     rms = im.rms_clip
     if verbose:
         print('')
-        print '%s: RMS in requested region is %f' % (infile, rms)
+        print('%s: RMS in requested region is %f' % (infile, rms))
     del im
     return rms
 
@@ -2626,7 +2574,7 @@ def open_fits(infile, mode='copyonwrite'):
             hdulist = pf.open(infile, mode=mode, ignore_missing_end=True)
         except:
             print('')
-            print "ERROR. Could not open fits file %s" % infile
+            print('ERROR. Could not open fits file %s' % infile)
             return None
 
     return hdulist

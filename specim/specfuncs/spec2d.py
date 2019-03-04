@@ -51,7 +51,7 @@ class Spec2d(imf.Image):
 
     def __init__(self, inspec, hext=0, extvar=None,
                  xtrim=None, ytrim=None, transpose=False, fixnans=True,
-                 logwav=False, verbose=True):
+                 nanval='sky', logwav=False, verbose=True):
         """
         Reads in the 2-dimensional spectrum from an input fits file (or the
         HDUList from a previously loaded fits file) and
@@ -203,7 +203,7 @@ class Spec2d(imf.Image):
         Check for NaN's within the spectrum and replace them if they are there
         """
         if fixnans:
-            self.fix_nans(verbose=True)
+            self.fix_nans_spec(verbose=True)
 
     # -----------------------------------------------------------------------
 
@@ -317,7 +317,7 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def fix_nans(self, verbose=False):
+    def fix_nans_spec(self, nanval='sky', verbose=False):
         """
         Detects NaN's within the spectrum and replaces them with real numbers
         if they are there.
