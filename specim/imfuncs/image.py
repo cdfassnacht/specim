@@ -1393,7 +1393,7 @@ class Image:
     # -----------------------------------------------------------------------
 
     def def_subim_radec(self, imcent, imsize, outscale=None, hext=0, dext=0,
-                        epsilon=1.e-5, nanval=0., verbose=True):
+                        epsilon=1.e-5, nanval=0., verbose=True, debug=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
 
@@ -1439,7 +1439,8 @@ class Image:
         If a sub-image is required, set up an astropy WCS structure that will
         be used for the calculations
         """
-        w = wcs.WCS(hdr)
+        # w = wcs.WCS(hdr)
+        w = self.wcsinfo
 
         """
         If the passed imcent is None, then just take the central pixel
@@ -1478,8 +1479,8 @@ class Image:
             ysize = xysize[1]
         else:
             ysize = xysize[0]
-        inpixxsize = int(xsize / self.pixscale)
-        inpixysize = int(ysize / self.pixscale)
+        inpixxsize = int((xsize / self.pixscale) + 0.5)
+        inpixysize = int((ysize / self.pixscale) + 0.5)
 
         """ Summarize the request """
         if verbose:
