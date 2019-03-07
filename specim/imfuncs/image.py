@@ -109,19 +109,19 @@ class Image:
         self.prevdext = None
         # self.data = self.hdu[datahext].data.copy()
         self.hdr = self.hdu[hdrhext].header.copy()
+        self.wcshdr = self.hdu[wcshext].header.copy()
         # self.prevdext = datahext
 
         """ Do an initial import of the WCS information from the header """
-        self.found_wcs = False
         self.wcsinfo = None
         self.radec = None
         self.pixscale = None
         try:
-            self.get_wcs(hext=wcshext, verbose=verbose)
+            self.get_wcs(self.wcshdr, verbose=verbose)
         except:
             if verbose:
                 print('Could not load WCS info')
-            self.found_wcs = False
+            self.wcsinfo = None
 
         """ Initialize figures """
         self.fig1 = None
@@ -278,7 +278,7 @@ class Image:
         NOTE: The region used for determining these image statistics is set
         by the following decision path:
          - if statsec is not None, use statsec
-         - else, if the subim has been set, use the subim
+         - else, if the plotim has been set, use plotim
          - else, use the entire image
         for the second and third options, an optional mask can be used to
         exclude known bad pixels from the calculation.
@@ -317,8 +317,8 @@ class Image:
         if statsec is not None:
             x1, y1, x2, y2 = statsec
             data = self.hdu[hext].data[y1:y2, x1:x2]
-        elif self.data is not None:
-            data = self.data.copy()
+        elif self.plotim is not None:
+            data = self.plotim.data.copy()
         else:
             data = self.hdu[hext].data.copy()
 
@@ -439,7 +439,7 @@ class Image:
         Actions taken if a mouse button is clicked.  In this case the
         following are done:
           (1) Store and print (x, y) value of cursor
-          (2) If the image has wcs info (i.e., if found_wcs is True) then
+          (2) If the image has wcs info (i.e., if wcsinfo is not None) then
                 store and print the (RA, dec) value associated with the (x, y)
         """
         self.xclick = event.xdata
@@ -454,7 +454,7 @@ class Image:
         NOTE: This needs to be handled differently if the displayed image has
          axes in pixels or in arcsec offsets
         """
-        if self.found_wcs:
+        if self.wcsinfo is not None:
             if self.mode == 'xy':
                 pix = np.zeros((1, self.wcsinfo.naxis))
                 pix[0, 0] = self.xclick
@@ -550,7 +550,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def get_wcs(self, hext=0, verbose=True):
+    def get_wcs(self, hdr, verbose=True):
         """
         Reads in WCS information from the header and stores it in
         new wcsinfo (see below) and pixscale variables.
@@ -563,11 +563,10 @@ class Image:
         """
 
         """ Read the WCS information from the header """
-        fileWCS = coords.fileWCS(self.hdu[hext].header, verbose)
+        fileWCS = coords.fileWCS(hdr, verbose)
 
         """ Transfer the information """
         self.wcsinfo = fileWCS.wcsinfo
-        self.found_wcs = fileWCS.found_wcs
         self.pixscale = fileWCS.pixscale
         self.impa = fileWCS.impa
         self.radec = fileWCS.radec
@@ -614,13 +613,14 @@ class Image:
                      (0.5, 0.3) if the origin were at the center of the image
         """
 
-        self.get_wcs(hext)
-        icoords = np.indices(self.data.shape).astype(np.float32)
+        # self.get_wcs(self.plotim.header)
+        data = self.plotim.data
+        icoords = np.indices(data.shape).astype(np.float32)
         pltc = np.zeros(icoords.shape)
-        pltc[0] = (icoords[0] - self.data.shape[0] / 2.) * self.pixscale
-        pltc[1] = (icoords[1] - self.data.shape[1] / 2.) * self.pixscale
+        pltc[0] = (icoords[0] - data.shape[0] / 2.) * self.pixscale
+        pltc[1] = (icoords[1] - data.shape[1] / 2.) * self.pixscale
         pltc[1] *= -1.
-        maxi = np.atleast_1d(self.data.shape) - 1
+        maxi = np.atleast_1d(data.shape) - 1
         extx1 = pltc[1][0, 0]
         exty1 = pltc[0][0, 0]
         extx2 = pltc[1][maxi[0], maxi[1]] - self.pixscale
@@ -1169,7 +1169,7 @@ class Image:
             outhdr = hdr
 
         """ Add the WCS information to the header """
-        if self.found_wcs:
+        if self.wcsinfo is not None:
             wcshdr = wcsinfo.to_header()
             for key in wcshdr.keys():
                 outhdr[key] = wcshdr[key]
@@ -1393,7 +1393,7 @@ class Image:
     # -----------------------------------------------------------------------
 
     def def_subim_radec(self, imcent, imsize, outscale=None, hext=0, dext=0,
-                        epsilon=1.e-5, nanval=0., verbose=True, debug=True):
+                        theta_tol=1.e-5, nanval=0., verbose=True, debug=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
 
@@ -1507,13 +1507,17 @@ class Image:
 
         At this point, see if the following are satisified:
           1. input image PA is zero, or close enough to it (defined by the
-              value of epsilon).  
+              value of theta_tol).  
           2. outscale is None
 
         If they are then just do a pixel-based cutout rather than the more
          complex interpolation that is required otherwise.
         """
-        if fabs(self.impa) < epsilon and outscale is None:
+        print('%f' % theta_tol)
+        print(fabs(self.impa), theta_tol)
+        print(fabs(self.impa) < theta_tol)
+        print(outscale is None)
+        if fabs(self.impa) < theta_tol and outscale is None:
             if verbose:
                 print('')
                 print('Image PA is effectively zero, so doing pixel-based '
@@ -1530,6 +1534,7 @@ class Image:
         """
         if outscale is None:
             outscale = self.pixscale
+        print outscale
         nx_out = int(xsize / outscale)
         ny_out = int(ysize / outscale)
             
@@ -1625,8 +1630,8 @@ class Image:
         """
 
         """ Create the postage stamp data """
-        subim = self.def_subim_radec(imcent, imsize, outscale, hext,
-                                     dext, verbose)
+        subim = self.def_subim_radec(imcent, imsize, outscale=outscale,
+                                     hext=hext, dext=dext, verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -1875,7 +1880,7 @@ class Image:
         This function is meaningless if the input image does not have WCS
         information in it.  Check on this before proceeding
         """
-        if self.found_wcs is False:
+        if self.wcsinfo is None:
             print('')
             print('ERROR: Input image'
                   ' does not have WCS information in it.')
@@ -1932,7 +1937,7 @@ class Image:
         This function is meaningless if the input image does not have WCS
         information in it.  Check on this before proceeding
         """
-        if self.found_wcs is False:
+        if self.wcsinfo is None:
             print('')
             print('ERROR: Requested a FOV plot, but input image'
                   ' does not have WCS information in it.')
@@ -2072,8 +2077,6 @@ class Image:
             if self.found_rms is False:
                 print('Calculating display limits')
                 print('--------------------------')
-                print(self.data.size)
-                print(self.data.shape)
                 if mask is not None:
                     print('Using a mask')
                 self.sigma_clip(hext=hext, verbose=verbose, mask=mask)
@@ -2170,10 +2173,11 @@ class Image:
 
         """ First check to see if any modification needs to be made """
         if imcent is None and imsize is None:
-            if self.prevdext is None or hext != self.prevdext:
-                self.data = self.hdu[hext].data.copy()
-            else:
-                return
+            self.plotim = self.hdu[hext].copy()
+            # if self.prevdext is None or hext != self.prevdext:
+            #     self.data = self.hdu[hext].data.copy()
+            # else:
+            #     return
 
         """
         The definition of the subimage depends on whether the requested
@@ -2182,7 +2186,7 @@ class Image:
         Treat each case appropriately.
         """
         if mode == 'radec':
-            self.def_subim_radec(imcent, imsize, hext=hext, verbose=verbose)
+            self.plotim = self.poststamp_radec(imcent, imsize, verbose=verbose)
         else:
             self.plotim = self.poststamp_xy(imcent, imsize, hext=hext)
         print('')
@@ -2228,7 +2232,7 @@ class Image:
              units are counts/s or e-/s, and should more closely match the
              display behavior that the user wants.
             """
-            data = self.data.copy() - self.data.min()
+            data = self.plotim.data.copy() - self.plotim.data.min()
 
             """ Now rescale from 1-255 in requested range """
             data[data >= 0] = ((bitscale - 1) * data[data >= 0] / fdiff) + 1.
@@ -2241,7 +2245,7 @@ class Image:
 
         else:
             """ Linear scaling is the default """
-            data = self.data
+            data = self.plotim.data
             vmin = self.fmin
             vmax = self.fmax
 
@@ -2266,7 +2270,7 @@ class Image:
         """ Set the displayed axes to be in WCS offsets, if requested """
         self.mode = mode
         if self.mode == 'radec':
-            if not self.found_wcs:
+            if self.wcsinfo is None:
                 print('')
                 print('WARNING: mode="radec" but no WCS info in image'
                       'header')
@@ -2417,7 +2421,7 @@ class Image:
           dispunits
         """
         print('')
-        if self.infile is not None:
+        if verbose and self.infile is not None:
             print('Input file:  %s' % self.infile)
 
         """
@@ -2426,6 +2430,7 @@ class Image:
         """
         self.mode = mode
         self.set_subim(hext, mode, imcent, imsize, verbose=verbose)
+        print(self.plotim.data)
 
         """ Set up the parameters that will be needed to display the image """
         if mask is not None:
