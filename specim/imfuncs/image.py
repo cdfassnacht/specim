@@ -1513,10 +1513,6 @@ class Image:
         If they are then just do a pixel-based cutout rather than the more
          complex interpolation that is required otherwise.
         """
-        print('%f' % theta_tol)
-        print(fabs(self.impa), theta_tol)
-        print(fabs(self.impa) < theta_tol)
-        print(outscale is None)
         if fabs(self.impa) < theta_tol and outscale is None:
             if verbose:
                 print('')
@@ -1534,10 +1530,9 @@ class Image:
         """
         if outscale is None:
             outscale = self.pixscale
-        print outscale
-        nx_out = int(xsize / outscale)
-        ny_out = int(ysize / outscale)
-            
+        nx_out = int((xsize / outscale) + 0.5)
+        ny_out = int((ysize / outscale) + 0.5)
+
         """
         Set up the output wcs information.
 
@@ -1565,9 +1560,10 @@ class Image:
             data = self.hdu[dext].data.copy()
 
         """ Transform the coordinates """
-        outdata = ndimage.map_coordinates(data, icoords, output=np.float64,
-                                          order=5)
-        outdata[np.isnan(outdata)] = nanval
+        # outdata = ndimage.map_coordinates(data, icoords, output=np.float64,
+        #                                   order=5)
+        data[np.isnan(data)] = nanval
+        outdata = ndimage.map_coordinates(data, icoords, order=5)
 
         """ Save the output as a PHDU object """
         outhdr = self.make_hdr_wcs(hdr, subwcs, debug=False)
@@ -2430,7 +2426,6 @@ class Image:
         """
         self.mode = mode
         self.set_subim(hext, mode, imcent, imsize, verbose=verbose)
-        print(self.plotim.data)
 
         """ Set up the parameters that will be needed to display the image """
         if mask is not None:
