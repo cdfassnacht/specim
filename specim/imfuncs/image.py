@@ -53,6 +53,7 @@ try:
     from cdfutils import coords
 except ImportError:
     import coords
+from .imutils import open_fits
 
 # -----------------------------------------------------------------------
 
@@ -118,7 +119,7 @@ class Image:
         self.pixscale = None
         try:
             self.get_wcs(self.wcshdr, verbose=verbose)
-        except:
+        except KeyError:
             if verbose:
                 print('Could not load WCS info')
             self.wcsinfo = None
@@ -581,9 +582,9 @@ class Image:
         """
 
         print('')
-        self.pixscale = \
-            float(raw_input('Enter the pixel scale for the image '
-                            'in arcsec/pix: '))
+        pixscale = float(raw_input('Enter the pixel scale for the image '
+                                   'in arcsec/pix: '))
+        self.pixscale = [pixscale, pixscale]
 
     # -----------------------------------------------------------------------
 
@@ -617,14 +618,14 @@ class Image:
         data = self.plotim.data
         icoords = np.indices(data.shape).astype(np.float32)
         pltc = np.zeros(icoords.shape)
-        pltc[0] = (icoords[0] - data.shape[0] / 2.) * self.pixscale
-        pltc[1] = (icoords[1] - data.shape[1] / 2.) * self.pixscale
+        pltc[0] = (icoords[0] - data.shape[0] / 2.) * self.pixscale[1]
+        pltc[1] = (icoords[1] - data.shape[1] / 2.) * self.pixscale[0]
         pltc[1] *= -1.
         maxi = np.atleast_1d(data.shape) - 1
         extx1 = pltc[1][0, 0]
         exty1 = pltc[0][0, 0]
-        extx2 = pltc[1][maxi[0], maxi[1]] - self.pixscale
-        exty2 = pltc[0][maxi[0], maxi[1]] + self.pixscale
+        extx2 = pltc[1][maxi[0], maxi[1]] - self.pixscale[1]
+        exty2 = pltc[0][maxi[0], maxi[1]] + self.pixscale[0]
 
         if zeropos is not None:
             dx = zeropos[0]
@@ -958,7 +959,7 @@ class Image:
             xlab = 'r (pixels)'
         rflux = (data[pixmask])[ii] - skylevel
         if zp:
-            domega = self.pixscale**2
+            domega = self.pixscale[0] * self.pixscale[1]
             mu = -2.5 * np.log10(rflux/domega) + zp
             ftype = 'Surface Brightness'
             ttype = 'Magnitude'
@@ -1479,8 +1480,8 @@ class Image:
             ysize = xysize[1]
         else:
             ysize = xysize[0]
-        inpixxsize = int((xsize / self.pixscale) + 0.5)
-        inpixysize = int((ysize / self.pixscale) + 0.5)
+        inpixxsize = int((xsize / self.pixscale[0]) + 0.5)
+        inpixysize = int((ysize / self.pixscale[1]) + 0.5)
 
         """ Summarize the request """
         if verbose:
@@ -1529,16 +1530,20 @@ class Image:
         First set the output scale and number of output pixels
         """
         if outscale is None:
-            outscale = self.pixscale
-        nx_out = int((xsize / outscale) + 0.5)
-        ny_out = int((ysize / outscale) + 0.5)
+            oscale = self.pixscale
+        elif (np.atleast_1d(outscale).size < 2):
+            oscale = [outscale, outscale]
+        else:
+            oscale = outscale
+        nx_out = int((xsize / oscale[0]) + 0.5)
+        ny_out = int((ysize / oscale[1]) + 0.5)
 
         """
         Set up the output wcs information.
 
         Note that the output image will have the standard orientatio with PA=0
         """
-        whdr, subwcs = coords.make_header(imcent, outscale, nx_out, ny_out)
+        whdr, subwcs = coords.make_header(imcent, oscale, nx_out, ny_out)
 
         """ Do the coordinate transform preparation """
         icoords = np.indices((ny_out, nx_out), dtype=np.float32)
@@ -2549,36 +2554,6 @@ def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
     infits.close()
     if whtsuff is not None:
         whtfits.close()
-
-# -----------------------------------------------------------------------
-
-
-def open_fits(infile, mode='copyonwrite'):
-    """
-    Opens a fits file, allowing for the possibility of the missing end that
-    plagues some of the NIR instruments on Keck.
-
-    Inputs:
-        infile - input file name
-        mode    - [OPTIONAL] mode of opening the file.  Note that the default
-                    value ('copyonwrite') is the pyfits default value.  Look at
-                    the help information for pyfits open for other options.
-    """
-
-    try:
-        hdulist = pf.open(infile, mode=mode)
-    except:
-        try:
-            """ Try to get rid of read-in warnings """
-            import warnings
-            warnings.filterwarnings('ignore')
-            hdulist = pf.open(infile, mode=mode, ignore_missing_end=True)
-        except:
-            print('')
-            print('ERROR. Could not open fits file %s' % infile)
-            return None
-
-    return hdulist
 
 # ---------------------------------------------------------------------------
 
