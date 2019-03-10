@@ -182,6 +182,15 @@ class WcsHDU(pf.PrimaryHDU):
         impa = coords.matrix_to_rot(wcsinfo.pixel_scale_matrix, raax=raax,
                                     decax=decax)
 
+        """ Summarize the WCS information """
+        if verbose:
+            print('Pixel scale (x, y): (%7.3f, %7.3f) arcsec/pix' % 
+                  (pixscale[0], pixscale[1]))
+            print('Instrument FOV (arcsec): %7.1f x %7.1f' %
+                  (pixscale[0] * wcshdr[rakey],
+                   pixscale[1] * wcshdr[deckey]))
+            print('Image position angle (E of N): %+7.2f' % impa)
+
         """ Add the information to the object """
         self.wcsinfo = wcsinfo
         self.raaxis = raaxis
