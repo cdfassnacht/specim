@@ -53,14 +53,16 @@ try:
     from cdfutils import coords
 except ImportError:
     import coords
+from .wcshdu import WcsHDU
 from .imutils import open_fits
 
 # -----------------------------------------------------------------------
 
 
-class Image:
+class Image(WcsHDU):
 
-    def __init__(self, indat, datahext=0, hdrhext=0, wcshext=0, verbose=True):
+    def __init__(self, indat, hext=0, hdrhext=0, wcsext=None,
+                 verbose=True):
         """
         This method gets called when the user types something like
             myim = Image(infile)
@@ -76,53 +78,59 @@ class Image:
                      2. a HDU list.
         """
 
-        """ Check the format of the input image data """
-        if isinstance(indat, str):
-            informat = 'file'
-        elif isinstance(indat, pf.HDUList):
-            informat = 'hdulist'
-        else:
-            print('')
-            print('ERROR: The input image data for the Image class must be'
-                  'one of the following:')
-            print('  1. A filename (i.e. a string)')
-            print('  2. A HDUList')
-            print('')
-            raise TypeError
+        # """ Check the format of the input image data """
+        # if isinstance(indat, str):
+        #     informat = 'file'
+        # elif isinstance(indat, pf.HDUList):
+        #     informat = 'hdulist'
+        # else:
+        #     print('')
+        #     print('ERROR: The input image data for the Image class must be'
+        #           'one of the following:')
+        #     print('  1. A filename (i.e. a string)')
+        #     print('  2. A HDUList')
+        #     print('')
+        #     raise TypeError
+        # 
+        # """ Load the hdu information """
+        # if informat == 'hdulist':
+        #     self.hdu = indat
+        #     self.infile = None
+        # 
+        # else:
+        #     try:
+        #         self.read_from_file(indat, verbose=verbose)
+        #     except IOError:
+        #         raise IOError
+        # 
+        # if verbose:
+        #     self.hdu.info()
+        # 
+        # """ Set up pointers to the default data and header """
+        # self.data = None
+        # self.hdr = None
+        # self.prevdext = None
+        # # self.data = self.hdu[datahext].data.copy()
+        # self.hdr = self.hdu[hdrhext].header.copy()
+        # self.wcshdr = self.hdu[wcshext].header.copy()
+        # # self.prevdext = datahext
+        # 
+        # """ Do an initial import of the WCS information from the header """
+        # self.wcsinfo = None
+        # self.radec = None
+        # self.pixscale = None
+        # try:
+        #     self.get_wcs(self.wcshdr, verbose=verbose)
+        # except KeyError:
+        #     if verbose:
+        #         print('Could not load WCS info')
+        #     self.wcsinfo = None
 
-        """ Load the hdu information """
-        if informat == 'hdulist':
-            self.hdu = indat
-            self.infile = None
-
-        else:
-            try:
-                self.read_from_file(indat, verbose=verbose)
-            except IOError:
-                raise IOError
-
-        if verbose:
-            self.hdu.info()
-
-        """ Set up pointers to the default data and header """
-        self.data = None
-        self.hdr = None
-        self.prevdext = None
-        # self.data = self.hdu[datahext].data.copy()
-        self.hdr = self.hdu[hdrhext].header.copy()
-        self.wcshdr = self.hdu[wcshext].header.copy()
-        # self.prevdext = datahext
-
-        """ Do an initial import of the WCS information from the header """
-        self.wcsinfo = None
-        self.radec = None
-        self.pixscale = None
-        try:
-            self.get_wcs(self.wcshdr, verbose=verbose)
-        except KeyError:
-            if verbose:
-                print('Could not load WCS info')
-            self.wcsinfo = None
+        """ Load the data by calling the superclass """
+        # test = WcsHDU(indat, hext, wcsext=wcsext, verbose=verbose)
+        # return
+        super(Image, self).__init__(indat, hext, wcsext=wcsext,
+                                    verbose=verbose)
 
         """ Initialize figures """
         self.fig1 = None
@@ -167,35 +175,35 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def read_from_file(self, infile, verbose=True):
-        """
-        Reads the image data from a file (as opposed to getting the data
-        directly from an input HDUList
-        """
-        if verbose:
-            print('')
-            print('Loading file %s' % infile)
-            print('-----------------------------------------------')
-
-        if os.path.isfile(infile):
-            try:
-                self.hdu = open_fits(infile)
-            except IOError:
-                print(' ERROR. Problem in loading file %s' % infile)
-                print(' Check to make sure filename matches an existing'
-                      'file')
-                print(' If it does, there may be something wrong with the'
-                      ' fits header.')
-                print('')
-                raise IOError
-        else:
-            print('')
-            print('ERROR. File %s does not exist.' % infile)
-            print('')
-            raise IOError
-
-        """ Set parameters related to image properties """
-        self.infile = infile
+    # def read_from_file(self, infile, verbose=True):
+    #     """
+    #     Reads the image data from a file (as opposed to getting the data
+    #     directly from an input HDUList
+    #     """
+    #     if verbose:
+    #         print('')
+    #         print('Loading file %s' % infile)
+    #         print('-----------------------------------------------')
+    # 
+    #     if os.path.isfile(infile):
+    #         try:
+    #             self.hdu = open_fits(infile)
+    #         except IOError:
+    #             print(' ERROR. Problem in loading file %s' % infile)
+    #             print(' Check to make sure filename matches an existing'
+    #                   'file')
+    #             print(' If it does, there may be something wrong with the'
+    #                   ' fits header.')
+    #             print('')
+    #             raise IOError
+    #     else:
+    #         print('')
+    #         print('ERROR. File %s does not exist.' % infile)
+    #         print('')
+    #         raise IOError
+    # 
+    #     """ Set parameters related to image properties """
+    #     self.infile = infile
 
     # -----------------------------------------------------------------------
 
@@ -221,6 +229,20 @@ class Image:
         #     raise KeyError
 
         """ Select the image slice to use """
+
+    # -----------------------------------------------------------------------
+
+    def select_ver(self, dataver='input'):
+        """
+
+        Selects the data version
+
+        """
+
+        if dataver == 'input':
+            data = self.data.copy()
+
+        return data
 
     # -----------------------------------------------------------------------
 
@@ -264,7 +286,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def sigma_clip(self, nsig=3., statsec=None, mask=None, hext=0,
+    def sigma_clip(self, dataver='input', nsig=3., statsec=None, mask=None, 
                    verbose=False):
         """
         Runs a sigma-clipping on image data.  The code iterates over
@@ -306,22 +328,18 @@ class Image:
                       be flagged before the inputs are computed by including
                       a mask.  This mask must be set such that True
                       indicates good data and False indicates bad data
-          hext    - Image HDU containing the data.  The default (hext=0)
-                      should work for all single-extension fits files and may
-                      work for some multi-extension files.
-                      NOTE: hext is ignored if the subim variable is already
-                      set by, e.g., set_subim_xy or def_subim_radec
           verbose - If False (the default) no information is printed
         """
+
+        """ Select the data """
+        data = self.select_ver(dataver)
 
         """ Determine what the input data set is """
         if statsec is not None:
             x1, y1, x2, y2 = statsec
-            data = self.hdu[hext].data[y1:y2, x1:x2]
+            data = data[y1:y2, x1:x2]
         elif self.plotim is not None:
             data = self.plotim.data.copy()
-        else:
-            data = self.hdu[hext].data.copy()
 
         """ Find the clipped mean and rms """
         mu, sig = df.sigclip(data, nsig=nsig, mask=mask, verbose=verbose)
@@ -334,7 +352,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def fix_nans(self, nanval='clipmean', mode='input', hext=0, verbose=True):
+    def fix_nans(self, nanval='clipmean', datamode='input', verbose=True):
         """
 
         Replaces any NaNs in the input data
@@ -345,7 +363,8 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def make_var(self, objmask=None, returnvar=True, hext=0, verbose=True):
+    def make_var(self, objmask=None, returnvar=True, dataver='input',
+                 verbose=True):
         """
         Make a variance image under the assumption that the data in the
         current image is (1) in units of electrons, and (2) has not been
@@ -370,7 +389,7 @@ class Image:
             mask = None
 
         """ Get the clipped mean and rms """
-        self.sigma_clip(mask=mask, hext=hext)
+        self.sigma_clip(mask=mask, dataver=dataver)
 
         """ Sanity check """
         sqrtmean = sqrt(self.mean_clip)
@@ -382,7 +401,7 @@ class Image:
                   (sqrtmean, self.rms_clip))
 
         """ Create the base variance image """
-        data = self.hdu[hext].data
+        data = self.data.copy()
         varval = (self.rms_clip)**2
         var = np.ones(data.shape) * varval
 
@@ -551,28 +570,28 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def get_wcs(self, hdr, verbose=True):
-        """
-        Reads in WCS information from the header and stores it in
-        new wcsinfo (see below) and pixscale variables.
-        NOTE: This used to use Matt Auger's wcs library, but it has
-         been converted to the astropy wcs module
-
-        Inputs:
-            hext - Header extension that contains the WCS info.  Default=0
-
-        """
-
-        """ Read the WCS information from the header """
-        fileWCS = coords.fileWCS(hdr, verbose)
-
-        """ Transfer the information """
-        self.wcsinfo = fileWCS.wcsinfo
-        self.pixscale = fileWCS.pixscale
-        self.impa = fileWCS.impa
-        self.radec = fileWCS.radec
-        self.raaxis = fileWCS.raaxis
-        self.decaxis = fileWCS.decaxis
+    # def get_wcs(self, hdr, verbose=True):
+    #     """
+    #     Reads in WCS information from the header and stores it in
+    #     new wcsinfo (see below) and pixscale variables.
+    #     NOTE: This used to use Matt Auger's wcs library, but it has
+    #      been converted to the astropy wcs module
+    # 
+    #     Inputs:
+    #         hdr - Header extension that contains the WCS info.  Default=0
+    # 
+    #     """
+    # 
+    #     """ Read the WCS information from the header """
+    #     fileWCS = coords.fileWCS(hdr, verbose)
+    # 
+    #     """ Transfer the information """
+    #     self.wcsinfo = fileWCS.wcsinfo
+    #     self.pixscale = fileWCS.pixscale
+    #     self.impa = fileWCS.impa
+    #     self.radec = fileWCS.radec
+    #     self.raaxis = fileWCS.raaxis
+    #     self.decaxis = fileWCS.decaxis
 
     # -----------------------------------------------------------------------
 
@@ -588,7 +607,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def set_wcsextent(self, hext=0, zeropos=None):
+    def set_wcsextent(self, zeropos=None):
         """
 
         For making plots with WCS information, it is necessary to define
@@ -604,7 +623,6 @@ class Image:
         offsets.
 
         Optional inputs:
-          hext    - HDU containing the WCS info.  Default=0
           zeropos - By default, which happens when zeropos=None, the (0, 0)
                      point on the output image, as designated by the image
                      axis labels, will be at the center of the image.
@@ -645,7 +663,7 @@ class Image:
     # -----------------------------------------------------------------------
 
     def im_moments(self, x0, y0, rmax=10., detect_thresh=3., skytype='global',
-                   hext=0, verbose=False):
+                   dataver='input', verbose=False):
         """
         Given an initial guess of a centroid position, calculates the
         flux-weighted first and second moments within a square centered
@@ -664,11 +682,10 @@ class Image:
                      'local'  - Use a region that surrounds the source
                                 NOT YET IMPLEMENTED
                      None     - Don't do any sky/background subtraction
-          hext    - HDU extension that contains the data.  Default = 0
         """
 
         """ Define the data and the coordinate arrays """
-        data = self.hdu[hext].data
+        data = self.data.copy()
         y, x = np.indices(data.shape)
 
         """
@@ -849,8 +866,8 @@ class Image:
     # -----------------------------------------------------------------------
 
     def radplot(self, x0, y0, rmax, center=True, imex_rmax=10., maxshift=5.,
-                skylevel=0., zp=None, runit='pixel', logr=False, hext=0,
-                doplot=True, normalize=False, outfile=None,
+                skylevel=0., zp=None, runit='pixel', logr=False,
+                dataver='input', doplot=True, normalize=False, outfile=None,
                 outtype='radplot'):
         """
         Given a position in the image file (the x0 and y0 parameters), makes
@@ -895,7 +912,6 @@ class Image:
                        'pixel' (the default) or 'arcsec'
           logr      - If False (the default) then x-axis is linear. If true,
                        then it is in log
-          hext      - HDU extension that contains the data.  Default = 0
           doplot    - Sets whether a plot is made or not.  Default is
                        doplot=True
           normalize - Normalize so that central value of the profile is 1.0?
@@ -913,7 +929,7 @@ class Image:
         """
 
         """ Define the data and the coordinate arrays """
-        data = self.hdu[hext].data
+        data = self.select_ver(dataver)
         y, x = np.indices(data.shape)
 
         """ Recenter from the initial guess using the flux distribution """
@@ -1041,7 +1057,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def set_contours(self, rms=None, hext=0, verbose=True):
+    def set_contours(self, rms=None, verbose=True):
         """
         Sets the contouring levels for an image.  If a subimage (i.e., cutout)
         has already been defined, then its properties are used.  Otherwise,
@@ -1059,11 +1075,6 @@ class Image:
          rms      - If rms is None (the default), then use the data to
                      determine the rms.  If it is not None, then use the
                      passed value.
-         hext     - Image HDU containing the data.  The default (hext=0)
-                     should work for all single-extension fits files and may
-                     work for some multi-extension files.
-                     NOTE: hext is ignored if the subim variable is already
-                     set by, e.g., set_subim_xy or def_subim_radec
          verbose - Report contour levels if True (the default)
         """
 
@@ -1100,8 +1111,8 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def plot_contours(self, color='r', rms=None, hext=0, overlay=True,
-                      verbose=True):
+    def plot_contours(self, color='r', rms=None, dataver='input',
+                      overlay=True, verbose=True):
         """
 
         Plots contours based on the flux (counts) in the image.
@@ -1110,7 +1121,7 @@ class Image:
 
         """ Set the contour levels if this has not already been done """
         if self.clevs is None:
-            self.set_contours(rms, hext, verbose)
+            self.set_contours(rms, verbose)
 
         """ Plot the contours """
         if overlay:
@@ -1181,7 +1192,7 @@ class Image:
 
     # -----------------------------------------------------------------------
 
-    def get_subim_bounds(self, centpos, imsize, hext=0):
+    def get_subim_bounds(self, centpos, imsize):
         """
         Takes a requested image center (xcent, ycent) and requested image size
         (all in pixels) and returns
@@ -1206,7 +1217,7 @@ class Image:
         """
 
         """ Get the full size of the image """
-        hdr = self.hdu[hext].header
+        hdr = self.header
         nx = hdr['naxis1']
         ny = hdr['naxis2']
 
@@ -2280,7 +2291,7 @@ class Image:
                 self.mode = 'xy'
                 self.extval = None
             else:
-                self.set_wcsextent(hext, zeropos)
+                self.set_wcsextent(zeropos)
         else:
             self.extval = None
 

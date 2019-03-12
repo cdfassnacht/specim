@@ -108,12 +108,12 @@ class WcsHDU(pf.PrimaryHDU):
                 print(' If it does, there may be something wrong with the'
                       ' fits header.')
                 print('')
-                raise IOError
+                raise IOError('Error in read_from_file')
         else:
             print('')
             print('ERROR. File %s does not exist.' % infile)
             print('')
-            raise IOError
+            raise IOError('Error in read_from_file')
 
         """
         Set parameters related to image properties and return the hdulist
