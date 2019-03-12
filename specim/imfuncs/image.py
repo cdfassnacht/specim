@@ -465,7 +465,7 @@ class Image(WcsHDU):
         self.xclick = event.xdata
         self.yclick = event.ydata
         print('')
-        print('Mouse click x, y:    %7.1f %7.1f' % 
+        print('Mouse click x, y:    %7.1f %7.1f' %
               (self.xclick, self.yclick))
 
         """
@@ -489,7 +489,7 @@ class Image(WcsHDU):
                     (self.xclick + self.zeropos[0]) / (3600. * cosdec)
                 self.decclick = self.radec.dec.degree + self.yclick/3600. + \
                     self.zeropos[1]
-            print('Mouse click ra, dec: %11.7f %+11.7f' % 
+            print('Mouse click ra, dec: %11.7f %+11.7f' %
                   (self.raclick, self.decclick))
         return
 
@@ -1371,7 +1371,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def imcopy(self, x1, x2, y1, y2, outfile, hext=0):
+    def imcopy(self, x1, x2, y1, y2, outfile, hext=0, verbose=True):
         """
         Description: Given the x and y coordinates of
         the lower left corner and the upper right corner, creates a new
@@ -1504,22 +1504,21 @@ class Image(WcsHDU):
             decstr = '%+03d %02d %05.2f' % \
                 (radec.dec.dms.d, radec.dec.dms.m,
                  radec.dec.dms.s)
-            print(' Requested center (RA, dec): %11.7f    %+10.6f' % 
+            print(' Requested center (RA, dec): %11.7f    %+10.6f' %
                   (radec.ra.deg, radec.dec.deg))
             print(' Requested center (RA, dec):  %s %s' % (rastr, decstr))
             print(' Requested center (x, y):     %8.2f %8.2f' % (x, y))
-            print(' Requested image size (arcsec): %6.2f %6.2f' % 
-                   (xsize, ysize))
-            print(' Requested size in input pixels: %d %d' % 
+            print(' Requested image size (arcsec): %6.2f %6.2f' %
+                  (xsize, ysize))
+            print(' Requested size in input pixels: %d %d' %
                   (inpixxsize, inpixysize))
-
 
         """
         The simple approach -- only valid in some cases
 
         At this point, see if the following are satisified:
           1. input image PA is zero, or close enough to it (defined by the
-              value of theta_tol).  
+              value of theta_tol).
           2. outscale is None
 
         If they are then just do a pixel-based cutout rather than the more
@@ -1666,7 +1665,7 @@ class Image(WcsHDU):
         This method replicates (more or less) the blkavg task
         within iraf/pyraf.  The purpose is to take the image data and
         create an output data array that is smaller by an integer factor
-        (N). 
+        (N).
         The code takes NxN blocks of pixels from the input array and
         creates 1 pixel in the output array.  Therefore, unlike
         ndimage.zoom or ndimage.map_coordinates, there is no interpolation
@@ -1687,27 +1686,27 @@ class Image(WcsHDU):
         """
         arr = self.hdu[hext].data.copy()
         # arr = self.data.copy()
-        
-        """ 
+
+        """
         Cut off rows and columns to get an integer multiple of the factor
         in each dimension
         """
         dx = arr.shape[1] % factor
         dy = arr.shape[0] % factor
-        if dx>0:
-            arr = arr[:,:-dx]
-        if dy>0:
-            arr = arr[:-dy,:]
+        if dx > 0:
+            arr = arr[:, :-dx]
+        if dy > 0:
+            arr = arr[:-dy, :]
 
         """ Set the output dimensions """
         x = arr.shape[1]/factor
         y = arr.shape[0]/factor
 
         """ Fill the output array with the block-averaged values """
-        out = np.zeros((y,x))
+        out = np.zeros((y, x))
         for i in range(factor):
             for j in range(factor):
-                out += arr[i::factor,j::factor]
+                out += arr[i::factor, j::factor]
 
         """ Average if requested, otherwise leave as sum """
         if mode == 'average':
@@ -1732,7 +1731,7 @@ class Image(WcsHDU):
                     via the wcs to_header() function saves the CDELTn as just
                     1.0 and puts the CD matrix into an output PC matrix.
                     """
-                    keylist = ['pc%d_%d' % (rak, rak), 
+                    keylist = ['pc%d_%d' % (rak, rak),
                                'pc%d_%d' % (rak, dek),
                                'pc%d_%d' % (dek, rak),
                                'pc%d_%d' % (dek, dek)]
@@ -1748,7 +1747,6 @@ class Image(WcsHDU):
                 for key in ['crpix%d' % rak, 'crpix%d' % dek]:
                     if key.upper() in outhdr.keys():
                         outhdr[key] /= (1.0 * factor)
-                
             else:
                 outhdr = self.hdr.copy()
 
@@ -2753,18 +2751,18 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
     """ Read the input images """
     try:
         im1 = Image(infile1)
-    except:
+    except IOError:
         print('')
-        print 'ERROR: Could not properly open %s' % infile1
-        return
+        print('ERROR: Could not properly open %s' % infile1)
+        raise IOError
     print "    .... Done"
     try:
         im2 = Image(infile2)
-    except:
+    except IOError:
         print('')
-        print 'ERROR: Could not properly open %s' % infile2
-        return
-    print "    .... Done"
+        print('ERROR: Could not properly open %s' % infile2)
+        raise IOError
+    print('    .... Done')
 
     """
     Make cutouts of the appropriate size for each of the input images
@@ -2793,10 +2791,10 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
     if infile3 is not None:
         try:
             im3 = Image(infile3)
-        except:
+        except IOError:
             print('')
-            print 'ERROR: Could not properly open %s' % infile3
-            return
+            print('ERROR: Could not properly open %s' % infile3)
+            raise IOError
         im3.def_subim_radec(imcent, imsize, outscale=pixscale)
         im3.set_contours(rms3)
         im3.set_wcsextent(zeropos=zeropos)
@@ -2909,7 +2907,7 @@ def plot_cat(fitsfile, catfile, xcol=0, ycol=1, marksize=20., markcolor='g',
     try:
         quick_display(fitsfile, inhdu=inhdu, cmap=cmap, fmin=fmin, fmax=fmax,
                       funits=funits)
-    except:
+    except IOError:
         print('')
         print ('Image display failed when called from plot_cat.')
         print('')
