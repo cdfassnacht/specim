@@ -61,8 +61,7 @@ from .imutils import open_fits
 
 class Image(WcsHDU):
 
-    def __init__(self, indat, hext=0, hdrhext=0, wcsext=None,
-                 verbose=True):
+    def __init__(self, indat, hext=0, wcsext=None, verbose=True):
         """
         This method gets called when the user types something like
             myim = Image(infile)
@@ -207,7 +206,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def set_data(self, imslice=0, raax=0, decax=1, specax=2, hext=0):
+    def set_data(self, imslice=0, raax=0, decax=1, specax=2):
         """
         Sets the 2-dimension slice to use for the display functions.
         For nearly all imaging data, there is only one image slice, and so
@@ -222,7 +221,7 @@ class Image(WcsHDU):
         """
 
         """ Get the number of dimensions in the input image """
-        # hdr = self.hdu[hext].header
+        # hdr = self.header
         # if 'naxis' in hdr.keys():
         #     ndim = hdr['naxis']
         # else:
@@ -276,13 +275,13 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def close(self):
-        """
-        Closes the image
-        """
-
-        self.hdu.close()
-        return
+    # def close(self):
+    #     """
+    #     Closes the image
+    #     """
+    # 
+    #     self.hdu.close()
+    #     return
 
     # -----------------------------------------------------------------------
 
@@ -1080,11 +1079,7 @@ class Image(WcsHDU):
 
         """
         Set the portion of the data to be used.  This may already have been
-        set before calling set_contours.  If it has already been set, then
-        self.data will contain the data and the hext parameter will be
-        ignored.
-        If it has not been set, i.e., if self.data is None, then set the
-        data to be the full image.
+        set before calling set_contours.
         """
         if self.data is None:
             self.set_subim()
@@ -1269,7 +1264,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def set_subim_xy(self, x1, y1, x2, y2, hext=0, verbose=True):
+    def set_subim_xy(self, x1, y1, x2, y2, verbose=True):
         """
 
         Selects the data in the subimage defined by the bounds x1, x2, y1, y2.
@@ -1277,7 +1272,6 @@ class Image(WcsHDU):
         get_subim_bounds function (which takes a subimage center and size)
 
         Inputs:
-            hext     - Image HDU number that contains the full image
             verbose - Print out useful information if True (the default)
         """
 
@@ -1286,14 +1280,13 @@ class Image(WcsHDU):
         Note that radio images often have 4 dimensions (x, y, freq, stokes)
          so for those just take the x and y data
         """
-        hdr = self.hdu[hext].header
+        hdr = self.header
         if hdr['naxis'] == 4:
-            data = self.hdu[hext].data[0, 0, y1:y2, x1:x2].copy()
+            data = self.data[0, 0, y1:y2, x1:x2].copy()
         else:
-            data = self.hdu[hext].data[y1:y2, x1:x2].copy()
+            data = self.data[y1:y2, x1:x2].copy()
         data[~np.isfinite(data)] = 0.
-        subim = pf.PrimaryHDU(data, self.hdu[hext].header)
-        self.prevdext = hext
+        subim = pf.PrimaryHDU(data, hdr)
         subcentx = 0.5 * (x1 + x2)
         subcenty = 0.5 * (y1 + y2)
 
@@ -1324,8 +1317,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def poststamp_xy(self, centpos, imsize, outfile=None, hext=0,
-                     verbose=True):
+    def poststamp_xy(self, centpos, imsize, outfile=None, verbose=True):
         """
         Creates a subimage that is a cutout of the original image.  For
          this method, the image center is defined by its (x, y) coordinate
@@ -1349,13 +1341,11 @@ class Image(WcsHDU):
                        4. A 2-element tuple: (xsize, ysize)
                        5. imsize=None.  In this case, the full image is used
             outfile - name of optional output file (default=None)
-            hext    - HDU containing the image data in the input image
-                      (default=0)
         """
 
         """ Make the cutout """
-        x1, y1, x2, y2, = self.get_subim_bounds(centpos, imsize, hext)
-        outhdu = self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
+        x1, y1, x2, y2, = self.get_subim_bounds(centpos, imsize)
+        outhdu = self.set_subim_xy(x1, y1, x2, y2, verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -1371,7 +1361,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def imcopy(self, x1, x2, y1, y2, outfile, hext=0, verbose=True):
+    def imcopy(self, x1, x2, y1, y2, outfile, verbose=True):
         """
         Description: Given the x and y coordinates of
         the lower left corner and the upper right corner, creates a new
@@ -1383,12 +1373,10 @@ class Image(WcsHDU):
           y1:      y coordinate of the lower left corner of desired region
           y2:      y coordinate of the upper right corner of desired region
           outfile: file name of output image
-          hext:    HDU containing the image data in the input image
-                   (default=0)
         """
 
         """ Make the cutout """
-        outhdu = self.set_subim_xy(x1, y1, x2, y2, hext, verbose=verbose)
+        outhdu = self.set_subim_xy(x1, y1, x2, y2, verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -1404,7 +1392,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def def_subim_radec(self, imcent, imsize, outscale=None, hext=0, dext=0,
+    def def_subim_radec(self, imcent, imsize, outscale=None, 
                         theta_tol=1.e-5, nanval=0., verbose=True, debug=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
@@ -1427,10 +1415,6 @@ class Image(WcsHDU):
           outscale - Output image pixel scale, in arcsec/pix.
                       If outscale is None (the default) then the output image
                       scale will be the same as the input image scale
-          hext     - Input file HDU number that contains the WCS info
-                        (default 0)
-          dext     - Input file HDU number that contains the image data
-                        (default 0)
           verbose  - Print out informational statements if True (default=True)
         """
 
@@ -1438,13 +1422,13 @@ class Image(WcsHDU):
         The following assignments get used whether a subimage has been
         requested or not
         """
-        hdr = self.hdu[hext].header.copy()
-        nx = self.hdu[hext].data.shape[1]
-        ny = self.hdu[hext].data.shape[0]
+        hdr = self.header.copy()
+        nx = self.data.shape[1]
+        ny = self.data.shape[0]
 
         """ Check to make sure that a subimage is even requested """
         if imsize is None:
-            subim = pf.PrimaryHDU(self.hdu[hext].data, hdr)
+            subim = pf.PrimaryHDU(self.data, hdr)
             return subim
 
         """
@@ -1570,9 +1554,9 @@ class Image(WcsHDU):
 
         """ Get the data to be resampled """
         if hdr['naxis'] == 4:
-            data = self.hdu[dext].data[0, 0, :, :].copy()
+            data = self.data[0, 0, :, :].copy()
         else:
-            data = self.hdu[dext].data.copy()
+            data = self.data.copy()
 
         """ Transform the coordinates """
         # outdata = ndimage.map_coordinates(data, icoords, output=np.float64,
@@ -1586,7 +1570,7 @@ class Image(WcsHDU):
             outhdr['ORIG_IM'] = 'Copied from %s' % self.infile
         subim = pf.PrimaryHDU(outdata, outhdr)
 
-        self.prevdext = dext
+        # self.prevdext = dext
 
         """ Clean up and exit """
         del data, icoords, skycoords, ccdcoords
@@ -1595,7 +1579,7 @@ class Image(WcsHDU):
     # -----------------------------------------------------------------------
 
     def poststamp_radec(self, imcent, imsize, outscale=None, outfile=None,
-                        docdmatx=False, hext=0, dext=0, verbose=True,
+                        docdmatx=False, verbose=True,
                         debug=False):
         """
         Given a central coordinate (RA, dec) and an image size in arcseconds,
@@ -1629,10 +1613,6 @@ class Image(WcsHDU):
           outscale - Output image pixel scale, in arcsec/pix.
                       If outscale is None (the default) then the output image
                       scale will be the same as the input image scale
-          hext     - Input file HDU number that contains the WCS info
-                      (default 0)
-          dext     - Input file HDU number that contains the image data
-                      (default 0)
           docdmatx - If set to True, then put the output image
                       scale in terms of a CD matrix.  If False (the default),
                       then use the CDELT and PC matrix formalism instead.
@@ -1642,7 +1622,7 @@ class Image(WcsHDU):
 
         """ Create the postage stamp data """
         subim = self.def_subim_radec(imcent, imsize, outscale=outscale,
-                                     hext=hext, dext=dext, verbose=verbose)
+                                     verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -1657,7 +1637,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def blkavg(self, factor, mode='sum', outfile=None, verbose=True, hext=0):
+    def blkavg(self, factor, mode='sum', outfile=None, verbose=True):
         """
 
         Code to block average the image data, taken from Matt Auger's
@@ -1684,7 +1664,7 @@ class Image(WcsHDU):
         """
         Make a copy of the input data, just to be on the safe side
         """
-        arr = self.hdu[hext].data.copy()
+        arr = self.data.copy()
         # arr = self.data.copy()
 
         """
@@ -1720,7 +1700,7 @@ class Image(WcsHDU):
         if outfile is not None:
             if self.wcsinfo is not None:
 
-                outhdr = self.make_hdr_wcs(self.hdr, self.wcsinfo)
+                outhdr = self.make_hdr_wcs(self.header, self.wcsinfo)
                 rak = self.raaxis
                 dek = self.decaxis
 
@@ -1748,7 +1728,7 @@ class Image(WcsHDU):
                     if key.upper() in outhdr.keys():
                         outhdr[key] /= (1.0 * factor)
             else:
-                outhdr = self.hdr.copy()
+                outhdr = self.header.copy()
 
             pf.PrimaryHDU(out, outhdr).writeto(outfile, overwrite=True)
             if verbose:
@@ -1759,7 +1739,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def get_rms(self, centpos, size, hext=0, verbose=True):
+    def get_rms(self, centpos, size, verbose=True):
         """
         Calculates the rms (by calling the sigma_clip method) by calculating
         the pixel value statistics in a region of the image defined by its
@@ -1780,15 +1760,13 @@ class Image(WcsHDU):
                      3. A 2-element list:  [xsize, ysize]
                      4. A 2-element tuple: (xsize, ysize)
                      5. size=None.  In this case, the full image is used
-          hext    - HDU containing the image data in the input image
-                    (default=0)
         """
 
         """
         Convert the center and size paramters into the coordinates of the
         corners of the region
         """
-        statsec = self.get_subim_bounds(centpos, size, hext)
+        statsec = self.get_subim_bounds(centpos, size)
         print('')
         print(statsec)
 
@@ -1801,7 +1779,7 @@ class Image(WcsHDU):
     # -----------------------------------------------------------------------
 
     def snr_image_xy(self, centpos, imsize, statcent=None, statsize=None,
-                     outfile=None, hext=0, verbose=True):
+                     outfile=None, verbose=True):
         """
         Creates a signal-to-noise image by first calculating the image RMS
         within a region defined by statcent and statsize.  If both of these
@@ -1844,8 +1822,6 @@ class Image(WcsHDU):
                        5. statsize=None.  In this case, the statsize defaults
                           to the value of imsize
           outfile  - name of optional output file (default=None)
-          hext     - HDU containing the image data in the input image
-                        (default=0)
         """
 
         """ First get the rms in the requested region """
@@ -1857,10 +1833,10 @@ class Image(WcsHDU):
             sztmp = statsize
         else:
             sztmp = imsize
-        imrms = self.get_rms(xytmp, sztmp, hext=hext, verbose=verbose)
+        imrms = self.get_rms(xytmp, sztmp, verbose=verbose)
 
         """ Now create the SNR image """
-        subim = self.poststamp_xy(centpos, imsize, hext=hext, outfile=None,
+        subim = self.poststamp_xy(centpos, imsize, outfile=None,
                                   verbose=verbose)
         subim.data /= imrms
         if outfile is not None:
@@ -2007,7 +1983,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def set_display_limits(self, fmin=-1., fmax=10., funits='sigma', hext=0,
+    def set_display_limits(self, fmin=-1., fmax=10., funits='sigma', 
                            mask=None, verbose=False):
         """
 
@@ -2089,7 +2065,7 @@ class Image(WcsHDU):
                 print('--------------------------')
                 if mask is not None:
                     print('Using a mask')
-                self.sigma_clip(hext=hext, verbose=verbose, mask=mask)
+                self.sigma_clip(verbose=verbose, mask=mask)
                 self.found_rms = True
 
             """ If disprange is not set, then query the user for the range """
@@ -2153,7 +2129,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def set_subim(self, hext=0, mode='radec', imcent=None, imsize=None,
+    def set_subim(self, mode='radec', imcent=None, imsize=None,
                   verbose=False):
         """
         Sets the region of the image to be displayed
@@ -2183,11 +2159,7 @@ class Image(WcsHDU):
 
         """ First check to see if any modification needs to be made """
         if imcent is None and imsize is None:
-            self.plotim = self.hdu[hext].copy()
-            # if self.prevdext is None or hext != self.prevdext:
-            #     self.data = self.hdu[hext].data.copy()
-            # else:
-            #     return
+            self.plotim = pf.PrimaryHDU(self.data, self.header)
 
         """
         The definition of the subimage depends on whether the requested
@@ -2198,7 +2170,7 @@ class Image(WcsHDU):
         if mode == 'radec':
             self.plotim = self.poststamp_radec(imcent, imsize, verbose=verbose)
         else:
-            self.plotim = self.poststamp_xy(imcent, imsize, hext=hext)
+            self.plotim = self.poststamp_xy(imcent, imsize)
         print('')
 
     # -----------------------------------------------------------------------
@@ -2264,7 +2236,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def _display_setup(self, hext=0, cmap='gaia', fmin=-1., fmax=10.,
+    def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,
                        funits='sigma', statsize=2048,
                        title=None,  mode='xy', zeropos=None, mask=None,
                        verbose=False):
@@ -2294,7 +2266,7 @@ class Image(WcsHDU):
             self.extval = None
 
         """ Set the image flux display limits """
-        self.set_display_limits(fmin, fmax, funits, hext=hext, mask=mask,
+        self.set_display_limits(fmin, fmax, funits, mask=mask,
                                 verbose=verbose)
 
         """ Set the color map """
@@ -2382,7 +2354,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def display(self, hext=0, cmap='gaia',
+    def display(self, cmap='gaia',
                 fmin=-1., fmax=10., funits='sigma', fscale='linear',
                 statsize=2048, title=None,
                 mode='radec', imcent=None, imsize=None,
@@ -2439,13 +2411,13 @@ class Image(WcsHDU):
         full input image
         """
         self.mode = mode
-        self.set_subim(hext, mode, imcent, imsize, verbose=verbose)
+        self.set_subim(mode, imcent, imsize, verbose=verbose)
 
         """ Set up the parameters that will be needed to display the image """
         if mask is not None:
             print('Using mask')
             print(mask.sum())
-        self._display_setup(hext=hext, cmap=cmap,
+        self._display_setup(cmap=cmap,
                             fmin=fmin, fmax=fmax, funits=funits,
                             statsize=statsize, mask=mask, title=title,
                             mode=mode, zeropos=zeropos, verbose=verbose)
@@ -2460,7 +2432,7 @@ class Image(WcsHDU):
 # -----------------------------------------------------------------------
 
 
-def get_rms(infile, xcent, ycent, xsize, ysize=None, hext=0, outfile=None,
+def get_rms(infile, xcent, ycent, xsize, ysize=None, outfile=None,
             verbose=True):
     """
 
@@ -2482,8 +2454,6 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, hext=0, outfile=None,
 
     Optional Inputs:
       ysize    - height of the region.  If not given, then ysize=xsize
-      hext     - the HDU containing the data.  The default (hext=0) should
-                  work for most data files.
       outfile - output file to store the data [NOT YET IMPLEMENTED]
       verbose - set to False to surpress output
     """
@@ -2493,7 +2463,7 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, hext=0, outfile=None,
         imsize = [xsize, ysize]
     else:
         imsize = xsize
-    x1, y1, x2, y2 = im.get_subim_bounds((xcent, ycent), imsize, hext=hext)
+    x1, y1, x2, y2 = im.get_subim_bounds((xcent, ycent), imsize)
     im.sigma_clip(statsec=[x1, y1, x2, y2])
     rms = im.rms_clip
     if verbose:
@@ -2506,7 +2476,7 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, hext=0, outfile=None,
 
 
 def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
-                makerms=False, rmssuff='_rms', hext=0, dext=0, verbose=True):
+                makerms=False, rmssuff='_rms', verbose=True):
     """
     Makes a cutout from an input image, based on a requested (RA, dec) center
      and an image size in arcsec.
@@ -2539,14 +2509,11 @@ def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
                   created.
       rmssuff - Suffix for output rms file.  Default='_rms' means that for
                    infile='foo.fits', the output file will be 'foo_rms.fits'
-      hext    - Input file HDU number that contains the WCS info (default 0)
-      dext    - Input file HDU number that contains the image data (default 0)
     """
 
     """ Make the input file cutout """
     infits = Image(infile)
-    infits.poststamp_radec(imcent, imsize, scale, outfile, hext=hext,
-                           dext=dext, verbose=verbose)
+    infits.poststamp_radec(imcent, imsize, scale, outfile, verbose=verbose)
 
     """ Make the weight file cutout, if requested """
     if whtsuff is not None:
@@ -2554,7 +2521,7 @@ def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
         outwht = outfile.replace('.fits', '%s.fits' % whtsuff)
         whtfits = Image(whtfile)
         whtfits.poststamp_radec(imcent, imsize, scale, outwht,
-                                hext=hext, dext=dext, verbose=verbose)
+                                verbose=verbose)
 
     """ Make output RMS file, if requested """
     # CODE STILL TO COME
@@ -2668,7 +2635,7 @@ def del_history_cards(hdu):
 
 
 def make_snr_image(infile, outcent=None, outsize=None, statcent=None,
-                   statsize=None, outfile=None, hext=0):
+                   statsize=None, outfile=None):
     """
     Reads in the data from the input image and estimates the RMS noise
     in the region defined by statcent and statsize (default is to use the
@@ -2682,7 +2649,7 @@ def make_snr_image(infile, outcent=None, outsize=None, statcent=None,
 
     """ Make the SNR image """
     im.snr_image_xy(outcent, outsize, statcent=statcent, statsize=statsize,
-                    outfile=outfile, hext=hext)
+                    outfile=outfile)
 
     if outfile is not None:
         print('')
@@ -2844,7 +2811,7 @@ def calc_sky_from_seg(infile, segfile):
 # -----------------------------------------------------------------------
 
 
-def quick_display(infile, hext=0, cmap='gaia', fmin=-1.0, fmax=10.0,
+def quick_display(infile, cmap='gaia', fmin=-1.0, fmax=10.0,
                   funits='sigma'):
     """
     Displays the image data contained in an input fits file.
@@ -2852,7 +2819,7 @@ def quick_display(infile, hext=0, cmap='gaia', fmin=-1.0, fmax=10.0,
     Note that most of the display parameters, which normally are accessed
     through the Image class, are fixed to their default values.  The only
     parameters that can be modified by this function are:
-      hext, cmap, fmin, fmax, and funits
+      cmap, fmin, fmax, and funits
     For other functionality, set up an Image class structure and access the
     display method within it rather than using this quick function.
     """
@@ -2861,7 +2828,7 @@ def quick_display(infile, hext=0, cmap='gaia', fmin=-1.0, fmax=10.0,
     image = Image(infile)
 
     """ Display the image. """
-    image.display(hext=hext, cmap=cmap, fmin=fmin, fmax=fmax, funits=funits)
+    image.display(cmap=cmap, fmin=fmin, fmax=fmax, funits=funits)
 
     return image
 
