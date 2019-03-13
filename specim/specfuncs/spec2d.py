@@ -49,7 +49,7 @@ class Spec2d(imf.Image):
       - myspec.extract(outfile='myspec1d.txt')
     """
 
-    def __init__(self, inspec, hext=0, extvar=None,
+    def __init__(self, inspec, hext=0, invar=None, varext=None,
                  xtrim=None, ytrim=None, transpose=False, fixnans=True,
                  nanval='sky', logwav=False, verbose=True):
         """
@@ -74,7 +74,7 @@ class Spec2d(imf.Image):
             hext      - The header-data unit (HDU) that contains the
                         2-dimensional spectroscopic data.  The default value
                         (hdu=0) should work for most fits files.
-            extvar    - If the 2d variance spectrum has already been computed
+            invar     - If the 2d variance spectrum has already been computed
                         by previous reduction steps and stored as a separate
                         external file, then it needs to be read in.
                         Default value is None, implying no external variance
@@ -102,7 +102,7 @@ class Spec2d(imf.Image):
         self.dispaxis = 'x'
         self.specaxis = 1
         self.spaceaxis = 0
-        self.extvar = None
+        self.vardata = None
         self.sky1d = None
         self.sky2d = None
         self.skyext = None
@@ -122,24 +122,19 @@ class Spec2d(imf.Image):
 
         """
         Read in the data and call the superclass initialization for useful
-        Image attributes (for now this superclass initialization only works if
-        inpsec is a file name.
+        Image attributes
         """
-        super(Spec2d, self).__init__(self, inspec, datahext=hext, hdrhext=hext,
-                                     verbose=verbose) 
+        super(Spec2d, self).__init__(inspec, hext=hext, verbose=verbose) 
 
         """ Read in the external variance file if there is one """
-        if extvar is not None:
-            test = str(type(extvar))
-            if test.rfind('hdu') > 0:
-                self.extvar = extvar
-            else:
-                self.extvar = pf.open(extvar)
+        if invar is not None:
+            if varext is None:
+                varext = hext
+            extim = imf.Image(invar, hext=varext)
 
         """ Set the portion of the input spectrum that should be used """
-        self.hdr = self.hdu[hext].header
-        nx = self.hdr['naxis1']
-        ny = self.hdr['naxis2']
+        nx = self.header['naxis1']
+        ny = self.header['naxis2']
         trimmed = False
         if xtrim is not None:
             xmin = xtrim[0]
@@ -158,9 +153,9 @@ class Spec2d(imf.Image):
 
         """ Put the data in the appropriate container """
         if transpose:
-            self.data = (self.hdu[hext].data[ymin:ymax, xmin:xmax]).transpose()
+            self.data = (self.data[ymin:ymax, xmin:xmax]).transpose()
         else:
-            self.data = self.hdu[hext].data[ymin:ymax, xmin:xmax]
+            self.data = self.data[ymin:ymax, xmin:xmax]
 
         """
         Do the same thing for the external variance file, if there is one
@@ -168,12 +163,12 @@ class Spec2d(imf.Image):
          as the data file and thus should be trimmed, transposed, etc. in the
          same way
         """
-        if self.extvar is not None:
+        if self.vardata is not None:
             if transpose:
                 self.vardata = \
-                     (self.extvar[hext].data[ymin:ymax, xmin:xmax]).transpose()
+                     (extim.data[ymin:ymax, xmin:xmax]).transpose()
             else:
-                self.vardata = self.extvar[hext].data[ymin:ymax, xmin:xmax]
+                self.vardata = self.extim.data[ymin:ymax, xmin:xmax]
 
         """ Set other variables and report results """
         self.xmin = xmin
@@ -266,17 +261,10 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def get_wavelength(self, hext=None, verbose=False):
+    def get_wavelength(self, verbose=False):
         """
         Gets a wavelength vector from the fits header, if it exists
 
-        Inputs:
-            hext - By default the wavelength information will be searched
-                     for in the the header that is already associated with
-                     the data, which was set when reading inp.  This
-                     process is followed for the default: hext=None
-                     If hext is not None, search for the wavelength info
-                     in the indicated HDU instead
         """
 
         if self.dispaxis == 'y':
@@ -286,10 +274,7 @@ class Spec2d(imf.Image):
         cdkey = 'cd%d_%d' % (dim, dim)
         crpix = 'crpix%d' % dim
         crval = 'crval%d' % dim
-        if hext is not None:
-            hdr = self.hdu[hext].header
-        else:
-            hdr = self.hdr
+        hdr = self.header
         # print cdkey, crpix, crval
         self.has_cdmatx = True
         try:
@@ -381,16 +366,18 @@ class Spec2d(imf.Image):
         sky2d = np.tile(self.sky1d['flux'].data,
                         (self.data.shape[spaceaxis], 1))
         skyhdu = pf.ImageHDU(sky2d, name='Sky')
-        self.hdu.append(skyhdu)
-        self.skyext = len(self.hdu) - 1
-        self.sky2d = self.hdu[self.skyext].data
+        self.sky2d = imf.Image(skyhdu)
+        # self.hdu.append(skyhdu)
+        # self.skyext = len(self.hdu) - 1
+        # self.sky2d = self.hdu[self.skyext].data
 
         """ Subtract the sky from the data """
         skysub = self.data - sky2d
         sshdu = pf.ImageHDU(skysub, name='SkySub')
-        self.hdu.append(sshdu)
-        self.ssext = len(self.hdu) - 1
-        self.skysub = self.hdu[self.ssext].data
+        self.skysub = imf.Image(sshdu)
+        # self.hdu.append(sshdu)
+        # self.ssext = len(self.hdu) - 1
+        # self.skysub = self.hdu[self.ssext].data
 
         # !! NOT QUITE DONE YET (needs possible saving of sky spectra) !! #
 
@@ -433,8 +420,7 @@ class Spec2d(imf.Image):
         tmpsub[mask] = m
 
         """ Replace the bad pixels in skysub with a median-filtered value """
-        # m2, s2 = df.sigma_clip(self.skysub)
-        self.sigma_clip(hext=self.ssext)
+        self.sigma_clip(self.skysub)
         skysub[mask] = self.mean_clip
         ssfilt = filters.median_filter(skysub, boxsize)
         skysub[mask] = ssfilt[mask]
@@ -489,11 +475,8 @@ class Spec2d(imf.Image):
 
             """ Plot the sky-subtracted 2D spectrum """
             ax2 = plt.subplot(412, sharex=ax1, sharey=ax1)
-            self.found_rms = False
-            self.hdu.info()
-            print(self.ssext)
-            self.display(hext=self.ssext, mode='xy')
-            print('foo')
+            self.skysub.found_rms = False
+            self.skysub.display(mode='xy')
 
             """ Plot an estimate of the 1D sky spectrum """
             ax3 = plt.subplot(212, sharex=ax1)
@@ -975,7 +958,7 @@ class Spec2d(imf.Image):
         Set up the variance based on the detector characteristics
          (gain and readnoise) if an external variance was not provided
         """
-        if self.extvar is not None:
+        if self.vardata is not None:
             varspec = self.vardata
         else:
             varspec = (gain * self.data + rdnoise**2) / gain**2

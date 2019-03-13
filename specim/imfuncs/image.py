@@ -71,64 +71,17 @@ class Image(WcsHDU):
         The image data is stored in a Image class container.
 
         Required inputs:
-            indat - The input image data.  This can either be:
+            indat - The input image data -- must to be one of the following:
                      1. a filename, the most common case
-                           - or -
                      2. a HDU list.
+                     3. a single PrimaryHDU or ImageHDU
         """
 
-        # """ Check the format of the input image data """
-        # if isinstance(indat, str):
-        #     informat = 'file'
-        # elif isinstance(indat, pf.HDUList):
-        #     informat = 'hdulist'
-        # else:
-        #     print('')
-        #     print('ERROR: The input image data for the Image class must be'
-        #           'one of the following:')
-        #     print('  1. A filename (i.e. a string)')
-        #     print('  2. A HDUList')
-        #     print('')
-        #     raise TypeError
-        # 
-        # """ Load the hdu information """
-        # if informat == 'hdulist':
-        #     self.hdu = indat
-        #     self.infile = None
-        # 
-        # else:
-        #     try:
-        #         self.read_from_file(indat, verbose=verbose)
-        #     except IOError:
-        #         raise IOError
-        # 
-        # if verbose:
-        #     self.hdu.info()
-        # 
-        # """ Set up pointers to the default data and header """
-        # self.data = None
-        # self.hdr = None
-        # self.prevdext = None
-        # # self.data = self.hdu[datahext].data.copy()
-        # self.hdr = self.hdu[hdrhext].header.copy()
-        # self.wcshdr = self.hdu[wcshext].header.copy()
-        # # self.prevdext = datahext
-        # 
-        # """ Do an initial import of the WCS information from the header """
-        # self.wcsinfo = None
-        # self.radec = None
-        # self.pixscale = None
-        # try:
-        #     self.get_wcs(self.wcshdr, verbose=verbose)
-        # except KeyError:
-        #     if verbose:
-        #         print('Could not load WCS info')
-        #     self.wcsinfo = None
+        """ Initialization """
+        self.infile = None
 
         """ Load the data by calling the superclass """
-        # test = WcsHDU(indat, hext, wcsext=wcsext, verbose=verbose)
-        # return
-        super(Image, self).__init__(indat, hext, wcsext=wcsext,
+        super(Image, self).__init__(indat, hext=hext, wcsext=wcsext,
                                     verbose=verbose)
 
         """ Initialize figures """
@@ -285,7 +238,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def sigma_clip(self, dataver='input', nsig=3., statsec=None, mask=None, 
+    def sigma_clip(self, data, nsig=3., statsec=None, mask=None, 
                    verbose=False):
         """
         Runs a sigma-clipping on image data.  The code iterates over
@@ -297,13 +250,21 @@ class Image(WcsHDU):
         Once convergence has been reached, the final clipped mean and clipped
         rms are stored in the mean_clip and rms_clip variables
 
+        This method is just a minimal wrapper for the sigclip method in the
+         cdfutils.datafuncs library.
+
         NOTE: The region used for determining these image statistics is set
         by the following decision path:
          - if statsec is not None, use statsec
-         - else, if the plotim has been set, use plotim
          - else, use the entire image
-        for the second and third options, an optional mask can be used to
+        for the second option, an optional mask can be used to
         exclude known bad pixels from the calculation.
+
+        Required input:
+          data    - the data set to be used.  Within the generic Image
+                    class this will probably be either self.data or 
+                    self.plotim.data, but other options may be used
+                    by child classes of the Image class
 
         Optional inputs:
           nsig    - Number of sigma from the mean beyond which points are
@@ -330,21 +291,17 @@ class Image(WcsHDU):
           verbose - If False (the default) no information is printed
         """
 
-        """ Select the data """
-        data = self.select_ver(dataver)
-
         """ Determine what the input data set is """
+        scdata = data.copy()
         if statsec is not None:
             x1, y1, x2, y2 = statsec
-            data = data[y1:y2, x1:x2]
-        elif self.plotim is not None:
-            data = self.plotim.data.copy()
+            scdata = scdata[y1:y2, x1:x2]
 
         """ Find the clipped mean and rms """
-        mu, sig = df.sigclip(data, nsig=nsig, mask=mask, verbose=verbose)
+        mu, sig = df.sigclip(scdata, nsig=nsig, mask=mask, verbose=verbose)
 
         """ Store the results and clean up """
-        del data
+        del scdata
         self.mean_clip = mu
         self.rms_clip = sig
         return
@@ -388,7 +345,7 @@ class Image(WcsHDU):
             mask = None
 
         """ Get the clipped mean and rms """
-        self.sigma_clip(mask=mask, dataver=dataver)
+        self.sigma_clip(self.data, mask=mask, dataver=dataver)
 
         """ Sanity check """
         sqrtmean = sqrt(self.mean_clip)
@@ -697,7 +654,7 @@ class Image(WcsHDU):
             f = data[pixmask]
         else:
             if self.found_rms is False:
-                self.sigma_clip(verbose=verbose)
+                self.sigma_clip(self.data, verbose=verbose)
                 self.found_rms = True
             if verbose:
                 print(self.mean_clip, self.rms_clip)
@@ -1078,17 +1035,10 @@ class Image(WcsHDU):
         """
 
         """
-        Set the portion of the data to be used.  This may already have been
-        set before calling set_contours.
-        """
-        if self.data is None:
-            self.set_subim()
-
-        """
         If no rms value has been requested, calculate the rms from the data
         """
         if rms is None:
-            self.sigma_clip()
+            self.sigma_clip(self.data)
             rms = self.rms_clip
 
         """ Set the contours based on the rms and the contour base """
@@ -1771,7 +1721,7 @@ class Image(WcsHDU):
         print(statsec)
 
         """ Get the pixel statistics """
-        self.sigma_clip(statsec=statsec)
+        self.sigma_clip(self.data, statsec=statsec)
         if verbose:
             print('RMS = %f' % self.rms_clip)
         return self.rms_clip
@@ -2034,7 +1984,7 @@ class Image(WcsHDU):
                 """
                 if self.fmin is None or self.fmax is None:
                     if self.found_rms is False:
-                        self.sigma_clip(verbose=verbose)
+                        self.sigma_clip(self.plotim.data, verbose=verbose)
                         self.found_rms = True
                     self.fmin = self.mean_clip - 1.*self.rms_clip
                     self.fmax = self.mean_clip + 10.*self.rms_clip
@@ -2065,7 +2015,7 @@ class Image(WcsHDU):
                 print('--------------------------')
                 if mask is not None:
                     print('Using a mask')
-                self.sigma_clip(verbose=verbose, mask=mask)
+                self.sigma_clip(self.plotim.data, verbose=verbose, mask=mask)
                 self.found_rms = True
 
             """ If disprange is not set, then query the user for the range """
@@ -2464,7 +2414,7 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, outfile=None,
     else:
         imsize = xsize
     x1, y1, x2, y2 = im.get_subim_bounds((xcent, ycent), imsize)
-    im.sigma_clip(statsec=[x1, y1, x2, y2])
+    im.sigma_clip(im.data, statsec=[x1, y1, x2, y2])
     rms = im.rms_clip
     if verbose:
         print('')
@@ -2717,14 +2667,14 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
 
     """ Read the input images """
     try:
-        im1 = Image(infile1)
+        im1 = Image(infile1, hext=hext1)
     except IOError:
         print('')
         print('ERROR: Could not properly open %s' % infile1)
         raise IOError
     print "    .... Done"
     try:
-        im2 = Image(infile2)
+        im2 = Image(infile2, hext=hext2)
     except IOError:
         print('')
         print('ERROR: Could not properly open %s' % infile2)
@@ -2735,7 +2685,7 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
     Make cutouts of the appropriate size for each of the input images
     For the first image this is done via a call to display
     """
-    im1.display(hext=hext1, cmap='gray_inv', mode='radec',
+    im1.display(cmap='gray_inv', mode='radec',
                 imcent=imcent, imsize=(imsize, imsize),
                 fmax=fmax, zeropos=zeropos)
     im2.def_subim_radec(imcent, imsize, outscale=pixscale)
@@ -2757,7 +2707,7 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
     """ If there is a third image, plot contours from it """
     if infile3 is not None:
         try:
-            im3 = Image(infile3)
+            im3 = Image(infile3, hext=hext3)
         except IOError:
             print('')
             print('ERROR: Could not properly open %s' % infile3)

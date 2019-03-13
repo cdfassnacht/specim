@@ -31,8 +31,10 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         Inputs:
-          indat - either a filename for a fits file or a HDUList that has
-                  previously been read in
+          indat - One of the following:
+                   1. a filename for a fits file
+                   2. a HDUList that has previously been read in
+                   3. a single HDU
         """
 
         """ Set some default values """
@@ -44,7 +46,9 @@ class WcsHDU(pf.PrimaryHDU):
         self.raaxis = None
         self.decaxis = None
 
-        """ Check the format of the input info """
+        """
+        Check the format of the input info and get the data and header info
+        """
         if isinstance(indat, str):
             informat = 'file'
             try:
@@ -54,18 +58,23 @@ class WcsHDU(pf.PrimaryHDU):
         elif isinstance(indat, pf.HDUList):
             informat = 'hdulist'
             hdu = indat
+        elif isinstance(indat, pf.PrimaryHDU) or \
+                isinstance(indat, pf.ImageHDU):
+            data = indat.data
+            hdr = indat.header
+            hdu = pf.HDUList(pf.PrimaryHDU(data, hdr))
         else:
             print('')
             print('ERROR: The input for the WcsHDU class must be'
                   'one of the following:')
             print('  1. A filename (i.e. a string)')
             print('  2. A HDUList')
+            print('  3. A single PrimaryHDU or ImageHDU')
             print('')
             raise TypeError
 
         """
-        Select the request HDU and then use the super-class to give
-        it useful properties
+        Use the input data and header info to make the call to the super class
         """
         data = hdu[hext].data
         hdr = hdu[hext].header
