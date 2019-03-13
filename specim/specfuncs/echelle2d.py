@@ -49,6 +49,7 @@ class Ech2d(list):
         """ Initialize some variables """
         self.infile = None
         self.plotgrid = None
+        self.p0hdr = None
 
         """
         Set the input HDU(s) in a manner reflecting how the input spectra
