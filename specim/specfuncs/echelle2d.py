@@ -12,6 +12,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from astropy.io import fits as pf
 from astropy.table import Table
+from specim import imfuncs as imf
 from specim import specfuncs as ss
 
 
@@ -63,7 +64,7 @@ class Ech2d(list):
 
         """ Load each order into its own Spec2d container """
         for i in range(hdustart, len(hdu)):
-            tmpspec = ss.Spec2d(hdu, hext=i, extvar=varhdu, logwav=logwav,
+            tmpspec = ss.Spec2d(hdu, hext=i, invar=varhdu, logwav=logwav,
                                 fixnans=fixnans, verbose=False)
             tmpspec.spec1d = None
             self.append(tmpspec)
@@ -140,6 +141,77 @@ class Ech2d(list):
             print(' %2d   %dx%d     %s' % 
                   (order, spec.data.shape[1], spec.data.shape[0],
                    spec.dispaxis))
+
+    # --------------------------------------------------------------------
+
+    def plot_2d(self, fillval=0., gap=50, **kwargs):
+        """
+
+        Plots in one figure the 2-d spectra from all of the orders.
+        These are stored in separate HDUs in the input file
+
+        """
+
+        """
+        Make a temporary array to hold all the spectra
+        """
+        ycurr = 0
+        arrinfo = np.zeros((len(self), 3), dtype=int)
+        for i, spec in enumerate(self):
+            arrinfo[i, 0] = spec.npix
+            if i == 0:
+                ycurr = 0
+            else:
+                ycurr += gap
+            arrinfo[i, 1] = ycurr
+            ycurr += spec.nspat
+            arrinfo[i, 2] = ycurr
+        aimax = arrinfo.max(axis=0)
+        fulldat = np.zeros((aimax[2], aimax[0])) + fillval
+
+        """
+        Loop through the orders and put the 2d spectra into the temporary
+        array
+        """
+        for i, spec in enumerate(self):
+            xmax = arrinfo[i, 0]
+            ystart = arrinfo[i, 1]
+            yend = arrinfo[i, 2]
+            fulldat[ystart:yend, 0:xmax] = spec.data.copy()
+
+        """ Display the data """
+        tmpim = imf.Image(pf.PrimaryHDU(fulldat))
+        tmpim.display(mode='xy', **kwargs)
+
+        """ Mark limits of "good" data if available """
+        count = 0
+        for spec, info in zip(self, self.ordinfo):
+            tmp = np.arange(spec.npix)
+            ystart = arrinfo[count, 1]
+            yend = arrinfo[count, 2]
+            xstart = tmp[info['pixmin']]
+            xend = tmp[info['pixmax']]
+            tmpx = np.array([xstart, xstart])
+            tmpy = np.array([ystart, yend])
+            plt.plot(tmpx, tmpy, color='g', lw=3)
+            tmpx = np.array([xend, xend])
+            plt.plot(tmpx, tmpy, color='g', lw=3)
+            count += 1
+        #     
+        # 
+        # # plt.figure(figsize=(10,10))
+        # plt.subplots_adjust(hspace=0.001)
+        # fig = plt.gcf()
+        # for spec, info in zip(self, self.ordinfo):
+        #     tmp = np.arange(spec.npix)
+        #     B = tmp[info['pixmin']]
+        #     R = tmp[info['pixmax']]
+        #     axi = fig.add_subplot(10, 1, info['order'])
+        #     spec.display(hext=(i+1), mode='xy', axlabel=False, **kwargs)
+        #     plt.axvline(B, color='g', lw=3)
+        #     plt.axvline(R, color='g', lw=3)
+        #     plt.setp(axi.get_xticklabels(), visible=False)
+        #     axi.set_xlabel('', visible=False)
 
     # --------------------------------------------------------------------
 

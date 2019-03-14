@@ -1214,7 +1214,7 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def set_subim_xy(self, x1, y1, x2, y2, verbose=True):
+    def set_subim_xy(self, x1, y1, x2, y2, nanval=0., verbose=True):
         """
 
         Selects the data in the subimage defined by the bounds x1, x2, y1, y2.
@@ -1235,7 +1235,15 @@ class Image(WcsHDU):
             data = self.data[0, 0, y1:y2, x1:x2].copy()
         else:
             data = self.data[y1:y2, x1:x2].copy()
-        data[~np.isfinite(data)] = 0.
+
+        """ Fix NaNs """
+        if nanval == 'max':
+            goodmask = np.isfinite(data)
+            dmax = data[goodmask].max()
+            nanval = 10. * dmax
+        data[~np.isfinite(data)] = nanval
+
+        """ Save the new data and header in a PrimaryHDU format """
         subim = pf.PrimaryHDU(data, hdr)
         subcentx = 0.5 * (x1 + x2)
         subcenty = 0.5 * (y1 + y2)
@@ -1267,7 +1275,8 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def poststamp_xy(self, centpos, imsize, outfile=None, verbose=True):
+    def poststamp_xy(self, centpos, imsize, outfile=None, nanval=0.,
+                     verbose=True):
         """
         Creates a subimage that is a cutout of the original image.  For
          this method, the image center is defined by its (x, y) coordinate
@@ -1295,7 +1304,8 @@ class Image(WcsHDU):
 
         """ Make the cutout """
         x1, y1, x2, y2, = self.get_subim_bounds(centpos, imsize)
-        outhdu = self.set_subim_xy(x1, y1, x2, y2, verbose=verbose)
+        outhdu = self.set_subim_xy(x1, y1, x2, y2, nanval=nanval,
+                                   verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -1342,8 +1352,8 @@ class Image(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def def_subim_radec(self, imcent, imsize, outscale=None, 
-                        theta_tol=1.e-5, nanval=0., verbose=True, debug=True):
+    def def_subim_radec(self, imcent, imsize, outscale=None, nanval=0.,
+                        theta_tol=1.e-5, verbose=True, debug=True):
         """
         Selects the data in the subimage defined by ra, dec, xsize, and ysize.
 
@@ -1463,7 +1473,8 @@ class Image(WcsHDU):
                 print('')
                 print('Image PA is effectively zero, so doing pixel-based '
                       'cutout')
-            subim = self.poststamp_xy((x, y), (inpixxsize, inpixysize))
+            subim = self.poststamp_xy((x, y), (inpixxsize, inpixysize),
+                                      nanval=nanval)
             return subim
 
         """
@@ -1509,8 +1520,10 @@ class Image(WcsHDU):
             data = self.data.copy()
 
         """ Transform the coordinates """
-        # outdata = ndimage.map_coordinates(data, icoords, output=np.float64,
-        #                                   order=5)
+        if nanval == 'max':
+            goodmask = np.isfinite(data)
+            dmax = data[goodmask].max()
+            nanval = 10. * dmax
         data[np.isnan(data)] = nanval
         outdata = ndimage.map_coordinates(data, icoords, order=5)
 
@@ -1529,7 +1542,7 @@ class Image(WcsHDU):
     # -----------------------------------------------------------------------
 
     def poststamp_radec(self, imcent, imsize, outscale=None, outfile=None,
-                        docdmatx=False, verbose=True,
+                        docdmatx=False, nanval=0., verbose=True,
                         debug=False):
         """
         Given a central coordinate (RA, dec) and an image size in arcseconds,
@@ -1572,7 +1585,7 @@ class Image(WcsHDU):
 
         """ Create the postage stamp data """
         subim = self.def_subim_radec(imcent, imsize, outscale=outscale,
-                                     verbose=verbose)
+                                     nanval=nanval, verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
