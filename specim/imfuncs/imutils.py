@@ -29,13 +29,11 @@ def open_fits(infile, mode='copyonwrite'):
 
     try:
         hdulist = pf.open(infile, mode=mode)
-    except:
+    except IOError:
         try:
             hdulist = pf.open(infile, mode=mode, ignore_missing_end=True)
-        except:
+        except IOError:
             print('')
             print('ERROR. Could not open fits file %s' % infile)
-            raise IOError
 
     return hdulist
-

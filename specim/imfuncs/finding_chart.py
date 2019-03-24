@@ -1,10 +1,11 @@
-import numpy as np
+# import numpy as np
 from matplotlib import pyplot as plt
 from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-from cdfutils import coords
+# from cdfutils import coords
 from . import image as imf
+
 
 def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
             zoomim=None, slitsize=None, slitpa=0., posfile=None,
@@ -17,8 +18,8 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
 
     """ First make the wide-field image """
     fcim = imf.Image(infile)
-    fig = plt.figure(figsize=(8,10))
-    fig.add_axes([0.1,0.3,0.7,0.7])
+    fig = plt.figure(figsize=(8, 10))
+    fig.add_axes([0.1, 0.3, 0.7, 0.7])
     title = '%s Finding Chart' % srcname
     fcim.display(imcent=imcent, imsize=imsize, cmap='grey_inv', title=title)
     plt.axvline(0, ls='dotted', color='k')
@@ -67,7 +68,7 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         zim = imf.Image(zoomim)
     else:
         zim = fcim
-    fig.add_axes([0.1,0.05,0.25,0.25])
+    fig.add_axes([0.1, 0.05, 0.25, 0.25])
     zim.display(imcent=imcent, imsize=zoomsize, cmap='grey_inv')
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')

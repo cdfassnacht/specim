@@ -3,7 +3,7 @@
 wcshdu.py
 
 Defines a new class that is essentially a fits PrimaryHDU class but with
-some of the WCS information in the header split out into separate 
+some of the WCS information in the header split out into separate
 attributes of the class
 
 """
@@ -27,7 +27,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     """
 
-    def __init__(self, indat, hext=0, wcsext=None, verbose=True):
+    def __init__(self, indat, inhdr=None, hext=0, wcsext=None, verbose=True):
         """
 
         Inputs:
@@ -35,6 +35,12 @@ class WcsHDU(pf.PrimaryHDU):
                    1. a filename for a fits file
                    2. a HDUList that has previously been read in
                    3. a single HDU
+                   4. a numpy.ndarray, which will be interpreted as the data
+                      portion of a data / header pair to be put into a HDU.
+                      In this case, the header information, if it exists,
+                      should be passed via the optional inhdr parameter.
+                      If hdr is None, then a minimal header will be
+                      automatically generated.
         """
 
         """ Set some default values """
@@ -50,19 +56,21 @@ class WcsHDU(pf.PrimaryHDU):
         Check the format of the input info and get the data and header info
         """
         if isinstance(indat, str):
-            informat = 'file'
-            try:
-                hdu = self.read_from_file(indat, verbose=verbose)
-            except IOError:
-                raise IOError
+            hdu = self.read_from_file(indat, verbose=verbose)
+            data = hdu[hext].data
+            hdr = hdu[hext].header
         elif isinstance(indat, pf.HDUList):
-            informat = 'hdulist'
             hdu = indat
+            data = hdu[hext].data
+            hdr = hdu[hext].header
         elif isinstance(indat, pf.PrimaryHDU) or \
                 isinstance(indat, pf.ImageHDU):
-            data = indat.data
-            hdr = indat.header
-            hdu = pf.HDUList(pf.PrimaryHDU(data, hdr))
+            data = indat.data.copy()
+            hdr = indat.header.copy()
+        elif isinstance(indat, np.ndarray):
+            data = indat.copy()
+            if inhdr is not None:
+                hdr = inhdr.copy()
         else:
             print('')
             print('ERROR: The input for the WcsHDU class must be'
@@ -70,14 +78,17 @@ class WcsHDU(pf.PrimaryHDU):
             print('  1. A filename (i.e. a string)')
             print('  2. A HDUList')
             print('  3. A single PrimaryHDU or ImageHDU')
+            print('  4. A numpy data array (numpy.ndarray), which will be')
+            print('     interpreted as the data portion of a HDU.  In this'
+                  ' case, use the optional')
+            print('     inhdr parameter to pass the header portion of the'
+                  ' HDU, if it exists')
             print('')
             raise TypeError
 
         """
         Use the input data and header info to make the call to the super class
         """
-        data = hdu[hext].data
-        hdr = hdu[hext].header
         super(WcsHDU, self).__init__(data, hdr)
 
         """
@@ -86,9 +97,16 @@ class WcsHDU(pf.PrimaryHDU):
         indicated by the wcsext parameter
         """
         if wcsext is not None:
-            wcshdr = hdu[wcsext].header
+            try:
+                wcshdr = hdu[wcsext].header
+            except UnboundLocalError:
+                print('')
+                print('ERROR: You cannot set wcsext parameter if the input'
+                      ' is not a file or HDUList')
+                print('')
+                raise TypeError
         else:
-            wcshdr = hdu[hext].header
+            wcshdr = hdr
         try:
             self.read_wcsinfo(wcshdr, verbose=verbose)
         except KeyError:
@@ -193,7 +211,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Summarize the WCS information """
         if verbose:
-            print('Pixel scale (x, y): (%7.3f, %7.3f) arcsec/pix' % 
+            print('Pixel scale (x, y): (%7.3f, %7.3f) arcsec/pix' %
                   (pixscale[0], pixscale[1]))
             print('Instrument FOV (arcsec): %7.1f x %7.1f' %
                   (pixscale[0] * wcshdr[rakey],
