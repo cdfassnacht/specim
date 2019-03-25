@@ -51,7 +51,8 @@ class Spec2d(imf.Image):
 
     def __init__(self, inspec, hext=0, invar=None, varext=None,
                  xtrim=None, ytrim=None, transpose=False, fixnans=True,
-                 nanval='sky', logwav=False, verbose=True):
+                 nanval='sky', logwav=False, verbose=True,
+                 wcsverb=False):
         """
         Reads in the 2-dimensional spectrum from an input fits file (or the
         HDUList from a previously loaded fits file) and
@@ -106,7 +107,6 @@ class Spec2d(imf.Image):
         self.sky1d = None
         self.sky2d = None
         self.skyext = None
-        self.skysub = None
         self.ssext = None
         self.spec1d = None
         self.fitrange = None
@@ -124,7 +124,8 @@ class Spec2d(imf.Image):
         Read in the data and call the superclass initialization for useful
         Image attributes
         """
-        super(Spec2d, self).__init__(inspec, hext=hext, verbose=verbose) 
+        super(Spec2d, self).__init__(inspec, hext=hext, verbose=verbose,
+                                     wcsverb=wcsverb) 
 
         """ Read in the external variance file if there is one """
         if invar is not None:
@@ -365,21 +366,11 @@ class Spec2d(imf.Image):
         #     sky2
         sky2d = np.tile(self.sky1d['flux'].data,
                         (self.data.shape[spaceaxis], 1))
-        skyhdu = pf.ImageHDU(sky2d, name='Sky')
-        self.sky2d = imf.Image(skyhdu)
-        # self.hdu.append(skyhdu)
-        # self.skyext = len(self.hdu) - 1
-        # self.sky2d = self.hdu[self.skyext].data
+        self['sky2d'] = imf.WcsHDU(sky2d, wcsverb=False)
 
         """ Subtract the sky from the data """
         skysub = self.data - sky2d
-        sshdu = pf.ImageHDU(skysub, name='SkySub')
-        self.skysub = imf.Image(sshdu)
-        # self.hdu.append(sshdu)
-        # self.ssext = len(self.hdu) - 1
-        # self.skysub = self.hdu[self.ssext].data
-
-        # !! NOT QUITE DONE YET (needs possible saving of sky spectra) !! #
+        self['skysub'] = imf.WcsHDU(skysub, wcsverb=False)
 
         """ Clean up """
         del sky2d, skysub
@@ -401,7 +392,7 @@ class Spec2d(imf.Image):
 
         """ Subtract the sky  """
         self.subtract_sky_2d()
-        skysub = self.skysub.copy()
+        skysub = self['skysub'].data.copy()
 
         """
         Divide the result by the square root of the sky to get a rms image
@@ -420,7 +411,7 @@ class Spec2d(imf.Image):
         tmpsub[mask] = m
 
         """ Replace the bad pixels in skysub with a median-filtered value """
-        self.sigma_clip(self.skysub)
+        self.sigma_clip('skysub')
         skysub[mask] = self.mean_clip
         ssfilt = filters.median_filter(skysub, boxsize)
         skysub[mask] = ssfilt[mask]
@@ -451,7 +442,7 @@ class Spec2d(imf.Image):
         if doskysub:
 
             """ Subtract the sky if this has not already been done """
-            if self.skysub is None:
+            if 'skysub' not in self.keys():
                 self.subtract_sky_2d()
 
             """ Set the subplot designation for the main spectrum """
@@ -475,14 +466,13 @@ class Spec2d(imf.Image):
 
             """ Plot the sky-subtracted 2D spectrum """
             ax2 = plt.subplot(412, sharex=ax1, sharey=ax1)
-            self.skysub.found_rms = False
-            self.skysub.display(mode='xy')
+            self.found_rms = False
+            self.display(dmode='skysub', mode='xy')
 
             """ Plot an estimate of the 1D sky spectrum """
             ax3 = plt.subplot(212, sharex=ax1)
-            # print self.sky1d['wav']
-            # print self.sky1d['flux']
             self.sky1d.plot(title=None, xlabel='x (pix)')
+        self.found_rms = False
 
         """
         For ease of viewing, only display part of the spectrum if it is
