@@ -61,10 +61,11 @@ from .imutils import open_fits
 
 class Image(dict):
 
-    def __init__(self, indat, **kwargs):
+    def __init__(self, indat, hext=0, vardat=None, varmode='var',
+                 varext=None, **kwargs):
         """
         This method gets called when the user types something like
-            myim = Image(infile)
+            myim = Image(indat)
 
         Reads in the image data from an input fits file or a HDUList from a
          previously loaded fits file (or [not yet implemented] a PrimaryHDU).
@@ -83,10 +84,21 @@ class Image(dict):
           wcsverb
         """
 
-        """ Load the data by calling the superclass """
+        """ Set default """
+        self.varmode = 'var'
+
+        """ Set up the empty Image container by calling the superclass """
         super(Image, self).__init__()
-        hdu = WcsHDU(indat, **kwargs)
-        self['input'] = hdu
+
+        """ Load the image data """
+        self['input'] = WcsHDU(indat, hext=hext, **kwargs)
+
+        """ Load the variance / rms / weight data, if requested """
+        if vardat is not None:
+            if varext is None:
+                varext = hext
+            self['var'] = WcsHDU(vardat, hext=varext, **kwargs)
+            self.varmode = varmode
 
         """ Set some short-cut variables """
         self.infile = self['input'].infile
@@ -158,20 +170,6 @@ class Image(dict):
         #     raise KeyError
 
         """ Select the image slice to use """
-
-    # -----------------------------------------------------------------------
-
-    def select_ver(self, dataver='input'):
-        """
-
-        Selects the data version
-
-        """
-
-        if dataver == 'input':
-            data = self.data.copy()
-
-        return data
 
     # -----------------------------------------------------------------------
 
@@ -277,7 +275,7 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def make_var(self, objmask=None, returnvar=True, dataver='input',
+    def make_var(self, objmask=None, returnvar=True, dmode='input',
                  verbose=True):
         """
         Make a variance image under the assumption that the data in the
@@ -315,7 +313,7 @@ class Image(dict):
                   (sqrtmean, self.rms_clip))
 
         """ Create the base variance image """
-        data = self.data.copy()
+        data = self[dmode].data.copy()
         varval = (self.rms_clip)**2
         var = np.ones(data.shape) * varval
 
@@ -553,7 +551,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def im_moments(self, x0, y0, rmax=10., detect_thresh=3., skytype='global',
-                   dataver='input', verbose=False):
+                   dmode='input', verbose=False):
         """
         Given an initial guess of a centroid position, calculates the
         flux-weighted first and second moments within a square centered
@@ -575,7 +573,7 @@ class Image(dict):
         """
 
         """ Define the data and the coordinate arrays """
-        data = self.data.copy()
+        data = self[dmode].data.copy()
         y, x = np.indices(data.shape)
 
         """
@@ -947,7 +945,7 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def set_contours(self, rms=None, verbose=True):
+    def set_contours(self, rms=None, dmode='input', verbose=True):
         """
         Sets the contouring levels for an image.  If a subimage (i.e., cutout)
         has already been defined, then its properties are used.  Otherwise,
@@ -976,7 +974,7 @@ class Image(dict):
             rms = self.rms_clip
 
         """ Set the contours based on the rms and the contour base """
-        maxcont = int(log((self.data.max() / rms), self.contbase))
+        maxcont = int(log((self[dmode].data.max() / rms), self.contbase))
         if maxcont < 3:
             self.clevs = np.array([-3., 3., self.contbase**3])
         else:
@@ -991,7 +989,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def plot_contours(self, color='r', rms=None, dataver='input',
-                      overlay=True, verbose=True):
+                      overlay=True, dmode='input', verbose=True):
         """
 
         Plots contours based on the flux (counts) in the image.
@@ -1000,14 +998,14 @@ class Image(dict):
 
         """ Set the contour levels if this has not already been done """
         if self.clevs is None:
-            self.set_contours(rms, verbose)
+            self.set_contours(rms, dmode, verbose)
 
         """ Plot the contours """
         if overlay:
-            plt.contour(self.data, self.clevs, colors=color,
+            plt.contour(self[dmode].data, self.clevs, colors=color,
                         extent=self.extval)
         else:
-            plt.contour(self.data, self.clevs, colors=color,
+            plt.contour(self[dmode].data, self.clevs, colors=color,
                         extent=self.extval, origin='lower')
 
     # -----------------------------------------------------------------------
@@ -1211,7 +1209,8 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def blkavg(self, factor, mode='sum', outfile=None, verbose=True):
+    def blkavg(self, factor, mode='sum', outfile=None, dmode='input',
+               verbose=True):
         """
 
         Code to block average the image data, taken from Matt Auger's
@@ -1238,8 +1237,7 @@ class Image(dict):
         """
         Make a copy of the input data, just to be on the safe side
         """
-        arr = self.data.copy()
-        # arr = self.data.copy()
+        arr = self[dmode].data.copy()
 
         """
         Cut off rows and columns to get an integer multiple of the factor
@@ -1857,8 +1855,8 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def _display_implot(self, fscale='linear', axlabel=True, fontsize=None,
-                        show_xyproj=False):
+    def _display_implot(self, fscale='linear', axlabel=True,
+                        fontsize=None, show_xyproj=False):
         """
 
         NOTE: DO NOT USE this routine/method unless you know exactly what
@@ -1871,12 +1869,15 @@ class Image(dict):
 
         """
         Set up for displaying the image data
-         - If show_xyproj is False (the default), then just show self.data
+         - If show_xyproj is False (the default), then just show
+            self['plotim'].data
          - If show_xyproj is True, then make a three panel plot, with
-             Panel 1: self.data (i.e., what you would see in the default
-              behavior)
-             Panel 2: Projection of data in self.data onto the x-axis
-             Panel 3: Projection of data in self.data onto the x-axis
+             Panel 1: self['plotim'].data (i.e., what you would see in the
+              default behavior)
+             Panel 2: Projection of data in self['plotim'].data onto the
+                      x-axis
+             Panel 3: Projection of data in self['plotim'].data onto the
+                      y-axis
           - Setting show_xyproj=True is most useful when evaluating, e.g., a
              star in the image data.  The projections along the two axes of the
              cutout can be useful for evaluating whether the object is a star
@@ -1920,11 +1921,11 @@ class Image(dict):
         """
         if show_xyproj:
             self.fig2.add_subplot(132)
-            xsum = self.data.sum(axis=0)
+            xsum = self['plotim'].data.sum(axis=0)
             plt.plot(xsum)
             plt.xlabel('Relative x Coord')
             self.fig2.add_subplot(133)
-            ysum = self.data.sum(axis=1)
+            ysum = self['plotim'].data.sum(axis=1)
             plt.plot(ysum)
             plt.xlabel('Relative y Coord')
             self.cid_keypress2 = \

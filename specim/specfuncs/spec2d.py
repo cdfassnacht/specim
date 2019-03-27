@@ -105,9 +105,6 @@ class Spec2d(imf.Image):
         self.spaceaxis = 0
         self.vardata = None
         self.sky1d = None
-        self.sky2d = None
-        self.skyext = None
-        self.ssext = None
         self.spec1d = None
         self.fitrange = None
         self.profile = None
@@ -124,14 +121,9 @@ class Spec2d(imf.Image):
         Read in the data and call the superclass initialization for useful
         Image attributes
         """
-        super(Spec2d, self).__init__(inspec, hext=hext, verbose=verbose,
+        super(Spec2d, self).__init__(inspec, hext=hext, vardat=invar,
+                                     varext=varext, verbose=verbose,
                                      wcsverb=wcsverb) 
-
-        """ Read in the external variance file if there is one """
-        if invar is not None:
-            if varext is None:
-                varext = hext
-            extim = imf.Image(invar, hext=varext)
 
         """ Set the portion of the input spectrum that should be used """
         nx = self.header['naxis1']
@@ -153,10 +145,11 @@ class Spec2d(imf.Image):
             ymax = ny
 
         """ Put the data in the appropriate container """
+        data = self.data[ymin:ymax, xmin:xmax]
         if transpose:
-            self.data = (self.data[ymin:ymax, xmin:xmax]).transpose()
+            self.data = data.transpose()
         else:
-            self.data = self.data[ymin:ymax, xmin:xmax]
+            self.data = data
 
         """
         Do the same thing for the external variance file, if there is one
@@ -164,12 +157,12 @@ class Spec2d(imf.Image):
          as the data file and thus should be trimmed, transposed, etc. in the
          same way
         """
-        if self.vardata is not None:
+        if 'var' in self.keys():
+            vdata = self['var'].data[ymin:ymax, xmin:xmax]
             if transpose:
-                self.vardata = \
-                     (extim.data[ymin:ymax, xmin:xmax]).transpose()
+                self.vardata = vdata.transpose()
             else:
-                self.vardata = self.extim.data[ymin:ymax, xmin:xmax]
+                self.vardata = vdata
 
         """ Set other variables and report results """
         self.xmin = xmin
@@ -177,22 +170,19 @@ class Spec2d(imf.Image):
         self.ymin = ymin
         self.ymax = ymax
         if verbose:
-            print('')
-            print '-----------------------------------------------------------'
-            print('')
             if self.infile is None:
-                print 'Read in 2-dimensional spectrum from HDU=%d' % hext
+                print('Read in 2-dimensional spectrum from HDU=%d' % hext)
             else:
-                print 'Read in 2-dimensional spectrum from %s (HDU=%d)' % \
-                     (self.infile, hext)
+                print('Read in 2-dimensional spectrum from %s (HDU=%d)' % \
+                     (self.infile, hext))
             if trimmed:
-                print 'The input dataset was trimmed'
-                print ' xrange: %d:%d.  yrange: %d:%d' % \
-                    (xmin, xmax, ymin, ymax)
+                print('The input dataset was trimmed')
+                print(' xrange: %d:%d.  yrange: %d:%d' % 
+                      (xmin, xmax, ymin, ymax))
             if transpose:
-                print 'The input dataset was transposed'
-            print 'Final data dimensions (x y): %d x %d' % \
-                (self.data.shape[1], self.data.shape[0])
+                print('The input dataset was transposed')
+            print('Final data dimensions (x y): %d x %d' % 
+                  (self.data.shape[1], self.data.shape[0]))
         self.get_dispaxis(verbose)
 
         """
@@ -327,7 +317,7 @@ class Spec2d(imf.Image):
             """
             Finally, replace the NaNs with the median sky for their row/column
             """
-            self.data[nanmask] = self.sky2d[nanmask]
+            self.data[nanmask] = self['sky2d'].data[nanmask]
 
     # -----------------------------------------------------------------------
 
@@ -397,7 +387,7 @@ class Spec2d(imf.Image):
         """
         Divide the result by the square root of the sky to get a rms image
         """
-        ssrms = skysub / np.sqrt(self.sky2d)
+        ssrms = skysub / np.sqrt(self['sky2d'].data)
         m, s = df.sigclip(ssrms)
 
         """ Now subtract a median-filtered version of the spectrum """
@@ -417,7 +407,7 @@ class Spec2d(imf.Image):
         skysub[mask] = ssfilt[mask]
 
         """ Add the sky back in and save the final result """
-        szapped = skysub + self.sky2d
+        szapped = skysub + self['sky2d'].data
         pf.PrimaryHDU(szapped).writeto(outfile)
         print ' Wrote szapped data to %s' % outfile
 
