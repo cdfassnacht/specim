@@ -23,7 +23,7 @@ class Ech2d(list):
 
     A generic class to process echelle 2d spectra that are stored in a
     multi-extension fits format.  This code is used by some of the ESI
-    and NIRES code that are in the keckcode repository
+    and NIRES code that is in the keckcode repository
 
     """
 

@@ -7,8 +7,35 @@ from astropy.coordinates import SkyCoord
 from . import image as imf
 
 
+def read_posfile(posfile, verbose=True):
+    """
+
+    Reads one or more (RA, Dec) positions from an input file
+
+    """
+
+    if verbose:
+        print('Reading central position from %s' % posfile)
+    postab = ascii.read(posfile)
+    if len(postab.colnames) >= 7:
+        names = ['name', 'hr', 'min', 'sec', 'deg', 'amin', 'asec']
+        for nin, nout in zip(postab.colnames, names):
+            postab.rename_column(nin, nout)
+
+    ra = []
+    dec = []
+    for info in postab:
+        ra.append('%d %d %f' % (info['hr'], info['min'], info['sec']))
+        dec.append('%+d %d %f' % (info['deg'], info['amin'], info['asec']))
+    radec = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg))
+
+    return postab, radec
+
+# ---------------------------------------------------------------------------
+
+
 def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
-            zoomim=None, slitsize=None, slitpa=0., posfile=None,
+            zoomim=None, slitsize=None, slitpa=0., slitfile=None,
             slitcent='default', starpos=None, rstar=1., **kwargs):
     """
 
@@ -16,34 +43,31 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
 
     """
 
-    """ First make the wide-field image """
+    """ Get the image center """
+    if isinstance(imcent, tuple):
+        cent = imcent
+    elif isinstance(imcent, str):
+        imtab, impos = read_posfile(imcent)
+        cent = (impos[0].ra.degree, impos[0].dec.degree)
+
+    """ Make the wide-field image """
     fcim = imf.Image(infile)
     fig = plt.figure(figsize=(8, 10))
     fig.add_axes([0.1, 0.3, 0.7, 0.7])
     title = '%s Finding Chart' % srcname
-    fcim.display(imcent=imcent, imsize=imsize, cmap='grey_inv', title=title)
+    fcim.display(imcent=cent, imsize=imsize, cmap='grey_inv', title=title)
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
 
     """ Get slit and star information from external file if requested """
     if slitcent == 'file' or starpos == 'file':
-        if posfile is None:
+        if slitfile is None:
             print('')
-            print('ERROR: position file requested but none provided via the'
-                  'posfile parameter')
+            print('ERROR: slit position file requested but none provided.')
+            print('Please use the slitfile parameter')
             print('')
             raise IOError
-        postab = ascii.read(posfile)
-        if len(postab.colnames) >= 7:
-            names = ['name', 'hr', 'min', 'sec', 'deg', 'amin', 'asec']
-            for nin, nout in zip(postab.colnames, names):
-                postab.rename_column(nin, nout)
-        ra = []
-        dec = []
-        for info in postab:
-            ra.append('%d %d %f' % (info['hr'], info['min'], info['sec']))
-            dec.append('%+d %d %f' % (info['deg'], info['amin'], info['asec']))
-        radec = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg))
+        postab, radec = read_posfile(slitfile)
 
     """ Add a circle for the offset/TT star position """
     if starpos is not None:
@@ -69,15 +93,15 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
     else:
         zim = fcim
     fig.add_axes([0.1, 0.05, 0.25, 0.25])
-    zim.display(imcent=imcent, imsize=zoomsize, cmap='grey_inv')
+    zim.display(imcent=cent, imsize=zoomsize, cmap='grey_inv', **kwargs)
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
     if slitsize is not None:
         slitra = []
         slitdec = []
         if slitcent == 'default':
-            slitra.append((imcent[0]))
-            slitdec.append((imcent[1]))
+            slitra.append((cent[0]))
+            slitdec.append((cent[1]))
         elif slitcent == 'file':
             for info, pos in zip(postab, radec):
                 name = info['name'].lower()
