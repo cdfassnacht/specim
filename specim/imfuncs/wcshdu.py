@@ -41,7 +41,7 @@ class WcsHDU(pf.PrimaryHDU):
                       portion of a data / header pair to be put into a HDU.
                       In this case, the header information, if it exists,
                       should be passed via the optional inhdr parameter.
-                      If hdr is None, then a minimal header will be
+                      If inhdr is None, then a minimal header will be
                       automatically generated.
         """
 
