@@ -1,7 +1,7 @@
 """
 
-A collection of useful functions that can be used in support of code
-in the Image and WcsHDU classes
+A collection of functions that are used to support code in the 
+ various classes defined within specim.imfuncs, e.g., Image, WcsHDU, etc.
 
 """
 
@@ -37,3 +37,4 @@ def open_fits(infile, mode='copyonwrite'):
             print('ERROR. Could not open fits file %s' % infile)
 
     return hdulist
+

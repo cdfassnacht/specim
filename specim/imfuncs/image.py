@@ -32,11 +32,15 @@ Stand-alone functions
                          positions of the catalog objects.
 """
 
+# For the future, to be used to make code run with either python2 or python3
+# import sys
+# pyversion = sys.version_info[0] (or maybe sys.version_info['major']
+# # This will give either 2 or 3
 # import os
-from math import log, log10, sqrt, pi, fabs
+from math import log, sqrt, pi, fabs
 from math import cos as mcos, sin as msin
 import numpy as np
-from scipy import ndimage
+# from scipy import ndimage
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 # from astropy import wcs, coordinates
@@ -122,9 +126,6 @@ class Image(dict):
          - The display min and max values are stored as self.fmin and self.fmax
          - For more information see the set_display_limits method
         """
-        self.found_rms = False       # Have clipped rms / mean been calculated?
-        self.mean_clip = 0.0         # Value of the clipped mean
-        self.rms_clip = 0.0          # Value of the clipped rms
         self.fmin = None             # Lower flux limit used in image display
         self.fmax = None             # Upper flux limit used in image display
         self.statsize = 2048         # Stats region size if image is too big
@@ -301,20 +302,21 @@ class Image(dict):
             mask = None
 
         """ Get the clipped mean and rms """
-        self.sigma_clip('input', mask=mask, dataver=dataver)
+        self['input'].sigma_clip(mask=mask, dmode=dmode)
 
         """ Sanity check """
-        sqrtmean = sqrt(self.mean_clip)
-        check = sqrtmean / self.rms_clip
+        rms = self['input'].rms_clip
+        sqrtmean = sqrt(self['input'].mean_clip)
+        check = sqrtmean / rms
         if check < 0.9 or check > 1.1:
             print('Warning: %s - ratio of sqrt(mean) to rms is more than'
                   ' 10 percent from unity' % self.infile)
             print(' sqrt(mean) = %7.2f, rms = %7.2f' %
-                  (sqrtmean, self.rms_clip))
+                  (sqrtmean, rms))
 
         """ Create the base variance image """
         data = self[dmode].data.copy()
-        varval = (self.rms_clip)**2
+        varval = (rms)**2
         var = np.ones(data.shape) * varval
 
         """
@@ -438,12 +440,11 @@ class Image(dict):
         if skytype is None:
             f = data[pixmask]
         else:
-            if self.found_rms is False:
-                self.sigma_clip('input', verbose=verbose)
-                self.found_rms = True
+            if self['input'].found_rms is False:
+                self['input'].sigma_clip(verbose=verbose)
             if verbose:
-                print(self.mean_clip, self.rms_clip)
-            f = data[pixmask] - self.mean_clip
+                print(self['input'].mean_clip, self['input'].rms_clip)
+            f = data[pixmask] - self['input'].mean_clip
         self.imex_x = x[pixmask]
         self.imex_y = y[pixmask]
 
@@ -453,7 +454,8 @@ class Image(dict):
           x1 and y1 back at the end -- in order to avoid rounding errors (see
           SExtractor user manual)
         """
-        objmask = f > self.mean_clip + detect_thresh * self.rms_clip
+        objmask = f > self['input'].mean_clip + \
+            detect_thresh * self['input'].rms_clip
         fgood = f[objmask]
         """
         """
@@ -703,7 +705,7 @@ class Image(dict):
         if zp or (runit == 'arcsec'):
             if self['input'].pixscale is None:
                 self.set_pixscale()
-            print('Using pixel scale of %6.3f arcsec/pix' % 
+            print('Using pixel scale of %6.3f arcsec/pix' %
                   self['input'].pixscale)
 
         """ Select the points within rmax and convert to mags if desired """
@@ -824,8 +826,8 @@ class Image(dict):
         If no rms value has been requested, calculate the rms from the data
         """
         if rms is None:
-            self.sigma_clip('input')
-            rms = self.rms_clip
+            self['input'].sigma_clip()
+            rms = self['input'].rms_clip
 
         """ Set the contours based on the rms and the contour base """
         maxcont = int(log((self[dmode].data.max() / rms), self.contbase))
@@ -1197,9 +1199,9 @@ class Image(dict):
         print(statsec)
 
         """ Get the pixel statistics """
-        self.sigma_clip('input', statsec=statsec)
+        self['input'].sigma_clip(statsec=statsec)
         if verbose:
-            print('RMS = %f' % self.rms_clip)
+            print('RMS = %f' % self['input'].rms_clip)
         return self.rms_clip
 
     # -----------------------------------------------------------------------
@@ -1409,122 +1411,6 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def set_display_limits(self, fmin=-1., fmax=10., funits='sigma',
-                           mask=None, verbose=False, debug=False):
-        """
-
-        The method used to set the flux limits for the image display.  The
-         two numbers that are generated by this method will be used for the
-         vmin and vmax values when the actual call to imshow (from
-         matplotlib.pyplot) is made.  The two values will be stored within the
-         Image class as fmin and fmax.
-
-        Inputs:
-          fmin   - Value that is used to set the minimum of the displayed flux
-                    range, where the actual value depends on the
-                    value of the funits paramters (see below).
-                   NOTE: If fmin is None then switch to interactive mode
-          fmax   - Value that is used to set the maximum of the displayed flux
-                    range, where the actual value depends on the
-                    value of the funits paramters (see below).
-                   NOTE: If fmin is None then switch to interactive mode
-          funits - Either 'sigma' (the default) or 'abs'. Used to determine
-                    the method of setting fmin and fmax.
-                   If funits is 'abs' then the two numbers in the disprange
-                    list just get stored as fmin and fmax.
-                   If funits is 'sigma' (the default) then the two numbers
-                    in disprange represent the numbers of clipped standard
-                    devitations relative to the clipped mean.  In that case,
-                    the method will first calculate the clipped mean and
-                    standarddeviations and then multiply them by the passed
-                    values.
-
-        """
-
-        """
-        If funits is 'abs', then just set self.fmin and self.fmax directly from
-         the disprange values if those are set. Otherwise, query the user for
-         the values.
-        """
-        if funits == 'abs':
-
-            """ If disprange was set, then just transfer the values """
-            if fmin is not None and fmax is not None:
-                self.fmin = fmin
-                self.fmax = fmax
-
-            else:  # Otherwise, query the user
-                """
-                Set some default values if there aren't already some in the
-                 fmin and fmax containers
-                """
-                if self.fmin is None or self.fmax is None:
-                    if self.found_rms is False:
-                        self.sigma_clip('plotim', verbose=verbose)
-                        self.found_rms = True
-                    self.fmin = self.mean_clip - 1.*self.rms_clip
-                    self.fmax = self.mean_clip + 10.*self.rms_clip
-                """ Query the user for new values """
-                tmpmin = self.fmin
-                tmpmax = self.fmax
-                tmp = raw_input('Enter minimum flux value for display [%f]: '
-                                % tmpmin)
-                if len(tmp) > 0:
-                    self.fmin = float(tmp)
-                tmp = raw_input('Enter maximum flux value for display [%f]: '
-                                % tmpmax)
-                if len(tmp) > 0:
-                    self.fmax = float(tmp)
-            print('fmin:  %f' % self.fmin)
-            print('fmax:  %f' % self.fmax)
-
-        else:
-            """
-            If funits is not 'abs', then it must be 'sigma', which is the only
-            other possibility, and the default value for funits.  In that case,
-            set the display limits in terms of the clipped mean and sigma
-            """
-
-            """ Start by calculating the clipped statistics if needed """
-            if self.found_rms is False:
-                print('Calculating display limits')
-                print('--------------------------')
-                if mask is not None:
-                    print('Using a mask')
-                if debug:
-                    tmpverb = True
-                else:
-                    tmpverb = False
-                self.sigma_clip('plotim', verbose=tmpverb, mask=mask)
-                self.found_rms = True
-
-            """ If disprange is not set, then query the user for the range """
-            if fmin is None or fmax is None:
-                fmin = -1.
-                fmax = 10.
-                tmp = raw_input('Enter min flux for display in terms of sigma'
-                                ' from mean [%f]: ' % fmin)
-                if len(tmp) > 0:
-                    fmin = float(tmp)
-                tmp = raw_input('Enter max flux for display in terms of sigma'
-                                ' from mean [%f]: ' % fmax)
-                if len(tmp) > 0:
-                    fmax = float(tmp)
-
-            """ Set fmin and fmax in terms of clipped mean and sigma"""
-            self.fmin = self.mean_clip + fmin * self.rms_clip
-            self.fmax = self.mean_clip + fmax * self.rms_clip
-            print(' Clipped mean: %f' % self.mean_clip)
-            print(' Clipped rms:  %f' % self.rms_clip)
-            s1 = '-' if fmin < 0. else '+'
-            s2 = '-' if fmax < 0. else '+'
-            print(' fmin (mean %s %3d sigma):  %f' %
-                  (s1, fabs(fmin), self.fmin))
-            print(' fmax (mean %s %3d sigma):  %f' %
-                  (s2, fabs(fmax), self.fmax))
-
-    # -----------------------------------------------------------------------
-
     def set_subim(self, imcent=None, imsize=None, mode='radec',
                   dmode='input', verbose=False):
         """
@@ -1555,8 +1441,7 @@ class Image(dict):
 
         """ First check to see if any modification needs to be made """
         if imcent is None and imsize is None:
-            self['plotim'] = self.poststamp_xy(imcent, imsize,
-                                               dmode=dmode)
+            plthdu = self['input']
 
         """
         The definition of the subimage depends on whether the requested
@@ -1565,10 +1450,10 @@ class Image(dict):
         Treat each case appropriately.
         """
         if mode == 'radec':
-            self['plotim'] = self.poststamp_radec(imcent, imsize, dmode=dmode,
+            plthdu = self.poststamp_radec(imcent, imsize, dmode=dmode,
                                                   verbose=verbose)
         else:
-            self['plotim'] = self.poststamp_xy(imcent, imsize, dmode=dmode)
+            plthdu = self.poststamp_xy(imcent, imsize, dmode=dmode)
         print('')
 
     # -----------------------------------------------------------------------
@@ -1607,10 +1492,8 @@ class Image(dict):
         dpar.extval = self.extval
 
         """ Set the image flux display limits """
-        self.set_display_limits(fmin, fmax, funits, mask=mask,
-                                verbose=verbose, debug=debug)
-        dpar.fmin = self.fmin
-        dpar.fmax = self.fmax
+        dpar.set_flux_limits(self['plotim'], fmin, fmax, funits, mask=mask,
+                             verbose=verbose, debug=debug)
 
         """ Set the color map """
         dpar.set_cmap(cmap)
@@ -1623,20 +1506,23 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def display(self, dmode='input', cmap='gaia',
-                fmin=-1., fmax=10., funits='sigma', fscale='linear',
-                statsize=2048, title=None,
-                mode='radec', imcent=None, imsize=None,
-                zeropos=None, axlabel=True, fontsize=None,
-                mask=None, show_xyproj=False, verbose=False, debug=False):
+    def display(self, dmode='input', mode='radec', imcent=None, imsize=None,
+                fscale='linear', axlabel=True, fontsize=None,
+                show_xyproj=False, verbose=False, debug=False, **kwargs):
         """
 
         The main way to display the image data contained in the Image class.
         The default is to display the entire image, but it is possible to
         display cutouts (subimages), which can be defined either by (RA, dec)
-        or (x, y)
+        or (x, y).
 
-        Optional inputs:
+        The code does three major steps:
+          1. Makes a cutout of the image data if requested
+          2. Sets up the parameters that control what the displayed image
+             looks like
+          3. Displays the image.
+
+        Optional inputs: [NEED TO BE UPDATED!]
           mode    - Either 'radec' (the default) or 'xy'.  Replaces the
                      obsolete subimdef and dispunits parameters
           imcent  - center of the subimage to be displayed, either in
@@ -1667,6 +1553,16 @@ class Image(dict):
                        to the point that would have been (0.5, 0.3) if the
                        origin were at the center of the image
 
+        Optional inputs via **kwargs - see _display_setup for more information
+          cmap
+          fmin
+          fmax
+          funits
+          statsize
+          mask
+          zeropos
+          title
+
         Obsolete inputs [not used any more -- just kept for legacy purposes]
           subimdef
           dispunits
@@ -1677,22 +1573,16 @@ class Image(dict):
         full input image
         """
         try:
-            self.set_subim(imcent, imsize, mode=mode, dmode=dmode,
-                           verbose=verbose)
+            self['plotim'] = self.set_subim(imcent, imsize, mode=mode,
+                                            dmode=dmode, verbose=verbose)
         except (TypeError, IOError):
             print('ERROR: Could not create image cutout')
             print('')
             return
 
         """ Set up the parameters that will be needed to display the image """
-        if mask is not None:
-            print('Using mask')
-            print(mask.sum())
-        dpar = self._display_setup(cmap=cmap,
-                                   fmin=fmin, fmax=fmax, funits=funits,
-                                   statsize=statsize, mask=mask, title=title,
-                                   mode=mode, zeropos=zeropos, verbose=verbose,
-                                   debug=debug)
+        dpar = self._display_setup(mode=mode, verbose=verbose, debug=debug,
+                                   **kwargs)
 
         """ Now display the data """
         self.dispim = DispIm(self['plotim'])
@@ -1713,6 +1603,9 @@ class Image(dict):
 
 # -----------------------------------------------------------------------
 # Stand-alone functions below this point
+# -----------------------------------------------------------------------
+
+
 # -----------------------------------------------------------------------
 
 
@@ -1748,8 +1641,8 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, outfile=None,
     else:
         imsize = xsize
     x1, y1, x2, y2 = im.get_subim_bounds((xcent, ycent), imsize)
-    im.sigma_clip('input', statsec=[x1, y1, x2, y2])
-    rms = im.rms_clip
+    im['input'].sigma_clip(statsec=[x1, y1, x2, y2])
+    rms = im['input'].rms_clip
     if verbose:
         print('')
         print('%s: RMS in requested region is %f' % (infile, rms))

@@ -38,7 +38,7 @@ class DispIm(WcsHDU):
         """
 
         """ Link to the superclass """
-        super(DispIm, self).__init__(inhdu)
+        super(DispIm, self).__init__(inhdu, wcsverb=False)
 
         """ Initialize some parameters """
         self.ax1 = None
@@ -293,10 +293,13 @@ class DispIm(WcsHDU):
             print('')
             self.xmark = event.xdata
             self.ymark = event.ydata
-            imsize = (self.zoomsize, self.zoomsize)
-            imcent = (self.xmark, self.ymark)
-            #self.display(imcent=imcent, imsize=imsize, mode=self.mode,
-            #             show_xyproj=True)
+            plt.axvline(self.xmark, color='g')
+            plt.axhline(self.ymark, color='g')
+            plt.draw()
+            # imsize = (self.zoomsize, self.zoomsize)
+            # imcent = (self.xmark, self.ymark)
+            # self.display(imcent=imcent, imsize=imsize, mode=self.mode,
+            #              show_xyproj=True)
 
         if event.key == 'z':
             """

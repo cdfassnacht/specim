@@ -13,7 +13,7 @@ from math import fabs
 import numpy as np
 from astropy import wcs
 from astropy.io import fits as pf
-from cdfutils import coords
+from cdfutils import coords, datafuncs as df
 from .imutils import open_fits
 
 # ---------------------------------------------------------------------------
@@ -24,7 +24,11 @@ class WcsHDU(pf.PrimaryHDU):
 
     This class is essentially a fits PrimaryHDU class but with some of the
     WCS information that may be in the header split out into separate
-    attributes of the class
+    attributes of the class.
+
+    The class also contains methods to:
+      * Compute statistics for all or part of the data
+      * Make cutouts of the data based on either wcs or pixel information
 
     """
 
@@ -54,6 +58,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.radec = None
         self.raaxis = None
         self.decaxis = None
+        self.found_rms = False
 
         """
         Check the format of the input info and get the data and header info
@@ -230,6 +235,65 @@ class WcsHDU(pf.PrimaryHDU):
         self.radec = radec
         self.pixscale = pixscale
         self.impa = impa
+
+    # -----------------------------------------------------------------------
+
+    def sigma_clip(self, nsig=3., statsec=None, mask=None,
+                   verbose=False):
+        """
+        Runs a sigma-clipping on image data.  After doing outlier rejection
+        the code returns the mean and rms of the clipped data.
+
+        This method is just a minimal wrapper for the sigclip method in the
+         cdfutils.datafuncs library.
+
+        NOTE: The region used for determining these image statistics is set
+        by the following decision path:
+         - if statsec is not None, use statsec
+         - else, use the entire image
+        for the second option, an optional mask can be used to
+        exclude known bad pixels from the calculation.
+
+        Optional inputs:
+          nsig     - Number of sigma from the mean beyond which points are
+                      rejected.  Default=3.
+          statsec  - Region of the input image to be used to determine the
+                      image statistics, defined by the coordinates of its
+                      corners (x1, y1, x2, y2).
+                      If this variable is is None (the default value)
+                      then the image statistics will be determined from:
+                        - the subimage, if it has been set
+                        - else, the entire image.
+                      The format for statsec can be any of the following:
+                        1. A 4-element numpy array
+                        2. A 4-element list:  [x1, y1, x2, y2]
+                        3. A 4-element tuple: (x1, y1, x2, y2)
+                        4. statsec=None.  In this case, the region used for
+                           determining the pixel statistics defaults to either
+                           the subimage (if defined) or the full image (if no
+                           subimage has been defined)
+          mask     - If some of the input data are known to be bad, they can
+                       be flagged before the inputs are computed by including
+                       a mask.  This mask must be set such that True
+                       indicates good data and False indicates bad data
+          verbose  - If False (the default) no information is printed
+        """
+
+        """ Determine what the input data set is """
+        scdata = self.data.copy()
+        if statsec is not None:
+            x1, y1, x2, y2 = statsec
+            scdata = scdata[y1:y2, x1:x2]
+
+        """ Find the clipped mean and rms """
+        mu, sig = df.sigclip(scdata, nsig=nsig, mask=mask, verbose=verbose)
+
+        """ Store the results and clean up """
+        del scdata
+        self.found_rms = True
+        self.mean_clip = mu
+        self.rms_clip = sig
+        return
 
     # -----------------------------------------------------------------------
 
