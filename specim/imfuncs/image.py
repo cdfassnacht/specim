@@ -1563,9 +1563,6 @@ class Image(dict):
           zeropos
           title
 
-        Obsolete inputs [not used any more -- just kept for legacy purposes]
-          subimdef
-          dispunits
         """
 
         """
