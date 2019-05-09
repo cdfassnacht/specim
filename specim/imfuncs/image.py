@@ -1456,6 +1456,8 @@ class Image(dict):
             plthdu = self.poststamp_xy(imcent, imsize, dmode=dmode)
         print('')
 
+        return plthdu
+        
     # -----------------------------------------------------------------------
 
     def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,
@@ -1566,6 +1568,8 @@ class Image(dict):
         """
 
         """
+        Step 1
+        ------
         Select the region of the image to be displayed, which may be the
         full input image
         """
@@ -1576,12 +1580,21 @@ class Image(dict):
             print('ERROR: Could not create image cutout')
             print('')
             return
+        print(type(self['plotim']))
 
-        """ Set up the parameters that will be needed to display the image """
+        """
+        Step 2
+        ------
+        Set up the parameters that will be needed to display the image
+        """
         dpar = self._display_setup(mode=mode, verbose=verbose, debug=debug,
                                    **kwargs)
 
-        """ Now display the data """
+        """
+        Step 3
+        ------
+        Actually display the data
+        """
         self.dispim = DispIm(self['plotim'])
         self.dispim.display(fscale, axlabel, fontsize, show_xyproj, mode,
                             dpar)
