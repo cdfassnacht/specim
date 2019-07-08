@@ -11,6 +11,7 @@ attributes of the class
 import os
 from math import fabs
 import numpy as np
+from scipy import ndimage
 from astropy import wcs
 from astropy.io import fits as pf
 from cdfutils import coords, datafuncs as df
@@ -173,7 +174,11 @@ class WcsHDU(pf.PrimaryHDU):
             wcsinfo = wcs.WCS(wcshdr)
         except:
             if verbose:
-                print('No WCS information in image header')
+                if self.infile is not None:
+                    print('No WCS information in image header: %s',
+                          self.infile)
+                else:
+                    print('No WCS information in image header')
             self.wcsinfo = None
             raise KeyError
 
@@ -443,6 +448,65 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Return the new HDU """
         return subim
+
+    # -----------------------------------------------------------------------
+
+    def make_hdr_wcs(self, inhdr, wcsinfo, keeplist=None, debug=False):
+        """
+
+        Creates a new header that includes (possibly updated) wcs
+        information to use for an output file/HDU.
+
+        Inputs:
+          inhdr    - Input header.  This could be just the header of the
+                     HDU that was used to create this Image object, but it
+                     could also be some modification of that header or even
+                     a brand-new header
+          wcsinfo  - WCS information, which may be just the information in
+                     the input file, but may also be a modification
+          keeplist - If set to None (the default) then keep all of the
+                     header cards in inhdr.  If not, then just keep the
+                     header cards -- designated as strings -- in keeplist
+
+        """
+
+        """
+        Eliminate, as much as possible, the WCS header keywords from
+         the original header.  This is done to avoid possibly conflicting
+         information, e.g., a CD matrix in the original header and then
+         a CDELT + PC matrix from the cutout.
+        """
+        hdr = inhdr.copy()
+        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
+                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
+                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
+        for key in wcskeys:
+            if key.upper() in hdr.keys():
+                del hdr[key]
+                if debug:
+                    print('Deleting original %s keyword' % key.upper())
+
+        """ Create a new output header, according to keeplist """
+        if keeplist is not None:
+            tmphdu = pf.PrimaryHDU()
+            outhdr = tmphdu.header.copy()
+            for key in keeplist:
+                if key.upper() in hdr.keys():
+                    outhdr[key] = hdr[key]
+                    if debug:
+                        print(key.upper())
+        else:
+            outhdr = hdr
+
+        """ Add the WCS information to the header """
+        if self.wcsinfo is not None:
+            wcshdr = wcsinfo.to_header()
+            for key in wcshdr.keys():
+                outhdr[key] = wcshdr[key]
+                if debug:
+                    print(key.upper(), wcshdr[key], outhdr[key])
+
+        return outhdr
 
     # -----------------------------------------------------------------------
 
