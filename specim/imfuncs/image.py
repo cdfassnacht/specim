@@ -34,16 +34,14 @@ Stand-alone functions
 
 # For the future, to be used to make code run with either python2 or python3
 # import sys
-# pyversion = sys.version_info[0] (or maybe sys.version_info['major']
+# pyversion = sys.version_info[0] (or maybe sys.version_info['major'])
 # # This will give either 2 or 3
 # import os
 from math import log, sqrt, pi, fabs
 from math import cos as mcos, sin as msin
 import numpy as np
-# from scipy import ndimage
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-# from astropy import wcs, coordinates
 from astropy import units as u
 try:
     from astropy.io import fits as pf
@@ -74,7 +72,7 @@ class Image(dict):
             myim = Image(indat)
 
         Reads in the image data from an input fits file or a HDUList from a
-         previously loaded fits file (or [not yet implemented] a PrimaryHDU).
+         previously loaded fits file or  a PrimaryHDU.
         The image data is stored in a Image class container.
 
         Required inputs:
