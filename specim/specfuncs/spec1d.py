@@ -382,19 +382,19 @@ class Spec1d(df.Data1d):
                 wav = hdr1['crval1'] + wav*hdr1['cd1_1']
             del hdu
         else:
-            spec = np.loadtxt(infile)
+            spectab = ascii.read(infile)
             if self.logwav:
-                wav = 10.**(spec[:, 0])
+                wav = 10.**spectab.columns[0].data
             else:
-                wav = spec[:, 0]
-            flux = spec[:, 1]
-            if spec.shape[1] > 2:
-                var = spec[:, 2]
+                wav = spectab.columns[0].data
+            flux = spectab.columns[1].data
+            if len(spectab.columns) > 2:
+                var = spectab[2].data
                 hasvar = True
-            if spec.shape[1] > 3:
-                sky = spec[:, 3]
+            if len(spectab.columns) > 3:
+                var = spectab[3].data
                 self.sky = True
-            del spec
+            
 
         """ Fix var=0 values, since they will cause things to crash """
         if hasvar:

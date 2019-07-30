@@ -100,7 +100,7 @@ class DispIm(WcsHDU):
 
         else:
             """ Linear scaling is the default """
-            data = self.data
+            data = self.data.copy()
             vmin = self.fmin
             vmax = self.fmax
 

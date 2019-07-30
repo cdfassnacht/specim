@@ -243,6 +243,23 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def copy_wcsinfo(self, wcshdu):
+        """
+
+        Takes the wcsinfo from the given wcshdu and copies the information
+        into the appropriate locations
+
+        """
+
+        self.wcsinfo = wcshdu.wcsinfo
+        self.pixscale = wcshdu.pixscale
+        self.impa = wcshdu.impa
+        self.radec = wcshdu.radec
+        self.raaxis = wcshdu.raaxis
+        self.decaxis = wcshdu.decaxis
+
+    # -----------------------------------------------------------------------
+
     def sigma_clip(self, nsig=3., statsec=None, mask=None,
                    verbose=False):
         """
