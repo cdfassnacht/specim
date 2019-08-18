@@ -85,7 +85,7 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
             starra.append((starpos[0]))
             stardec.append((starpos[1]))
         for sra, sdec in zip(starra, stardec):
-            fcim.plot_circle(sra, sdec, rstar)
+            fcim.plot_circle(sra, sdec, rstar, crosshair=True)
 
     """ Make the zoomed-in image """
     if zoomim is not None:

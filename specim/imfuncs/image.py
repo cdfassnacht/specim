@@ -1213,7 +1213,8 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def plot_circle(self, ra, dec, radius, color='g', lw=1, **kwargs):
+    def plot_circle(self, ra, dec, radius, color='g', lw=1, fc='none',
+                    crosshair=False, **kwargs):
         """
 
         Draws one or more circles on the plot
@@ -1224,8 +1225,10 @@ class Image(dict):
           radius  - radius of the circle IN ARCSEC.
 
         Optional inputs:
-          color - Line color for drawing the rectangle.  Default='g'
-          lw     - Line width for drawing the rectangle.  Default=1
+          color - Line color for drawing the circle.  Default='g'
+          lw    - Line width for drawing the circle.  Default=1
+          fc    - Face color of the circle. Default=None, i.e., an empty
+                  circle
           **kwargs - any other parameter affecting patch properties
         """
 
@@ -1246,8 +1249,9 @@ class Image(dict):
          to be correct, since the origin of the axes may not be at the center
          pixel.
         """
-        imcent = coords.radec_to_skycoord(self.subimhdr['crval1'],
-                                          self.subimhdr['crval2'])
+        # imcent = coords.radec_to_skycoord(self.subimhdr['crval1'],
+        #                                   self.subimhdr['crval2'])
+        imcent = self['plotim'].radec
         ccent = coords.radec_to_skycoord(ra, dec)
         offset = imcent.spherical_offsets_to(ccent)
         cx = (offset[0].to(u.arcsec)).value - self.zeropos[0]
@@ -1255,8 +1259,16 @@ class Image(dict):
 
         """ Set up the circle """
         ax = plt.gca()
-        mark = Circle((cx, cy), radius, color=color, **kwargs)
+        mark = Circle((cx, cy), radius, edgecolor=color, facecolor=fc,
+                      **kwargs)
         ax.add_patch(mark)
+
+        """ Add a crosshair within the circle if requested """
+        if crosshair:
+            plt.plot((cx, cx), (cy-radius, cy+radius), color=color,
+                     ls='dashed')
+            plt.plot((cx-radius, cx+radius), (cy, cy), color=color,
+                     ls='dashed')
 
     # -----------------------------------------------------------------------
 
