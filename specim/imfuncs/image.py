@@ -1214,7 +1214,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def plot_circle(self, ra, dec, radius, color='g', lw=1, fc='none',
-                    crosshair=False, **kwargs):
+                    crosshair=False, save_offsets=False, **kwargs):
         """
 
         Draws one or more circles on the plot
@@ -1249,8 +1249,6 @@ class Image(dict):
          to be correct, since the origin of the axes may not be at the center
          pixel.
         """
-        # imcent = coords.radec_to_skycoord(self.subimhdr['crval1'],
-        #                                   self.subimhdr['crval2'])
         imcent = self['plotim'].radec
         ccent = coords.radec_to_skycoord(ra, dec)
         offset = imcent.spherical_offsets_to(ccent)
@@ -1269,6 +1267,10 @@ class Image(dict):
                      ls='dashed')
             plt.plot((cx-radius, cx+radius), (cy, cy), color=color,
                      ls='dashed')
+
+        """ Return the offsets if requested """
+        if save_offsets:
+            return cx, cy
 
     # -----------------------------------------------------------------------
 
@@ -1402,13 +1404,13 @@ class Image(dict):
         """
         if mode == 'radec':
             plthdu = self.poststamp_radec(imcent, imsize, dmode=dmode,
-                                                  verbose=verbose)
+                                          verbose=verbose)
         else:
             plthdu = self.poststamp_xy(imcent, imsize, dmode=dmode)
         print('')
 
         return plthdu
-        
+
     # -----------------------------------------------------------------------
 
     def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,

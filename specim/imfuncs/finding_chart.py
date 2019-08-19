@@ -1,4 +1,4 @@
-# import numpy as np
+import numpy as np
 from matplotlib import pyplot as plt
 from astropy.io import ascii
 from astropy import units as u
@@ -84,8 +84,13 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         else:
             starra.append((starpos[0]))
             stardec.append((starpos[1]))
-        for sra, sdec in zip(starra, stardec):
-            fcim.plot_circle(sra, sdec, rstar, crosshair=True)
+        xoff = np.zeros(len(starra))
+        yoff = np.zeros(len(starra))
+        for sra, sdec, xo, yo in zip(starra, stardec, xoff, yoff):
+            xo, yo = fcim.plot_circle(sra, sdec, rstar, crosshair=True,
+                                      save_offsets=True)
+        print(xo)
+        print(yo)
 
     """ Make the zoomed-in image """
     if zoomim is not None:
