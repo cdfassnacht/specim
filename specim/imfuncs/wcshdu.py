@@ -648,6 +648,7 @@ class WcsHDU(pf.PrimaryHDU):
             centpos = (x, y)
             imsize = (inpixxsize, inpixysize)
             x1, y1, x2, y2, = self.subim_bounds_xy(centpos, imsize)
+            print(x1, y1, x2, y2)
             subim = self.cutout_xy(x1, y1, x2, y2, nanval=nanval,
                                    verbose=verbose)
             return subim

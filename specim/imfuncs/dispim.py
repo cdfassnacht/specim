@@ -258,7 +258,7 @@ class DispIm(WcsHDU):
                 self.decclick = radec[0, 1]
             else:
                 """ For now use small-angle formula """
-                radec = self['input'].radec
+                radec = self.radec
                 cosdec = mcos(radec.dec.radian)
                 self.raclick = radec.ra.degree + \
                     (self.xclick + self.zeropos[0]) / (3600. * cosdec)

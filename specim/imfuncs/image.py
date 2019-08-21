@@ -1533,7 +1533,8 @@ class Image(dict):
             print('ERROR: Could not create image cutout')
             print('')
             return
-        print(type(self['plotim']))
+        if debug:
+            print(type(self['plotim']))
 
         """
         Step 2
