@@ -389,10 +389,10 @@ class Spec1d(df.Data1d):
                 wav = spectab.columns[0].data
             flux = spectab.columns[1].data
             if len(spectab.columns) > 2:
-                var = spectab[2].data
+                var = spectab.columns[2].data
                 hasvar = True
             if len(spectab.columns) > 3:
-                var = spectab[3].data
+                sky = spectab.columns[3].data
                 self.sky = True
             
 
