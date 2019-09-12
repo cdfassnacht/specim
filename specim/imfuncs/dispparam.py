@@ -56,6 +56,44 @@ class DispParam(object):
         self.extval = None           # Just label the axes by pixels
         self.cmap = plt.cm.YlOrBr_r  # This corresponds to the 'gaia' cmap
         self.title = None            # Title on displayed image
+        self.dpi = 100.              # Dots per inch in saved image
+
+    # -----------------------------------------------------------------------
+
+    """
+    Use properties to set many/most of the attributes that are associated
+     with this class.
+    These attributes include: dpi, mode, title, ...
+
+    For an attribute called x, use two declarations as can be seen below:
+     @property
+     @x.setter
+    These two will then allow you to set the value of x via
+      foo.x = [value]
+    but the @property construction also allows you to add some evaluation
+    of what the value is and how to respond.  For example, if x needs to
+    be non-negative, then with the appropriate coding, foo.x = -10 will
+    actually set foo.x = 0, in a way that is transparent to the user.
+    """
+
+    # -----------------------------------
+
+    """ Dots per inch in the final figure """
+    @property
+    def dpi(self):
+        return self.__dpi
+
+    @dpi.setter
+    def dpi(self, dpi):
+        if isinstance(dpi, int):
+            dpi = float(dpi)
+        if dpi is None or isinstance(dpi, float) is not True:
+            self.__dpi = 100.
+        elif dpi < 20.:
+            print('WARNING: Requested dpi is too low, setting to 100')
+            self.__dpi = 100.
+        else:
+            self.__dpi = dpi
 
     # -----------------------------------------------------------------------
 
@@ -205,8 +243,8 @@ class DispParam(object):
                 """
                 if self.fmin is None or self.fmax is None:
                     plthdu.sigma_clip(verbose=verbose)
-                    self.fmin = plthdu.mean_clip - 1.* plthdu.rms_clip
-                    self.fmax = plthdu.mean_clip + 10.* plthdu.rms_clip
+                    self.fmin = plthdu.mean_clip - 1. * plthdu.rms_clip
+                    self.fmax = plthdu.mean_clip + 10. * plthdu.rms_clip
                 """ Query the user for new values """
                 tmpmin = self.fmin
                 tmpmax = self.fmax

@@ -110,7 +110,7 @@ class DispIm(WcsHDU):
     # -----------------------------------------------------------------------
 
     def display(self, fscale='linear', axlabel=True, fontsize=None,
-                show_xyproj=False, mode='radec', dpar=None):
+                show_xyproj=False, mode='radec', dpar=None, debug=False):
         """
 
         Display the image data through a call to matplotlib.pyplot.imshow
@@ -150,6 +150,10 @@ class DispIm(WcsHDU):
         if dpar is None:
             dpar = DispParam()
 
+        """ Set figure / axes attributes based on the dpar values """
+        self.fig1.set_dpi(dpar.dpi)
+        print('Using dpi=%f' % self.fig1.get_dpi())
+
         """ Set the actual range for the display """
         self.fmin = dpar.fmin
         self.fmax = dpar.fmax
@@ -157,9 +161,9 @@ class DispIm(WcsHDU):
 
         """ Display the image data """
         self.mode = mode
-        plt.imshow(data, origin='lower', cmap=dpar.cmap, vmin=vmin,
-                   vmax=vmax, interpolation='nearest', extent=dpar.extval,
-                   aspect='equal')
+        self.ax1.imshow(data, origin='lower', cmap=dpar.cmap, vmin=vmin,
+                        vmax=vmax, interpolation='nearest', extent=dpar.extval,
+                        aspect='equal')
 
         """ Label the plot, if requested """
         if axlabel is True:

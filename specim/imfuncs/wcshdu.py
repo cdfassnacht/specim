@@ -219,7 +219,8 @@ class WcsHDU(pf.PrimaryHDU):
                                          imcentradec[0, decax])
 
         """ Get the pixel scale and image rotation """
-        pixscale = 3600. * wcs.utils.proj_plane_pixel_scales(wcsinfo)
+        pixscale = wcs.utils.proj_plane_pixel_scales(wcsinfo.celestial) \
+            * 3600.
 
         impa = coords.matrix_to_rot(wcsinfo.pixel_scale_matrix, raax=raax,
                                     decax=decax)
