@@ -1416,7 +1416,7 @@ class Image(dict):
     def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,
                        funits='sigma', statsize=2048,
                        title=None,  mode='xy', zeropos=None, mask=None,
-                       verbose=False, dpi=100., debug=False):
+                       verbose=False, dpi=100., facecolor='w', debug=False):
         """
         Sets parameters within the Image class that will be used to actually
          display the image or the requested part of it.
@@ -1456,6 +1456,7 @@ class Image(dict):
         """ Set other display parameters """
         dpar.title = title
         dpar.dpi = dpi
+        dpar.facecolor = facecolor
 
         """ Return the paramter information """
         return dpar
@@ -1518,6 +1519,8 @@ class Image(dict):
           mask
           zeropos
           title
+          dpi
+          facecolor
 
         """
 

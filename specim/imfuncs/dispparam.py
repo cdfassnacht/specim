@@ -242,7 +242,7 @@ class DispParam(object):
                  fmin and fmax containers
                 """
                 if self.fmin is None or self.fmax is None:
-                    plthdu.sigma_clip(verbose=verbose)
+                    plthdu.sigma_clip(verbose=verbose, mask=mask)
                     self.fmin = plthdu.mean_clip - 1. * plthdu.rms_clip
                     self.fmax = plthdu.mean_clip + 10. * plthdu.rms_clip
                 """ Query the user for new values """

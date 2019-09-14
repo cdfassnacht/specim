@@ -152,7 +152,7 @@ class DispIm(WcsHDU):
 
         """ Set figure / axes attributes based on the dpar values """
         self.fig1.set_dpi(dpar.dpi)
-        print('Using dpi=%f' % self.fig1.get_dpi())
+        self.fig1.set_facecolor(dpar.facecolor)
 
         """ Set the actual range for the display """
         self.fmin = dpar.fmin
