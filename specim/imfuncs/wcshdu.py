@@ -12,6 +12,7 @@ import os
 from math import fabs
 import numpy as np
 from scipy import ndimage
+from scipy.ndimage import filters
 from astropy import wcs
 from astropy.io import fits as pf
 from cdfutils import coords, datafuncs as df
@@ -318,6 +319,39 @@ class WcsHDU(pf.PrimaryHDU):
         self.rms_clip = sig
         return
 
+    # -----------------------------------------------------------------------
+
+    def smooth(self, size, smtype='median', invar=False):
+        """
+
+        Smooths the data, using one of the following schemes:
+          gaussian
+          median filter
+          (more to come)
+
+        Inputs:
+          size   - sets the smoothing scale.  For a Gaussian, this is the
+                   sigma, for median filter this is the length of the square
+                   box being used
+          smtype - type of smoothing to be done.  Options are: 'gauss',
+                   'median'
+
+        """
+
+        """ Smooth the data using the requested smoothing type """
+        if smtype.lower() == 'gauss' or smtype.lower() == 'gaussian':
+            smdata = filters.gaussian_filter(self.data, sigma=size)
+        elif smtype.lower() == 'median' or smtype.lower() == 'medfilt':
+            smdata = filters.median_filter(self.data, size=size)
+        else:
+            print('')
+            print('Smoothing type %s has not been implemented' % smtype)
+            print('')
+            raise NameError
+
+        """ Return the smoothed data set """
+        return smdata
+        
     # -----------------------------------------------------------------------
 
     def subim_bounds_xy(self, centpos, imsize):

@@ -124,6 +124,14 @@ class DispParam(object):
             self.cmap = plt.cm.YlOrBr_r
         elif cmap == 'jet':
             self.cmap = plt.cm.jet
+        elif cmap == 'viridis':
+            self.cmap = plt.cm.viridis
+        elif cmap == 'plasma':
+            self.cmap = plt.cm.plasma
+        elif cmap == 'magma':
+            self.cmap = plt.cm.magma
+        elif cmap == 'inferno':
+            self.cmap = plt.cm.inferno
         else:
             print(' WARNING - Requested unknown color map.  Using gaia'
                   ' colors')
