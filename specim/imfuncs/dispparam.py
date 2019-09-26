@@ -112,6 +112,7 @@ class DispParam(object):
                     'gray_inv' or 'grey_inv'
                     'heat' or 'hot'
                     'jet'
+                    'viridis'
         """
 
         if cmap == 'gray' or cmap == 'grey':
