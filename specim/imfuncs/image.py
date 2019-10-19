@@ -40,6 +40,7 @@ Stand-alone functions
 from math import log, sqrt, pi, fabs
 from math import cos as mcos, sin as msin
 import numpy as np
+from scipy.ndimage import filters
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from astropy import units as u
@@ -1103,6 +1104,48 @@ class Image(dict):
 
         else:
             return out
+
+    # -----------------------------------------------------------------------
+
+    def smooth(self, kwidth, smtype='median', dmode='input', outfile=None,
+               verbose=False):
+        """
+
+        Smooths the requested data with the requested smoothing kernel.
+        The result gets stored in the 'smooth' dataset
+
+        """
+
+        """ Smooth the data """
+        data = self[dmode].data
+        sm = smtype.lower()
+        if sm == 'gauss' or sm == 'guass' or sm == 'gaussian':
+            smdat = filters.gaussian_filter(data, sigma=[kwidth, kwidth])
+            smotype = 'Gaussian'
+        elif sm == 'median' or sm == 'medfilt':
+            smdat = filters.median_filter(data, size=[kwidth, kwidth])
+            smotype = 'Median filter'
+        else:
+            print('')
+            print('Smoothing type %s has not been implemented' % smtype)
+            print('')
+            raise NameError
+
+        """ Put the smoothed data into a new WcsHDU """
+        hdr = self.header.copy()
+        hdr['history'] = 'Data have been spatially smoothed'
+        hdr['smotype'] = smotype
+        hdr['smoothw'] = ('%5.1f' % kwidth,
+                          'Smoothing kernel width')
+        self['smooth'] = WcsHDU(smdat, hdr)
+
+        """ Save the smoothed cube in an output file if desired """
+        if outfile:
+            print('')
+            print('Wrote smoothed image to %s' % outfile)
+            self['smooth'].writeto(outfile, overwrite=True)
+            print('')
+
 
     # -----------------------------------------------------------------------
 
