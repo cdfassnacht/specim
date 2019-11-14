@@ -148,6 +148,21 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
+    def add_var(self, vardat, hext=0, **kwargs):
+        """
+
+        Adds a variance image to the list of data in the Image class.
+        This method is aimed at data that are known to be actually variance
+         format, as opposed to the more generic add_weight method,
+         which can take data in a variety of formats (exposure time,
+         inverse variance, etc.)
+
+        """
+
+        self['var'] = WcsHDU(vardat, hext=hext, **kwargs)
+
+    # -----------------------------------------------------------------------
+
     def set_data(self, imslice=0, raax=0, decax=1, specax=2):
         """
         Sets the 2-dimension slice to use for the display functions.
@@ -1149,7 +1164,7 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def get_rms(self, centpos, size, verbose=True):
+    def get_rms(self, centpos, size, dmode='input', verbose=True):
         """
         Calculates the rms (by calling the sigma_clip method) by calculating
         the pixel value statistics in a region of the image defined by its
@@ -1176,15 +1191,15 @@ class Image(dict):
         Convert the center and size paramters into the coordinates of the
         corners of the region
         """
-        statsec = self.get_subim_bounds(centpos, size)
+        statsec = self[dmode].subim_bounds_xy(centpos, size)
         print('')
         print(statsec)
 
         """ Get the pixel statistics """
-        self['input'].sigma_clip(statsec=statsec)
+        self[dmode].sigma_clip(statsec=statsec)
         if verbose:
-            print('RMS = %f' % self['input'].rms_clip)
-        return self.rms_clip
+            print('RMS = %f' % self[dmode].rms_clip)
+        return self[dmode].rms_clip
 
     # -----------------------------------------------------------------------
 
@@ -1612,6 +1627,36 @@ class Image(dict):
             print('')
             return
 
+    # -----------------------------------------------------------------------
+
+    def save(self, outfile=None, dmode='input', verbose=True):
+        """
+
+        Save a possibly updated HDU in an output file.  The default
+         (outfile=None) overwrites the input file from which the HDU was
+         originally read.  Choosing another value for outfile will, instead,
+         create a new file.
+
+        """
+
+        """ Put the possibly updated wcs info into the header """
+        outhdr = self[dmode].make_hdr_wcs(self.header, self.wcsinfo)
+
+        """
+        Create a new PrimaryHDU object and write it out, possibly
+        overwriting the image from which this WcsHDU object was read
+        """
+        if outfile is None:
+            if self[dmode].infile is None:
+                raise ValueError('No output file specified and no file'
+                                 ' information in current WcsHDU')
+            outfile = self[dmode].infile
+        pf.PrimaryHDU(self[dmode].data, outhdr).writeto(outfile,
+                                                        overwrite=True)
+        if verbose:
+            print('Wrote possibly updated HDU in %s container to %s'
+                  % (dmode, outfile))
+
 # -----------------------------------------------------------------------
 # Stand-alone functions below this point
 # -----------------------------------------------------------------------
@@ -1663,8 +1708,9 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, outfile=None,
 # -----------------------------------------------------------------------
 
 
-def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
-                makerms=False, rmssuff='_rms', verbose=True):
+def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
+                makerms=False, rmssuff='_rms', statcent=None, 
+                statsize=100, verbose=True):
     """
     Makes a cutout from an input image, based on a requested (RA, dec) center
      and an image size in arcsec.
@@ -1675,49 +1721,92 @@ def make_cutout(infile, imcent, imsize, scale, outfile, whtsuff=None,
           This only happens if BOTH whtsuff is not None AND makerms is True
 
     Inputs:
-      infile  - input file
-      imcent  - center of the cutout in decimal degrees
-                The imcent parameter can take any of the following formats:
-                  1. A 2-element numpy array
-                  2. A 2-element list:  [xsize, ysize]
-                  3. A 2-element tuple: (xsize, ysize)
-      imsize  - output image size, in arcsec
-      scale   - pixel scale of output image, in arcsec/pix
-      outfile - output file name
-      whtsuff - suffix for input weight file, if a cutout of the weight file
-                 is also desired.  If whtsuff is None (the default) then no
-                 weight-file cutout is made.
-                 Example: whtsuff='_wht' means that for infile='foo.fits' the
-                  weight file is called 'foo_wht.fits'
-      makerms - Set to True to make, in addition, an output rms file
-                 following the prescription of Matt Auger for the NIRC2 data.
-                 Default is False
-                 NB: Both whtsuff being something other than None and
-                  makerms=True are required for an output rms file to be
-                  created.
-      rmssuff - Suffix for output rms file.  Default='_rms' means that for
+      infile   - input file
+      imcent   - center of the cutout in decimal degrees
+                 The imcent parameter can take any of the following formats:
+                   1. A 2-element numpy array
+                   2. A 2-element list:  [xsize, ysize]
+                   3. A 2-element tuple: (xsize, ysize)
+      imsize   - output image size, in arcsec
+      scale    - pixel scale of output image, in arcsec/pix
+      outfile  - output file name
+      whtsuff  - suffix for input weight file, if a cutout of the weight file
+                  is also desired.  If whtsuff is None (the default) then no
+                  weight-file cutout is made.
+                  Example: whtsuff='_wht' means that for infile='foo.fits' the
+                   weight file is called 'foo_wht.fits'
+      makerms  - Set to True to make, in addition, an output rms file
+                  following the prescription of Matt Auger for the NIRC2 data.
+                  Default is False
+                  NB: Both whtsuff being something other than None and
+                   makerms=True are required for an output rms file to be
+                   created.
+      rmssuff  - Suffix for output rms file.  Default='_rms' means that for
                    infile='foo.fits', the output file will be 'foo_rms.fits'
+      statcent - List or tuple, e.g., [xcent, ycent], containing the
+                 central location of a region that will be used to determine
+                 the image statistics used to make the rms image.
+                 NOTE: This is given in pixels, even though the cutout
+                 center is given in (ra, dec)
+                 Goes along with the statsize parameter.
+      statsize - Size in pixels of the image statistics region that will be
+                 used to determine the rms level.  This can be either a
+                 single number (for a square region) or a 2-element
+                 tuple / list for a non-square region
     """
 
     """ Make the input file cutout """
     infits = Image(infile)
-    infits.poststamp_radec(imcent, imsize, scale, outfile, verbose=verbose)
+    infits.poststamp_radec(imcent, imsize, outfile=outfile, outscale=scale,
+                           verbose=verbose)
 
     """ Make the weight file cutout, if requested """
     if whtsuff is not None:
-        whtfile = infile.replace('.fits', '%s.fits' % whtsuff)
-        outwht = outfile.replace('.fits', '%s.fits' % whtsuff)
+        whtfile = infile.replace('.fits', '_%s.fits' % whtsuff)
+        outwht = outfile.replace('.fits', '_%s.fits' % whtsuff)
         whtfits = Image(whtfile)
-        whtfits.poststamp_radec(imcent, imsize, scale, outwht,
-                                verbose=verbose)
-
-    """ Make output RMS file, if requested """
-    # CODE STILL TO COME
+        whtfits.poststamp_radec(imcent, imsize, outscale=scale,
+                                outfile=outwht, verbose=verbose)
+        if makerms:
+            if statcent is None:
+                raise ValueError(' *** Need to set statcent parameter '
+                                 'in order to make rms image')
+            rms = infits.get_rms(statcent, statsize)
+            cutsci = pf.getdata(outfile)
+            cutwht = pf.getdata(outwht)
+            snr = filters.gaussian_filter(cutsci / rms, 1.)
+            """
+            Add the Poisson noise due to the astrophysical sources,
+            but this algorithm ONLY works if the following conditions are
+            satisfied:
+              1. Input image has units of e-/sec
+              2. Weight file is an (effective) exposure time image 
+            If these conditions hold, then for pixels in the input image
+            that have counts from sources, the counts are given as:
+               cts = N_e / t_exp.
+            Therefore, the variance in these pixels will be
+                var_cts = var_e- / t_exp^2 = N_e / t_exp^2
+                        = cts / t_exp
+            where the variance in electrons is just N_e since it is a Poisson 
+            process.
+            Therefore, with the weight file as an exposure time map, we have:
+               var_cts = img/wht
+            """
+            var = cutsci * 0. + rms**2
+            mask = snr > 1.
+            var[mask] += (cutsci / cutwht)[snr > 1.]
+            outrms = outfile.replace('.fits','_rms.fits')
+            outsnr = outfile.replace('.fits','_snr.fits')
+            rmsarr = np.sqrt(var)
+            rmshdu = pf.PrimaryHDU(rmsarr)
+            rmshdu.header['data_im'] = infile
+            rmshdu.writeto(outrms, overwrite=True)
+            pf.PrimaryHDU(cutsci / rmsarr).writeto(outsnr, overwrite=True)
 
     """ Clean up """
-    infits.close()
+    del(infits)
     if whtsuff is not None:
-        whtfits.close()
+        del(whtfits)
 
 # ---------------------------------------------------------------------------
 

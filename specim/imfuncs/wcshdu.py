@@ -245,6 +245,135 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def make_hdr_wcs(self, inhdr, wcsinfo, keeplist='all', debug=False):
+        """
+
+        Creates a new header that includes (possibly updated) wcs
+        information to use for an output file/HDU.
+
+        Inputs:
+          inhdr    - Input header.  This could be just the header of the
+                     HDU that was used to create this Image object, but it
+                     could also be some modification of that header or even
+                     a brand-new header
+          wcsinfo  - WCS information, which may be just the information in
+                     the input file, but may also be a modification
+          keeplist - If set to 'all' (the default) then keep all of the
+                     header cards in inhdr.  If not, then just keep the
+                     header cards -- designated as strings -- in keeplist
+
+        """
+
+        """
+        Eliminate, as much as possible, the WCS header keywords from
+         the original header.  This is done to avoid possibly conflicting
+         information, e.g., a CD matrix in the original header and then
+         a CDELT + PC matrix from the cutout.
+        """
+        hdr = inhdr.copy()
+        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
+                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
+                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
+        for key in wcskeys:
+            if key.upper() in hdr.keys():
+                del hdr[key]
+                if debug:
+                    print('Deleting original %s keyword' % key.upper())
+
+        """ Create a new output header, according to keeplist """
+        if keeplist != 'all':
+            tmphdu = pf.PrimaryHDU()
+            outhdr = tmphdu.header.copy()
+            for key in keeplist:
+                if key.upper() in hdr.keys():
+                    outhdr[key] = hdr[key]
+                    if debug:
+                        print(key.upper())
+        else:
+            outhdr = hdr
+
+        """ Add the WCS information to the header """
+        if self.wcsinfo is not None:
+            wcshdr = wcsinfo.to_header()
+            for key in wcshdr.keys():
+                outhdr[key] = wcshdr[key]
+                if debug:
+                    print(key.upper(), wcshdr[key], outhdr[key])
+
+        return outhdr
+
+    # -----------------------------------------------------------------------
+
+    def update_crpix(self, crpixarr, verbose=True):
+        """
+
+        Updates the CRPIX array in the wcsinfo structure
+
+        Inputs:
+         crpixarr - a list, tuple, or numpy ndarray containing the new 
+                     CRPIX values.  For most data, this parameter will
+                     contain two elements, to replace CRPIX1 and CRPIX2
+
+        """
+
+        """ Check dimensionality """
+        if len(crpixarr) != len(self.wcsinfo.wcs.crpix):
+            raise IndexError(' Input crpix array length does not match'
+                             ' length of current crpix array')
+
+        """
+        Update the CRPIX array assuming that the input is in the correct
+        format
+        """
+        if isinstance(crpixarr, list) or isinstance(crpixarr, tuple) \
+                or isinstance(crpixarr, np.ndarray):
+            if verbose:
+                print('Updating CRPIX array')
+            for i in range(len(crpixarr)):
+                if verbose:
+                    print('  %8.2f  -->  %8.2f' % (self.wcsinfo.wcs.crpix[i],
+                                                   crpixarr[i]))
+                self.wcsinfo.wcs.crpix[i] = crpixarr[i]
+        else:
+            raise TypeError('crpixarr must be list, tuple, or ndarray')
+
+    # -----------------------------------------------------------------------
+
+    def update_crval(self, crvalarr, verbose=True):
+        """
+
+        Updates the CRVAL array in the wcsinfo structure
+
+        Inputs:
+         crvalarr - a list, tuple, or numpy ndarray containing the new 
+                     CRVAL values.  For most data, this parameter will
+                     contain two elements, to replace CRVAL1 and CRVAL2
+
+        """
+
+        """ Check dimensionality """
+        if len(crvalarr) != len(self.wcsinfo.wcs.crval):
+            raise IndexError(' Input crval array length does not match'
+                             ' length of current crval array')
+
+        """
+        Update the CRVAL array assuming that the input is in the correct
+        format
+        """
+        if isinstance(crvalarr, list) or isinstance(crvalarr, tuple) \
+                or isinstance(crvalarr, np.ndarray):
+            if verbose:
+                print('Updating CRVAL array')
+            for i in range(len(crvalarr)):
+                if verbose:
+                    print('  %f  -->  %f' % (self.wcsinfo.wcs.crval[i],
+                                             crvalarr[i]))
+                self.wcsinfo.wcs.crval[i] = crvalarr[i]
+        else:
+            raise TypeError('crvalarr must be list, tuple, or ndarray')
+
+    # -----------------------------------------------------------------------
+
     def copy_wcsinfo(self, wcshdu):
         """
 
@@ -503,65 +632,6 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def make_hdr_wcs(self, inhdr, wcsinfo, keeplist=None, debug=False):
-        """
-
-        Creates a new header that includes (possibly updated) wcs
-        information to use for an output file/HDU.
-
-        Inputs:
-          inhdr    - Input header.  This could be just the header of the
-                     HDU that was used to create this Image object, but it
-                     could also be some modification of that header or even
-                     a brand-new header
-          wcsinfo  - WCS information, which may be just the information in
-                     the input file, but may also be a modification
-          keeplist - If set to None (the default) then keep all of the
-                     header cards in inhdr.  If not, then just keep the
-                     header cards -- designated as strings -- in keeplist
-
-        """
-
-        """
-        Eliminate, as much as possible, the WCS header keywords from
-         the original header.  This is done to avoid possibly conflicting
-         information, e.g., a CD matrix in the original header and then
-         a CDELT + PC matrix from the cutout.
-        """
-        hdr = inhdr.copy()
-        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
-                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
-                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
-        for key in wcskeys:
-            if key.upper() in hdr.keys():
-                del hdr[key]
-                if debug:
-                    print('Deleting original %s keyword' % key.upper())
-
-        """ Create a new output header, according to keeplist """
-        if keeplist is not None:
-            tmphdu = pf.PrimaryHDU()
-            outhdr = tmphdu.header.copy()
-            for key in keeplist:
-                if key.upper() in hdr.keys():
-                    outhdr[key] = hdr[key]
-                    if debug:
-                        print(key.upper())
-        else:
-            outhdr = hdr
-
-        """ Add the WCS information to the header """
-        if self.wcsinfo is not None:
-            wcshdr = wcsinfo.to_header()
-            for key in wcshdr.keys():
-                outhdr[key] = wcshdr[key]
-                if debug:
-                    print(key.upper(), wcshdr[key], outhdr[key])
-
-        return outhdr
-
-    # -----------------------------------------------------------------------
-
     def cutout_radec(self, imcent, imsize, outscale=None,
                      nanval=0., theta_tol=1.e-5, verbose=True, debug=True):
         """
@@ -696,7 +766,7 @@ class WcsHDU(pf.PrimaryHDU):
         First set the output scale and number of output pixels
         """
         if outscale is None:
-            oscale = self.pixscale
+            oscale = [self.pixscale, self.pixscale]
         elif (np.atleast_1d(outscale).size < 2):
             oscale = [outscale, outscale]
         else:
