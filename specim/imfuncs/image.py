@@ -624,7 +624,7 @@ class Image(dict):
 
     def radplot(self, x0, y0, rmax, center=True, imex_rmax=10., maxshift=5.,
                 skylevel=0., zp=None, runit='pixel', logr=False,
-                dataver='input', doplot=True, normalize=False, outfile=None,
+                dmode='input', doplot=True, normalize=False, outfile=None,
                 outtype='radplot'):
         """
         Given a position in the image file (the x0 and y0 parameters), makes
@@ -686,7 +686,7 @@ class Image(dict):
         """
 
         """ Define the data and the coordinate arrays """
-        data = self.select_ver(dataver)
+        data = self[dmode].data.copy()
         y, x = np.indices(data.shape)
 
         """ Recenter from the initial guess using the flux distribution """
