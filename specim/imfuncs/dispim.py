@@ -279,6 +279,7 @@ class DispIm(WcsHDU):
         Actions taken if a key on the keyboard is pressed
         """
 
+        print(event.key)
         if event.key == 'f':
             """
             Change the display range
@@ -320,7 +321,8 @@ class DispIm(WcsHDU):
             yz2 = max((min(yl2, (yzoom + dy))), (yzoom + 1.))
             self.ax1.set_xlim(xz1, xz2)
             self.ax1.set_ylim(yz1, yz2)
-            self.fig1.show()
+            # self.fig1.canvas.draw_idle()
+            plt.draw()
             return
 
         if event.key == 'x':
