@@ -151,8 +151,8 @@ class DispIm(WcsHDU):
             dpar = DispParam()
 
         """ Set figure / axes attributes based on the dpar values """
-        self.fig1.set_dpi(dpar.dpi)
-        self.fig1.set_facecolor(dpar.facecolor)
+        # self.fig1.set_dpi(dpar.dpi)
+        # self.fig1.set_facecolor(dpar.facecolor)
 
         """ Set the actual range for the display """
         self.fmin = dpar.fmin
@@ -280,7 +280,7 @@ class DispIm(WcsHDU):
         """
 
         print(event.key)
-        if event.key == 'f':
+        if event.key == 'b':
             """
             Change the display range
             """
