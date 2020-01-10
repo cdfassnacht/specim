@@ -143,7 +143,6 @@ class Spec1d(df.Data1d):
 
         """ Initialize some variables """
         self.ordnum = None
-        self.hasvar = False
         self.sky = False
         self.infile = None
         self.dispave = None
@@ -244,7 +243,6 @@ class Spec1d(df.Data1d):
         if 'var' in spec0.colnames:
             var = spec0['var']
             names = self.names0
-            self.hasvar = True
         else:
             var = None
             names = self.names0[:-1]
@@ -921,7 +919,7 @@ class Spec1d(df.Data1d):
         if self.sky:
             skyflux = self['sky']
             skylab = 'Sky spectrum'
-        elif self.hasvar:
+        elif 'var' in self.colnames:
             skyflux = np.sqrt(self['var'])
             print('Using RMS spectrum as a proxy for the sky spectrum')
             skylab = 'RMS spectrum'
@@ -929,6 +927,8 @@ class Spec1d(df.Data1d):
             if verbose:
                 print('')
                 print('Cannot plot sky spectrum.')
+                print('The spectrum must either have either a sky column or a'
+                      ' a variance column')
                 print('')
             raise KeyError('No sky or variance information in the spectrum')
 
@@ -1355,7 +1355,7 @@ class Spec1d(df.Data1d):
 
         if self.sky:
             skyflux = self['sky']
-        elif self.hasvar:
+        elif 'var' in self.colnames:
             skyflux = np.sqrt(self['var'])
             mask = np.isfinite(skyflux)
             skyflux = skyflux[mask]
@@ -1538,14 +1538,14 @@ class Spec1d(df.Data1d):
         if mask is not None:
             w = self['wav'][mask]
             f = self['flux'][mask]
-            if self.hasvar:
+            if 'var' in self.colnames:
                 v = self['var'][mask]
             else:
                 v = None
         else:
             w = self['wav'].copy()
             f = self['flux'].copy()
-            if self.hasvar:
+            if 'var' in self.colnames:
                 v = self['var'].copy()
             else:
                 v = None
@@ -1589,7 +1589,7 @@ class Spec1d(df.Data1d):
             wav = self['wav']
             vsize = len(wav)
             flux = self['flux']
-            if self.hasvar:
+            if 'var' in self.colnames:
                 var = self['var']
             else:
                 var = None
@@ -1605,7 +1605,7 @@ class Spec1d(df.Data1d):
             outflux = pf.ImageHDU(flux, name='flux')
             hdu.append(outwv)
             hdu.append(outflux)
-            if self.hasvar:
+            if 'var' in self.colnames:
                 outvar = pf.ImageHDU(var, name='variance')
                 hdu.append(outvar)
             if self.sky:
@@ -1624,7 +1624,7 @@ class Spec1d(df.Data1d):
 
         elif outformat == 'text':
             # CHANGE TO JUST USING THE WRITE() METHOD FOR THE TABLE HERE!
-            if self.hasvar:
+            if 'var' in self.colnames:
                 if self.sky:
                     outdata = np.zeros((vsize, 4))
                     fmtstring = '%7.2f %9.3f %10.4f %9.3f'
