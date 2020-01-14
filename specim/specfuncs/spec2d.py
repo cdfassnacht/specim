@@ -237,16 +237,16 @@ class Spec2d(imf.Image):
                 self.specaxis = 1
                 self.spaceaxis = 0
             print('')
-            print 'Old value of dispaxis: %s' % oldval
+            print('Old value of dispaxis: %s' % oldval)
             self.get_dispaxis()
             print('')
             return
         else:
             print('')
-            print "ERROR: dispaxis must be either 'x' or 'y'"
-            print '%s is not a valid value' % dispaxis
+            print("ERROR: dispaxis must be either 'x' or 'y'")
+            print('%s is not a valid value' % dispaxis)
             print('')
-            print 'Keeping current value for dispaxis:  %s' % self.dispaxis
+            print('Keeping current value for dispaxis:  %s' % self.dispaxis)
             print('')
             return
 
@@ -289,7 +289,7 @@ class Spec2d(imf.Image):
         if self.logwav:
             self.wavelength = 10.**self.wavelength
         if verbose:
-            print self.wavelength
+            print(self.wavelength)
 
     # -----------------------------------------------------------------------
 
@@ -303,7 +303,7 @@ class Spec2d(imf.Image):
         nnan = nanmask.sum()
         if nnan > 0:
             if verbose:
-                print 'Found %d NaNs in the two-dimensional spectrum' % nnan
+                print('Found %d NaNs in the two-dimensional spectrum' % nnan)
 
             """ First replace the NaNs with a temporary value """
             self.data[nanmask] = -999
@@ -343,7 +343,7 @@ class Spec2d(imf.Image):
         """ Take the median along the spatial direction to estimate the sky """
         if self.data.ndim < 2:
             print('')
-            print 'ERROR: subtract_sky needs a 2 dimensional data set'
+            print('ERROR: subtract_sky needs a 2 dimensional data set')
             return
         else:
             pix = np.arange(self.npix)
@@ -409,7 +409,7 @@ class Spec2d(imf.Image):
         """ Add the sky back in and save the final result """
         szapped = skysub + self['sky2d'].data
         pf.PrimaryHDU(szapped).writeto(outfile)
-        print ' Wrote szapped data to %s' % outfile
+        print(' Wrote szapped data to %s' % outfile)
 
         """ Clean up """
         del skysub, ssrms, tmpsub, szapped
@@ -668,7 +668,7 @@ class Spec2d(imf.Image):
         """
         Return the parameters produced by the fit and the fitted function
         """
-        print dpoly
+        print(dpoly)
         return dpoly, fity
 
     # -----------------------------------------------------------------------
@@ -1005,7 +1005,7 @@ class Spec2d(imf.Image):
         """
         Save the result as a Spec1d instance
         """
-        # print '*** Number of nans: %d %d %d ***' % (nnans, nnanv, nnan)
+        # print('*** Number of nans: %d %d %d ***' % (nnans, nnanv, nnan))
         print('')
         self.spec1d = Spec1d(wav=self.wavelength, flux=flux, var=var, sky=bkgd)
         self.apmask = apmask

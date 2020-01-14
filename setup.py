@@ -3,6 +3,7 @@ from os import sys
 from distutils.core import setup
 from distutils.command.install import INSTALL_SCHEMES
 from imp import find_module
+#from importlib import find_module
 
 for scheme in INSTALL_SCHEMES.values():
     scheme['data'] = scheme['purelib']

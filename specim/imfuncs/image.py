@@ -1853,17 +1853,17 @@ def imcopy(infile, x1, x2, y1, y2, outfile):
           (x1, y1, x2, y2))
     outdat = hdu_list[0].data[y1:y2, x1:x2]
     print('')
-    print "Updating CRPIXn header cards if they exist"
-    print "------------------------------------------"
+    print('Updating CRPIXn header cards if they exist')
+    print('------------------------------------------')
     try:
         crpix1 = inhdr['crpix1']
     except KeyError:
-        print "    No CRPIX1 header found"
+        print('    No CRPIX1 header found')
         crpix1 = np.nan
     try:
         crpix2 = inhdr['crpix2']
     except KeyError:
-        print "    No CRPIX2 header found"
+        print('    No CRPIX2 header found')
         crpix2 = np.nan
     if np.isnan(crpix1) is False:
         inhdr['crpix1'] -= x1
@@ -1871,8 +1871,8 @@ def imcopy(infile, x1, x2, y1, y2, outfile):
               (crpix1, inhdr['crpix1']))
     if np.isnan(crpix2) is False:
         inhdr['crpix2'] -= y1
-        print ('    Updating CRPIX2:  %8.2f --> %8.2f' %
-               (crpix2, inhdr['crpix2']))
+        print('    Updating CRPIX2:  %8.2f --> %8.2f' %
+              (crpix2, inhdr['crpix2']))
 
     """ Write to output file """
     outhdu = pf.PrimaryHDU(data=outdat, header=inhdr)
@@ -1906,7 +1906,7 @@ def del_history_cards(hdu):
     Deletes the history cards from the input HDU
     """
 
-    print "del_history_cards is not yet implemented"
+    print('del_history_cards is not yet implemented')
 
 # -----------------------------------------------------------------------
 
@@ -1999,7 +1999,7 @@ def overlay_contours(infile1, infile2, imcent, imsize, pixscale=None,
         print('')
         print('ERROR: Could not properly open %s' % infile1)
         raise IOError
-    print "    .... Done"
+    print('    .... Done')
     try:
         im2 = Image(infile2, hext=hext2)
     except IOError:
@@ -2077,11 +2077,11 @@ def calc_sky_from_seg(infile, segfile):
     #    sky = indat[segdat==0]
 
     """ Calculate statistics """
-    print "Statistics of sky outside masked regions"
-    print "----------------------------------------"
-    print "  N_pix  = %d" % sky.size
-    print "  Median = %f" % np.median(sky)
-    print "  Mean    = %f" % np.mean(sky)
+    print('Statistics of sky outside masked regions')
+    print('----------------------------------------')
+    print('  N_pix  = %d' % sky.size)
+    print('  Median = %f' % np.median(sky))
+    print('  Mean    = %f' % np.mean(sky))
 
     return
 
@@ -2153,7 +2153,7 @@ def plot_cat(fitsfile, catfile, xcol=0, ycol=1, marksize=20., markcolor='g',
                       funits=funits)
     except IOError:
         print('')
-        print ('Image display failed when called from plot_cat.')
+        print('Image display failed when called from plot_cat.')
         print('')
         return
     nx = pf.getval(fitsfile, 'naxis1')

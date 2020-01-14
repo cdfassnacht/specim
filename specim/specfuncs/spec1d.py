@@ -892,7 +892,7 @@ class Spec1d(df.Data1d):
             plt.xlim([wav[-1], wav[0]])
         else:
             plt.xlim([wav[0], wav[-1]])
-        # print self['wav'][0], self['wav'][-1]
+        # print(self['wav'][0], self['wav'][-1])
 
         """ Plot the atmospheric transmission if requested """
         if add_atm_trans:
@@ -1383,8 +1383,8 @@ class Spec1d(df.Data1d):
         ymin, ymax = plt.ylim()
         deltaobs = ymax - ymin
         deltamod = skymod['flux'].max() - skymod['flux'].min()
-        print deltaobs, deltamod
-        print skyflux.mean(), skymod['flux'].mean()
+        print(deltaobs, deltamod)
+        print(skyflux.mean(), skymod['flux'].mean())
         skymod['flux'] *= 0.75 * deltaobs / deltamod
         skymod['flux'] += skyflux.mean() - skymod['flux'].mean()
 

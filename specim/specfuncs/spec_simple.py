@@ -76,8 +76,8 @@ def load_2d_spectrum(filename, hdu=0):
     """
     data = Spec2d(filename, hext=hdu)
     print('')
-    print 'Loaded a 2-dimensional spectrum from %s' % filename
-    print 'Data dimensions (x y): %dx%d' % (data.shape[1], data.shape[0])
+    print('Loaded a 2-dimensional spectrum from %s' % filename)
+    print('Data dimensions (x y): %dx%d' % (data.shape[1], data.shape[0]))
     return data
 
 # -----------------------------------------------------------------------
@@ -103,8 +103,8 @@ def read_spectrum(filename, informat='text', varspec=True, verbose=True):
     """
 
     if verbose:
-        print ""
-        print "Reading spectrum from %s" % filename
+        print('')
+        print('Reading spectrum from %s') % filename
 
     """ Set default for variance spectrum """
     var = None
@@ -126,19 +126,19 @@ def read_spectrum(filename, informat='text', varspec=True, verbose=True):
         if varspec:
             if spec.shape[1] < 3:
                 print('')
-                print 'Warning: varspec=True but only 2 columns in input file'
+                print('Warning: varspec=True but only 2 columns in input file')
                 print('')
             else:
                 var = spec[:, 2]
         del spec
 
     if verbose:
-        print " Spectrum Start: %8.2f" % wavelength[0]
-        print " Spectrum End:    %8.2f" % wavelength[-1]
-        print " Dispersion (1st pixel): %6.2f" % (wavelength[1]-wavelength[0])
-        print " Dispersion (average):    %6.2f" % \
-            ((wavelength[-1]-wavelength[0])/(wavelength.size-1))
-        print ""
+        print(' Spectrum Start: %8.2f' % wavelength[0])
+        print(' Spectrum End:    %8.2f' % wavelength[-1])
+        print(' Dispersion (1st pixel): %6.2f' % (wavelength[1]-wavelength[0]))
+        print(' Dispersion (average):    %6.2f' % 
+              ((wavelength[-1]-wavelength[0])/(wavelength.size-1)))
+        print('')
 
     return wavelength, flux, var
 
@@ -239,8 +239,8 @@ def subtract_sky(data, outfile, outskyspec, dispaxis='x', doplot=True):
 
     """ Take the median along the spatial direction to estimate the sky """
     if data.ndim < 2:
-        print ""
-        print "ERROR: subtract_sky needs a 2 dimensional data set"
+        print('')
+        print('ERROR: subtract_sky needs a 2 dimensional data set')
         return
     else:
         sky1d = np.median(data, axis=spaceaxis)
@@ -266,9 +266,9 @@ def subtract_sky(data, outfile, outskyspec, dispaxis='x', doplot=True):
 
     """ Save the sky-subtracted spectrum and the median sky """
     pf.PrimaryHDU(skysub).writeto(outfile)
-    print ' Wrote sky-subtracted data to %s' % outfile
+    print(' Wrote sky-subtracted data to %s' % outfile)
     save_spectrum(outskyspec, x, sky1d)
-    print ' Wrote median sky spectrum to %s' % outskyspec
+    print(' Wrote median sky spectrum to %s' % outskyspec)
     print('')
 
     """ Clean up """
@@ -478,7 +478,7 @@ def find_peak(data, dispaxis="x", mu0=None, sig0=None, fixmu=False,
         specaxis = 0
     else:
         specaxis = 1
-    # print "specaxis = %d" % specaxis
+    # print('specaxis = %d' % specaxis)
 
     """ Compress the data along the dispersion axis and find the max value """
     if data.ndim < 2:
@@ -492,8 +492,8 @@ def find_peak(data, dispaxis="x", mu0=None, sig0=None, fixmu=False,
 
     if fixmu:
         if mu0 is None:
-            print ""
-            print "ERROR: find_peak.  mu is fixed, but no value for mu0 given"
+            print('')
+            print('ERROR: find_peak.  mu is fixed, but no value for mu0 given')
             return
         fixmunote = "**"
     else:
@@ -503,7 +503,7 @@ def find_peak(data, dispaxis="x", mu0=None, sig0=None, fixmu=False,
         fixmunote = " "
     if fixsig:
         if sig0 is None:
-            print ""
+            print('')
             print('ERROR: find_peak.  sigma is fixed, but no value for sig0'
                   'given')
             return
@@ -515,15 +515,15 @@ def find_peak(data, dispaxis="x", mu0=None, sig0=None, fixmu=False,
     amp0 = cdat.max()
     bkgd0 = np.median(data, axis=None)
     if(verbose):
-        print ""
-        print "Initial guesses for Gaussian plus background fit"
-        print "------------------------------------------------"
-        print " mu         = %7.2f%s" % (mu0, fixmunote)
-        print " sigma      =    %5.2f%s" % (sig0, fixsignote)
-        print " amplitude  = %f" % amp0
-        print " background = %f" % bkgd0
-        print "Parameters marked with a ** are held fixed during the fit"
-        print ""
+        print('')
+        print('Initial guesses for Gaussian plus background fit')
+        print('------------------------------------------------')
+        print(' mu         = %7.2f%s' % (mu0, fixmunote))
+        print(' sigma      =    %5.2f%s' % (sig0, fixsignote))
+        print(' amplitude  = %f' % amp0)
+        print(' background = %f' % bkgd0)
+        print('Parameters marked with a ** are held fixed during the fit')
+        print('')
 
     # Fit a Gaussian plus a background to the compressed spectrum
     mf = 100000
@@ -542,14 +542,14 @@ def find_peak(data, dispaxis="x", mu0=None, sig0=None, fixmu=False,
 
     # Give results
     if(verbose):
-        print "Fitted values for Gaussian plus background fit"
-        print "----------------------------------------------"
-        print " mu            = %7.2f%s" % (p_out[1], fixmunote)
-        print " sigma        =    %5.2f%s" % (p_out[2], fixsignote)
-        print " amplitude  = %f" % p_out[3]
-        print " background = %f" % p_out[0]
-        print "Parameters marked with a ** are held fixed during the fit"
-        print ""
+        print('Fitted values for Gaussian plus background fit')
+        print('----------------------------------------------')
+        print(' mu            = %7.2f%s' % (p_out[1], fixmunote))
+        print(' sigma        =    %5.2f%s' % (p_out[2], fixsignote))
+        print(' amplitude  = %f' % p_out[3])
+        print(' background = %f' % p_out[0])
+        print('Parameters marked with a ** are held fixed during the fit')
+        print('')
 
     # Plot the compressed spectrum
     if(showplot):
@@ -653,7 +653,7 @@ def combine_spectra(file_list, outfile, informat='text', **kwargs):
     wtsum = np.zeros(nx)
 
     """ Create the weighted sum """
-    print ""
+    print('')
     for spec in inspec:
         wt = np.zeros(nx)
         wt[spec['var'] != 0] = 1.0 / spec['var']
@@ -706,12 +706,12 @@ def planck_spec(wavelength, T=1.0e4, waveunit='Angstrom'):
     #  input wavelength is in Angstroms
     wtmp = wavelength.copy()
     if waveunit[0:6].lower() == 'micron':
-        print "Converting wavelength from microns to meters"
+        print('Converting wavelength from microns to meters')
         wtmp *= 1.0e-6
     elif waveunit[0:5].lower() == 'meter':
         wtmp *= 1.0
     else:
-        print "Converting wavelength from Angstroms to meters"
+        print('Converting wavelength from Angstroms to meters')
         wtmp *= 1.0e-10
 
     # Generate the Planck function, and then scale it so that its mean matches
@@ -798,11 +798,11 @@ def response_ir(infile, outfile, order=6, fitrange=None, filtwidth=9):
 
     # Fit a polynomial to the observed response function
     fpoly = np.polyfit(wavegood, respgood, order)
-    print ""
-    print "Fit a polynomial of order %d to curve in Figure 2." % order
-    print "Resulting coefficients:"
-    print "-----------------------"
-    print fpoly
+    print('')
+    print('Fit a polynomial of order %d to curve in Figure 2.' % order)
+    print('Resulting coefficients:')
+    print('-----------------------')
+    print(fpoly)
 
     # Convert polynomial into a smooth response function
     p = np.poly1d(fpoly)
@@ -841,16 +841,16 @@ def response_correct(infile, respfile, outfile):
     try:
         w, f, v = np.loadtxt(infile, unpack=True)
     except IOError:
-        print ""
-        print "ERROR: response_correct.  Unable to read input spectrum %s" \
-            % infile
+        print('')
+        print('ERROR: response_correct.  Unable to read input spectrum %s'
+              % infile)
         return
     try:
         wr, resp = np.loadtxt(respfile, unpack=True)
     except IOError:
-        print ""
-        print "ERROR: response_correct.  Unable to read response spectrum %s" \
-            % respfile
+        print('')
+        print('ERROR: response_correct.  Unable to read response spectrum %s'
+              % respfile)
         return
 
     # Apply the response correction and save the spectrum
@@ -916,11 +916,11 @@ def normalize(infile, outfile, order=6, fitrange=None, filtwidth=11):
 
     # Fit a polynomial to the observed response function
     fpoly = np.polyfit(wavegood, fluxgood, order)
-    print ""
-    print "Fit a polynomial of order %d to the red curve in Figure 1." % order
-    print "Resulting coefficients:"
-    print "-----------------------"
-    print fpoly
+    print('')
+    print('Fit a polynomial of order %d to the red curve in Figure 1.' % order)
+    print('Resulting coefficients:')
+    print('-----------------------')
+    print(fpoly)
 
     # Convert polynomial into a smooth response function
     p = np.poly1d(fpoly)
@@ -1092,6 +1092,6 @@ def calc_lineflux(wavelength, flux, bluemin, bluemax, redmin, redmax, var=None,
     lineflux = subflux[linemask].copy()
     # Assume that the wavelength scale is linear
     delwave = linewave[1] - linewave[0]
-    print delwave
+    print(delwave)
     intflux = (lineflux * delwave).sum()
-    print intflux
+    print(intflux)
