@@ -1,5 +1,5 @@
 """
-spec1d.py
+spec2d.py
 
 This file contains the Spec2d class, which is used to process and plot
 two-dimensional spectroscopic data.  This processing includes sky subtraction
@@ -14,16 +14,19 @@ Typical methods that are used to do an extraction:
 """
 
 from math import sqrt, pi
+
 import numpy as np
 from scipy.ndimage import filters
 import matplotlib.pyplot as plt
-try:
-    from astropy.io import fits as pf
-except ImportError:
-    import pyfits as pf
+
+from astropy.io import fits as pf
+
 from cdfutils import datafuncs as df
 from .. import imfuncs as imf
 from .spec1d import Spec1d
+
+import sys
+pyversion = sys.version_info.major
 
 # ===========================================================================
 #
@@ -45,6 +48,7 @@ class Spec2d(imf.Image):
 
     Example of standard processing on a spectrum within this class:
       - myspec = Spec2d('myspec2d.fits')
+      - myspec.display_spec()
       - myspec.find_and_trace()
       - myspec.extract(outfile='myspec1d.txt')
     """
@@ -121,9 +125,14 @@ class Spec2d(imf.Image):
         Read in the data and call the superclass initialization for useful
         Image attributes
         """
-        super(Spec2d, self).__init__(inspec, hext=hext, vardat=invar,
-                                     varext=varext, verbose=verbose,
-                                     wcsverb=wcsverb) 
+        if pyversion == 2:
+            super(Spec2d, self).__init__(inspec, hext=hext, vardat=invar,
+                                         varext=varext, verbose=verbose,
+                                         wcsverb=wcsverb)
+        else:
+            super().__init__(inspec, hext=hext, vardat=invar,
+                             varext=varext, verbose=verbose,
+                             wcsverb=wcsverb)
 
         """ Set the portion of the input spectrum that should be used """
         nx = self.header['naxis1']
@@ -524,7 +533,7 @@ class Spec2d(imf.Image):
 
         """ Save the profile as a Spec1d instance """
         px = np.arange(pflux.shape[0])
-        profile = Spec1d(wav=px, flux=pflux)
+        profile = Spec1d(wav=px, flux=pflux, verbose=verbose)
 
         """
         Plot the compressed spectrum, showing the best-fit Gaussian if
@@ -837,11 +846,11 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def _extract_horne(self, gain=1.0, rdnoise=0.0):
+    def _extract_horne(self, profile, gain=1.0, rdnoise=0.0):
         """
 
         STILL TO DO:
-          - implement uniform weighting - OR - pass the method a previously
+          - possibly pass to this method a previously
             generated profile instead of generating it here
 
         Extracts a 1d spectrum from the 2d spectrum by doing a weighted
@@ -852,15 +861,15 @@ class Spec2d(imf.Image):
         weighting.
 
         There are three components to the weighting:
-         1. The profile of the trace, P, i.e., aperture weighting (for now only
-             uniform or a single gaussian are implemented).  In future, this
-             may be provided in terms of an already constructed profile image
-             rather than calculated within this method.
-         2. The aperture definition itself (stored in the apmin and apmax
+         1. The aperture definition itself (stored in the apmin and apmax
              variables that are part of the Spec2d class definition).
              This weighting is, in fact, not really a weighting but just a mask
              set up so that a pixel will get a weight of 1.0 if it is inside
              the aperture and 0.0 if it is outside.
+         2. The profile of the trace, P, i.e., aperture weighting (for now only
+             uniform or a single gaussian are implemented).  In future, this
+             may be provided in terms of an already constructed profile image
+             rather than calculated within this method.
          3. The statistical errors associated with the detector, etc.,
              in the form of inverse variance weighting.
             The variance can either be provided as an external variance image,
@@ -900,37 +909,49 @@ class Spec2d(imf.Image):
         y = y.astype(float)
 
         """
-        First weighting: Aperture profile
-        ---------------------------------
-        NOTE: in future, this may be moved into the find_and_trace code
+        Define an array where the values are spatial-direction offsets from
+        the center of the trace.
 
-        Make the 1d mu and sig polynomials into 2d polynomials that vary
-        along the spectral direction but are identical along a given column.
+        To do this make the 1d mu polynomial into a 2d polynomial that varies
+         along the spectral direction but has a fixed value along a given
+         column.
         The transpose (.T) at the end is necessary because doing a np.repeat
-        directly on the desired shape does not give the proper behavior
-        (constant along columns in the right way).
-
-        Code below is just for gaussian weighting.
+         directly on the desired shape does not give the proper behavior
+         (constant along columns in the right way).
+        """
+        
+        """
+        First "weighting"/mask: Aperture limits
+        ----------------------------------------
+        Put in the aperture limits, delimited by apmin and apmax
         """
         newdim = (self.npix, self.nspat)
         self.mu2d = self.mu.repeat(self.nspat).reshape(newdim).T
-        self.sig2d = self.sig.repeat(self.nspat).reshape(newdim).T
-        ydiff = 1.0*y - self.mu2d
-        P = (1./(self.sig2d * sqrt(2.*pi))) * \
-            np.exp(-0.5 * (ydiff/self.sig2d)**2)
+        ydiff = y - self.mu2d
+        apmask = (ydiff > self.apmin - 1) & (ydiff < self.apmax)
+        # bkgdmask = np.logical_not(apmask)
+
+        """
+        Second weighting: Aperture profile
+        ---------------------------------
+        NOTE: in future, this may be moved into the find_and_trace code
+        """
+        if profile.lower() == 'uniform':
+            P = ydiff * 0.
+            P[apmask] = 1.
+
+        elif profile.lower() == 'gauss' or profile.lower() == 'gaussian':
+            P = (1./(self.sig2d * sqrt(2.*pi))) * \
+                np.exp(-0.5 * (ydiff/self.sig2d)**2)
+
+        else:
+            raise ValueError('Extraction weighting profile must be '
+                             '"uniform" or "gauss"')
 
         """ Make sure the profile is normalized in the spatial direction """
         Pnorm = (P.sum(axis=self.spaceaxis))
         Pnorm = Pnorm.repeat(self.nspat).reshape(newdim).T
         self.profile = P / Pnorm
-
-        """
-        Second "weighting"/mask: Aperture limits
-        ----------------------------------------
-        Put in the aperture limits, delimited by apmin and apmax
-        """
-        apmask = (ydiff > self.apmin - 1) & (ydiff < self.apmax)
-        # bkgdmask = np.logical_not(apmask)
 
         """
         Third weighting: Inverse variance
@@ -971,7 +992,8 @@ class Spec2d(imf.Image):
         vmask = varspec <= 0.
         varspec[vmask] = 1.e8
         varspec[nanvar] = 1.e8
-        self.extwt[apmask] = self.profile[apmask] / (varspec[apmask])
+        invar = 1. / varspec
+        self.extwt[apmask] = self.profile[apmask] * invar[apmask]
         self.extwt[nanmask] = 0.
         self.extwt[vmask] = 0.
         wtdenom = (self.profile * self.extwt).sum(axis=self.spaceaxis)
@@ -990,8 +1012,8 @@ class Spec2d(imf.Image):
         var = self.profile.sum(axis=self.spaceaxis) / wtdenom
 
         """
-        Fix any remaining NaNs (there shouldn't be any, but put this in just to
-         be on the safe side
+        Fix any remaining NaNs (there shouldn't be any, but put this in
+         just to be on the safe side
         """
         nansci = np.isnan(flux)
         nanvar = np.isnan(var)
@@ -1010,6 +1032,9 @@ class Spec2d(imf.Image):
         self.spec1d = Spec1d(wav=self.wavelength, flux=flux, var=var, sky=bkgd)
         self.apmask = apmask
 
+        """ Clean up """
+        del(invar)
+
     # -----------------------------------------------------------------------
 
     def extract(self, weight='gauss', sky=None, gain=1.0, rdnoise=0.0,
@@ -1025,7 +1050,7 @@ class Spec2d(imf.Image):
         """
 
         """ Extract the spectrum """
-        self._extract_horne(gain, rdnoise)
+        self._extract_horne(weight, gain, rdnoise)
 
         """ Plot the extracted spectrum if desired """
         if doplot:

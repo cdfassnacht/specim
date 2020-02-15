@@ -9,13 +9,12 @@ import os
 import numpy as np
 from scipy import interpolate, ndimage
 import matplotlib.pyplot as plt
+
 from astropy.io import ascii
 from astropy.table import Table
-try:
-    from astropy.io import fits as pf
-except ImportError:
-    import pyfits as pf
+from astropy.io import fits as pf
 # from astropy.modeling.blackbody import blackbody_lambda
+
 from cdfutils import datafuncs as df
 
 # ===========================================================================
@@ -870,19 +869,18 @@ class Spec1d(df.Data1d):
         """ Plot the RMS spectrum if the variance spectrum exists """
         if var is not None:
             rms = np.sqrt(var) + rmsoffset
+            drawstyle = 'steps'
             if rmsls is None:
                 if docolor:
-                    rlinestyle = 'steps'
+                    rlinestyle = 'solid'
+                    rlw = 1
                 else:
-                    rlinestyle = 'steps:'
+                    rlinestyle = 'dotted'
+                    rlw = 2
             else:
-                rlinestyle = 'steps%s' % rmsls
-            if docolor:
-                plt.plot(self['wav'], rms, rmscolor, linestyle=rlinestyle,
-                         label='RMS')
-            else:
-                plt.plot(self['wav'], rms, rmscolor, linestyle=rlinestyle,
-                         label='RMS', lw=2)
+                rlinestyle = '%s' % rmsls
+            plt.plot(self['wav'], rms, rmscolor, linestyle=rlinestyle,
+                     drawstyle=drawstyle, label='RMS', lw=rlw)
 
         """ More plot labels """
         plt.ylabel(ylabel, fontsize=fontsize)

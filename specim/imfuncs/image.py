@@ -32,34 +32,27 @@ Stand-alone functions
                          positions of the catalog objects.
 """
 
-# For the future, to be used to make code run with either python2 or python3
-# import sys
-# pyversion = sys.version_info[0] (or maybe sys.version_info['major'])
-# # This will give either 2 or 3
-# import os
 from math import log, sqrt, pi, fabs
 from math import cos as mcos, sin as msin
+
 import numpy as np
 from scipy.ndimage import filters
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+
 from astropy import units as u
-try:
-    from astropy.io import fits as pf
-except ImportError:
-    import pyfits as pf
-try:
-    from cdfutils import datafuncs as df
-except ImportError:
-    import datafuncs as df
-try:
-    from cdfutils import coords
-except ImportError:
-    import coords
+from astropy.io import fits as pf
+
+from cdfutils import datafuncs as df
+from cdfutils import coords
+
 from .wcshdu import WcsHDU
 from .imutils import open_fits
 from .dispparam import DispParam
 from .dispim import DispIm
+
+import sys
+pyversion = sys.version_info.major
 
 # -----------------------------------------------------------------------
 
@@ -93,7 +86,10 @@ class Image(dict):
         self.varmode = 'var'
 
         """ Set up the empty Image container by calling the superclass """
-        super(Image, self).__init__()
+        if pyversion == 2:
+            super(Image, self).__init__()
+        else:
+            super().__init__()
 
         """ Load the image data """
         self['input'] = WcsHDU(indat, hext=hext, **kwargs)
