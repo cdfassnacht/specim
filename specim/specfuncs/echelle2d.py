@@ -58,7 +58,9 @@ class Ech2d(list):
         """
         hdu = self.set_hdulist(inspec, debug)
         if varspec is not None:
+            tmpname = self.infile
             varhdu = self.set_hdulist(varspec, debug)
+            self.infile = tmpname
         else:
             varhdu = None
 
