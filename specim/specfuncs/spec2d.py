@@ -20,6 +20,7 @@ from scipy.ndimage import filters
 import matplotlib.pyplot as plt
 
 from astropy.io import fits as pf
+from astropy.table import Table
 
 from cdfutils import datafuncs as df
 from .. import imfuncs as imf
@@ -492,15 +493,11 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def spatial_profile(self, pixrange=None, doplot=True, 
-                        title='Spatial Profile', model=None, normalize=False,
-                        showap=True, verbose=True):
+    def compress_spec(self, pixrange=None):
         """
-        Compresses a 2d spectrum along the dispersion axis to create a spatial
-         profile, and then plots it if requested
+        Compresses the spectrum along the spectral direction to get a
+         spatial profile
         """
-
-        color = 'b'
 
         """ Set the data range in which to find the trace """
         if pixrange is not None:
@@ -516,12 +513,32 @@ class Spec2d(imf.Image):
             tmpdat = self.data.copy()
 
         """
-        Compress the data along the dispersion axis and find the max value
+        Compress the data along the dispersion axis
         """
         if self.data.ndim < 2:
             pflux = tmpdat
         else:
             pflux = np.median(tmpdat, axis=self.specaxis)
+
+        """ Return the compressed spectrum """
+        return pflux
+    
+    # -----------------------------------------------------------------------
+
+    def spatial_profile(self, pixrange=None, doplot=True, 
+                        title='Spatial Profile', model=None, normalize=False,
+                        showap=True, verbose=True):
+        """
+        Compresses a 2d spectrum along the dispersion axis to create a spatial
+         profile, and then plots it if requested
+        """
+
+        color = 'b'
+
+        """
+        Compress the data along the dispersion axis and find its max value
+        """
+        pflux = self.compress_spec(pixrange)
         pmax = pflux.max()
         if verbose:
             print(pmax)
@@ -579,6 +596,7 @@ class Spec2d(imf.Image):
         if modtype == '1gauss':
             """  Fit a Gaussian plus background to the profile """
             mod, fitinfo = profile.fit_gauss(mod0=init, verbose=verbose)
+            self.profcent = mod[1].mean
 
         """ Now plot the spatial profile, showing the best fit """
         if doplot:
@@ -590,6 +608,8 @@ class Spec2d(imf.Image):
             xlab = 'Spatial direction (0-indexed)'
             profile.plot(title=title, xlabel=xlab, model=mod, showzero=False,
                          **kwargs)
+            plt.axvline(self.profcent + self.apmin, color='k')
+            plt.axvline(self.profcent + self.apmax, color='k')
 
         """ Return the model """
         return profile, mod
@@ -682,16 +702,19 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def trace_spectrum(self, mod0, ngauss=1, stepsize=25, muorder=3,
-                       sigorder=4, fitrange=None, doplot=True,
+    def trace_spectrum(self, mod0, ngauss=1, stepsize='default', meantol=0.5,
+                       muorder=3, sigorder=4, fitrange=None, doplot=True,
                        do_subplot=False, verbose=True):
         """
         Fits a gaussian plus background to the spatial profile of the spectrum
          This is done in binned segments, because for nearly all cases the SNR
          in a single column (assuming that y is the spatial axis) is much too
          low to get a good fit to the profile.  The bin size, in pixels in the
-         dispersion direction, is set by the stepsize parameter (default is
-         25).
+         dispersion direction, is set by the stepsize parameter.  Setting
+         stepsize='default' (which is the default) means that the stepsize
+         (in pixels) is selected automatically to give 75 steps across the
+         spectrum
+
         The steps in this method are as follow:
          1. Obtain the parameters of the spatial fit in each bin and save them
              in the mustep and sigstep arrays
@@ -736,28 +759,39 @@ class Spec2d(imf.Image):
          the centroid and width of the object spectrum as it is traced down
          the chip
         """
+        if stepsize == 'default':
+            stepsize = int(self.npix / 50)
         xstep = np.arange(0, self.npix-stepsize, stepsize)
+        nsteps = np.arange(xstep.shape[0])
 
+        """ Report information about the trace parameters"""
+        if verbose:
+            print('')
+            print('Running fit_trace')
+            print('---------------------------------------------------------')
+            print('Finding the location and width of the trace at %d segments'
+                  % nsteps.shape[0])
+            print('    of the 2D spectrum with stepsize=%d pix ...' % stepsize)
+        
         """ Set up containers for mu and sigma along the trace """
         mustep = np.zeros((xstep.size, ngauss))
         sigstep = mustep.copy()
-        nsteps = np.arange(xstep.shape[0])
-
+        ampstep = mustep.copy()
+        
+        """ Make a temporary profile that will be used in the fitting  """
+        tmpprof = Spec1d((Table(self.profile).copy()), verbose=False)
+        
         """
         Step through the data, slice by slice, fitting to the spatial profile
         in each slice along the way and storing the results in the mustep
         and sigstep arrays
         """
-        print('')
-        print('Running fit_trace')
-        print('---------------------------------------------------------')
-        print('Finding the location and width of the trace at %d segments'
-              % nsteps.shape[0])
-        print('    of the 2D spectrum...')
         for i in nsteps:
             pixrange = [xstep[i], xstep[i]+stepsize]
-            prof, mod = self.locate_trace(pixrange=pixrange, init=mod0,
-                                          doplot=False, verbose=False)
+            tmpprof['flux'] = self.compress_spec(pixrange)
+            mod, fitinfo = tmpprof.fit_gauss(mod0=mod0, verbose=False)
+            #prof, mod = self.locate_trace(pixrange=pixrange, init=mod0,
+            #                              doplot=False, verbose=False)
             for j in range(ngauss):
                 mustep[i, j] = mod[j+1].mean.value
                 sigstep[i, j] = mod[j+1].stddev.value
@@ -777,7 +811,8 @@ class Spec2d(imf.Image):
                   'trace' % muorder)
             self.mupoly, self.mu = \
                 self.fit_poly_to_trace(xstep, mustep[:, 0], muorder,
-                                       self.mod0.mean_1, fitrange, doplot=doplot)
+                                       self.mod0.mean_1, fitrange,
+                                       doplot=doplot)
             # The following lines may get incorporated if the generic
             #  data structures in the CDFutils package get updated.
             #
@@ -799,15 +834,16 @@ class Spec2d(imf.Image):
                   % sigorder)
             self.sigpoly, self.sig = \
                 self.fit_poly_to_trace(xstep, sigstep[:, 0], sigorder,
-                                       self.mod0.stddev_1, fitrange, markformat='go',
+                                       self.mod0.stddev_1, fitrange,
+                                       markformat='go',
                                        title='Width of Peak (Gaussian sigma)',
                                        ylabel='Width of trace', doplot=doplot)
 
     # -----------------------------------------------------------------------
 
-    def find_and_trace(self, ngauss=1, bgorder=0, stepsize=25, muorder=3,
-                       sigorder=4, fitrange=None, doplot=True, do_subplot=True,
-                       verbose=True):
+    def find_and_trace(self, ngauss=1, bgorder=0, stepsize='default',
+                       muorder=3, sigorder=4, fitrange=None, doplot=True,
+                       do_subplot=True, verbose=True):
 
         """
         The first step in the spectroscopy reduction process.
@@ -841,8 +877,26 @@ class Spec2d(imf.Image):
                               ngauss=ngauss, pixrange=fitrange,
                               verbose=verbose)
 
-        self.trace_spectrum(self.mod0, ngauss, stepsize, muorder, sigorder,
-                            fitrange, doplot, do_subplot, verbose=verbose)
+        self.trace_spectrum(self.mod0, ngauss, stepsize, muorder=muorder,
+                            sigorder=sigorder, fitrange=fitrange,
+                            doplot=doplot, do_subplot=do_subplot,
+                            verbose=verbose)
+
+    # -----------------------------------------------------------------------
+
+    def _extract_modelfit(self, mod0, ncomp=1, usevar=True):
+        """
+
+        Does an extraction by fitting a n-component model + background to
+         the spatial profile in each wavelength bin.
+        For now, the components are only allowed to be Gaussian, but that
+         may change in the future (e.g., by adding Moffat profiles)
+        The expectation is that the SNR in any wavelength slice is too low
+         to actually do a good job with a full model fitting, therefore
+         most of the model components (e.g., Gaussian mean and sigma) will
+         be fixed to the values described by the polynomial fits to the
+         traces obtained from the trace_spectrum method.
+        """
 
     # -----------------------------------------------------------------------
 
@@ -941,6 +995,7 @@ class Spec2d(imf.Image):
             P[apmask] = 1.
 
         elif profile.lower() == 'gauss' or profile.lower() == 'gaussian':
+            self.sig2d = self.sig.repeat(self.nspat).reshape(newdim).T
             P = (1./(self.sig2d * sqrt(2.*pi))) * \
                 np.exp(-0.5 * (ydiff/self.sig2d)**2)
 
@@ -951,7 +1006,7 @@ class Spec2d(imf.Image):
         """ Make sure the profile is normalized in the spatial direction """
         Pnorm = (P.sum(axis=self.spaceaxis))
         Pnorm = Pnorm.repeat(self.nspat).reshape(newdim).T
-        self.profile = P / Pnorm
+        self.prof2d = P / Pnorm
 
         """
         Third weighting: Inverse variance
@@ -993,10 +1048,10 @@ class Spec2d(imf.Image):
         varspec[vmask] = 1.e8
         varspec[nanvar] = 1.e8
         invar = 1. / varspec
-        self.extwt[apmask] = self.profile[apmask] * invar[apmask]
+        self.extwt[apmask] = self.prof2d[apmask] * invar[apmask]
         self.extwt[nanmask] = 0.
         self.extwt[vmask] = 0.
-        wtdenom = (self.profile * self.extwt).sum(axis=self.spaceaxis)
+        wtdenom = (self.prof2d * self.extwt).sum(axis=self.spaceaxis)
         # wtdenom *= apmask.sum(axis=self.spaceaxis)
 
         """ Compute the weighted sum of the flux """
@@ -1009,7 +1064,7 @@ class Spec2d(imf.Image):
         """
         Compute the proper variance.
         """
-        var = self.profile.sum(axis=self.spaceaxis) / wtdenom
+        var = self.prof2d.sum(axis=self.spaceaxis) / wtdenom
 
         """
         Fix any remaining NaNs (there shouldn't be any, but put this in
@@ -1037,7 +1092,8 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def extract(self, weight='gauss', sky=None, gain=1.0, rdnoise=0.0,
+    def extract(self, method='wtsum', weight='gauss', mod0=None, ncomp=1,
+                sky=None, usevar=True, gain=1.0, rdnoise=0.0,
                 doplot=True, do_subplot=True, outfile=None,
                 outformat='text', verbose=True):
         """
@@ -1050,7 +1106,10 @@ class Spec2d(imf.Image):
         """
 
         """ Extract the spectrum """
-        self._extract_horne(weight, gain, rdnoise)
+        if method == 'modelfit':
+            self._extract_modelfit(mod0, ncomp, usevar)
+        else:
+            self._extract_horne(weight, gain, rdnoise)
 
         """ Plot the extracted spectrum if desired """
         if doplot:
