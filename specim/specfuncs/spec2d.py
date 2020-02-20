@@ -616,6 +616,60 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
+    def fit_slices(self, mod0, stepsize, ncomp=1, fitrange=None, usevar=None,
+                   mu0arr=None, sig0arr=None, debug=False):
+        """
+
+        Steps through the 2d spectrum, fitting a model to a series of
+        spatial profiles, one for each slice.  The model outputs for each
+        slice get stored in arrays that are returned by this method.
+        """
+
+        """
+        Define the slices through the 2D spectrum that will be used as the
+         inputs to the spatial profile modeling
+        """
+        if stepsize == 1:
+            xstep = np.arange(self.npix)
+        else:
+            xstep = np.arange(0, self.npix-stepsize, stepsize)
+
+        """ Set up containers for parameter values along the trace """
+        mustep = np.zeros((xstep.size, ncomp))
+        sigstep = mustep.copy()
+        ampstep = mustep.copy()
+        covar = []
+        
+        """ Make a temporary profile that will be used in the fitting  """
+        tmpprof = Spec1d((Table(self.profile).copy()), verbose=False)
+        
+        """
+        Step through the data, slice by slice, fitting to the spatial profile
+        in each slice along the way and storing the results in the mustep
+        and sigstep arrays
+        """
+        for i, x in enumerate(xstep):
+            pixrange = [x, x+stepsize]
+            tmpprof['flux'] = self.compress_spec(pixrange)
+            if mu0arr is not None:
+                mod0[1].mean = mu0arr[i]
+            if sig0arr is not None:
+                mod0[1].stddev = sig0arr[i]
+            mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+                                           verbose=debug)
+            covar.append(fitinfo['param_cov'])
+            for j in range(ncomp):
+                mustep[i, j] = mod[j+1].mean.value
+                sigstep[i, j] = mod[j+1].stddev.value
+                ampstep[i, j] = mod[j+1].amplitude.value
+
+        """ Return the fit parameters in a dictionany format """
+        parinfo = {'x': xstep, 'mu': mustep, 'sigma': sigstep, 'amp': ampstep,
+                   'covar': covar}
+        return parinfo
+    
+    # -----------------------------------------------------------------------
+
     def fit_poly_to_trace(self, x, data, fitorder, data0, fitrange=None,
                           nsig=3.0, doplot=True, markformat='bo',
                           ylabel='Centroid of Trace (0-indexed)',
@@ -772,31 +826,9 @@ class Spec2d(imf.Image):
             print('Finding the location and width of the trace at %d segments'
                   % nsteps.shape[0])
             print('    of the 2D spectrum with stepsize=%d pix ...' % stepsize)
-        
-        """ Set up containers for mu and sigma along the trace """
-        mustep = np.zeros((xstep.size, ngauss))
-        sigstep = mustep.copy()
-        ampstep = mustep.copy()
-        
-        """ Make a temporary profile that will be used in the fitting  """
-        tmpprof = Spec1d((Table(self.profile).copy()), verbose=False)
-        
-        """
-        Step through the data, slice by slice, fitting to the spatial profile
-        in each slice along the way and storing the results in the mustep
-        and sigstep arrays
-        """
-        for i in nsteps:
-            pixrange = [xstep[i], xstep[i]+stepsize]
-            tmpprof['flux'] = self.compress_spec(pixrange)
-            mod, fitinfo = tmpprof.fit_gauss(mod0=mod0, verbose=False)
-            #prof, mod = self.locate_trace(pixrange=pixrange, init=mod0,
-            #                              doplot=False, verbose=False)
-            for j in range(ngauss):
-                mustep[i, j] = mod[j+1].mean.value
-                sigstep[i, j] = mod[j+1].stddev.value
-                # mustep[i, j] = p[j*3+1]
-                # sigstep[i, j] = p[j*3+2]
+
+        """ Trace the spectrum down the chip """
+        tracepars = self.fit_slices(mod0, stepsize, ncomp=ngauss)
         print('    Done')
 
         """ Fit a polynomial to the location of the trace """
@@ -809,9 +841,11 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the location of the '
                   'trace' % muorder)
+            x = tracepars['x']
+            y = tracepars['mu'][:, 0]
+            y0 = self.mod0.mean_1
             self.mupoly, self.mu = \
-                self.fit_poly_to_trace(xstep, mustep[:, 0], muorder,
-                                       self.mod0.mean_1, fitrange,
+                self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
                                        doplot=doplot)
             # The following lines may get incorporated if the generic
             #  data structures in the CDFutils package get updated.
@@ -832,12 +866,15 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the width of the trace'
                   % sigorder)
+            x = tracepars['x']
+            y = tracepars['sigma'][:, 0]
+            y0 = self.mod0.stddev_1
+            title = 'Width of Peak (Gaussian sigma)'
+            ylab = 'Width of trace'
             self.sigpoly, self.sig = \
-                self.fit_poly_to_trace(xstep, sigstep[:, 0], sigorder,
-                                       self.mod0.stddev_1, fitrange,
-                                       markformat='go',
-                                       title='Width of Peak (Gaussian sigma)',
-                                       ylabel='Width of trace', doplot=doplot)
+                self.fit_poly_to_trace(x, y, sigorder, y0, fitrange,
+                                       markformat='go', title=title,
+                                       ylabel=ylab, doplot=doplot)
 
     # -----------------------------------------------------------------------
 
