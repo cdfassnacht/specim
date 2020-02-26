@@ -616,28 +616,42 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def fit_slices(self, mod0, stepsize, ncomp=1, fitrange=None, usevar=None,
-                   mu0arr=None, sig0arr=None, debug=False):
+    def fit_slices(self, mod0, stepsize, ncomp=1, bgorder=0, fitrange=None,
+                   usevar=None, mu0arr=None, sig0arr=None, verbose=True,
+                   debug=False):
         """
 
         Steps through the 2d spectrum, fitting a model to a series of
         spatial profiles, one for each slice.  The model outputs for each
         slice get stored in arrays that are returned by this method.
+
         """
 
         """
         Define the slices through the 2D spectrum that will be used as the
          inputs to the spatial profile modeling
         """
+        if stepsize == 'default':
+            stepsize = int(self.npix / 50)
         if stepsize == 1:
             xstep = np.arange(self.npix)
         else:
             xstep = np.arange(0, self.npix-stepsize, stepsize)
+        if verbose:
+            print('Fitting to the trace at %d segments' % len(xstep))
+            print('  of the 2D spectrum with stepsize=%d pix ...' % stepsize)
 
         """ Set up containers for parameter values along the trace """
-        mustep = np.zeros((xstep.size, ncomp))
-        sigstep = mustep.copy()
-        ampstep = mustep.copy()
+        partab = Table()
+        partab['x'] = xstep
+        for i in range(bgorder+1):
+            name = 'bkgd%d' % i
+            partab[name] = np.zeros(xstep.size)
+        for i in range(ncomp):
+            modcomp = i+1
+            partab['amp_%d' % modcomp] = np.zeros(xstep.size)
+            partab['mu_%d' % modcomp] = np.zeros(xstep.size)
+            partab['sig_%d' % modcomp] = np.zeros(xstep.size)
         covar = []
         
         """ Make a temporary profile that will be used in the fitting  """
@@ -658,15 +672,22 @@ class Spec2d(imf.Image):
             mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
                                            verbose=debug)
             covar.append(fitinfo['param_cov'])
-            for j in range(ncomp):
-                mustep[i, j] = mod[j+1].mean.value
-                sigstep[i, j] = mod[j+1].stddev.value
-                ampstep[i, j] = mod[j+1].amplitude.value
+            # for j in range(bgorder + 1):
+            #     partab['bkgd%d' % j][i] = mod[0].c0
+            partab['bkgd0'][i] = mod[0].c0.value
+            for j in range(1, ncomp+1):
+                partab['mu_%d' % j][i] = mod[j].mean.value
+                partab['sig_%d' % j][i] = mod[j].stddev.value
+                partab['amp_%d' % j][i] = mod[j].amplitude.value
 
-        """ Return the fit parameters in a dictionany format """
-        parinfo = {'x': xstep, 'mu': mustep, 'sigma': sigstep, 'amp': ampstep,
-                   'covar': covar}
-        return parinfo
+        """
+        Compute the integrated fluxes and then return all the fitted
+        parameters
+        """
+        for i in range(1, ncomp+1):
+            partab['flux_%d' % i] = sqrt(2. * pi) * partab['sig_%d' %i] \
+                * partab['amp_%d' %i]
+        return partab, covar
     
     # -----------------------------------------------------------------------
 
@@ -808,27 +829,14 @@ class Spec2d(imf.Image):
             mod0.stddev_1.fixed = True
             fitsig = False
 
-        """
-        Define the slices through the 2D spectrum that will be used to find
-         the centroid and width of the object spectrum as it is traced down
-         the chip
-        """
-        if stepsize == 'default':
-            stepsize = int(self.npix / 50)
-        xstep = np.arange(0, self.npix-stepsize, stepsize)
-        nsteps = np.arange(xstep.shape[0])
-
-        """ Report information about the trace parameters"""
+        """ Trace the spectrum down the chip """
         if verbose:
             print('')
             print('Running fit_trace')
             print('---------------------------------------------------------')
-            print('Finding the location and width of the trace at %d segments'
-                  % nsteps.shape[0])
-            print('    of the 2D spectrum with stepsize=%d pix ...' % stepsize)
 
-        """ Trace the spectrum down the chip """
-        tracepars = self.fit_slices(mod0, stepsize, ncomp=ngauss)
+        tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
+                                           verbose=verbose)
         print('    Done')
 
         """ Fit a polynomial to the location of the trace """
@@ -842,7 +850,7 @@ class Spec2d(imf.Image):
             print('Fitting a polynomial of order %d to the location of the '
                   'trace' % muorder)
             x = tracepars['x']
-            y = tracepars['mu'][:, 0]
+            y = tracepars['mu_1']
             y0 = self.mod0.mean_1
             self.mupoly, self.mu = \
                 self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
@@ -867,7 +875,7 @@ class Spec2d(imf.Image):
             print('Fitting a polynomial of order %d to the width of the trace'
                   % sigorder)
             x = tracepars['x']
-            y = tracepars['sigma'][:, 0]
+            y = tracepars['sig_1']
             y0 = self.mod0.stddev_1
             title = 'Width of Peak (Gaussian sigma)'
             ylab = 'Width of trace'
