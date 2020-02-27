@@ -929,7 +929,7 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def _extract_modelfit(self, mod0, ncomp=1, usevar=True):
+    def _extract_modelfit(self, usevar=True, extractrange=None, verbose=True):
         """
 
         Does an extraction by fitting a n-component model + background to
@@ -942,6 +942,31 @@ class Spec2d(imf.Image):
          be fixed to the values described by the polynomial fits to the
          traces obtained from the trace_spectrum method.
         """
+
+        """
+        Make a copy of the profile shape to use for the model fitting,
+        and then fix the mean and sigma parameters.  The model fitting will
+        therefore just fit to the amplitudes of the profiles
+        """
+        mod0 = self.mod0.copy()
+        ncomp = mod0.n_submodels() - 1
+        if verbose:
+            print('Fitting to %d components, plus a background' % ncomp)
+        for i in range(1, ncomp+1):
+            mod0[i].mean.fixed = True
+            mod0[i].stddev.fixed = True
+
+        """ Do the extraction by calling fit_slices """
+        if verbose:
+            print('Extracting the spectrum.  Please be patient')
+            if extractrange is None:
+                print(' Extraction range (pixels): 0 - %d' % self.npix)
+            else:
+                print(' Extraction range (pixels): %d - %d' %
+                      extractrange[0], extractrange[1])
+        fitpars, covar = self.fit_slices(mod0, 1, mu0arr=self.mu,
+                                         sig0arr=self.sig)
+        return fitpars, covar
 
     # -----------------------------------------------------------------------
 
