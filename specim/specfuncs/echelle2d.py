@@ -218,7 +218,8 @@ class Ech2d(list):
     # --------------------------------------------------------------------
 
     def plot_profiles(self, bgsub=True, showfit=False, fitrange=None,
-                      showap=True, xunits='pix', maxx=140.):
+                      showap=True, xunits='default', maxx=140., fontsize=12,
+                      **kwargs):
         """
 
         Plots, in one figure, the spatial profiles for all the 10 orders
@@ -251,6 +252,17 @@ class Ech2d(list):
         else:
             grid = (1, len(self))
 
+        """ See if we can convert the x axes to arcsecs """
+        if xunits == 'default':
+            if 'pixscale' in self.ordinfo.colnames:
+                xunits = 'arcsec'
+            else:
+                xunits = 'pix'
+        elif xunits == 'arcsec':
+            if 'pixscale' not in self.ordinfo.colnames:
+                print('Warning: no pixel scale information. Plotting in pix')
+                xunits = 'pix'
+                
         """ Loop through and plot the profiles """
         count = 1
         for spec, info in zip(self, self.ordinfo):
@@ -263,9 +275,15 @@ class Ech2d(list):
                 mod = spec.p0
             else:
                 mod = None
+            if xunits == 'arcsec':
+                pixscale = info['pixscale']
+            else:
+                pixscale = None
             spec.spatial_profile(normalize=normspec, title=None, model=mod,
-                                 pixrange=pixrange)
-            plt.xlim(-1, maxx)
+                                 pixrange=pixrange, pixscale=pixscale,
+                                 fontsize=fontsize, **kwargs)
+            if xunits == 'pix':
+                plt.xlim(-1, maxx)
             if normspec:
                 plt.ylim(-0.1, 1.1)
             if count == 1 or count == (grid[1] + 1):
@@ -273,17 +291,18 @@ class Ech2d(list):
             else:
                 plt.setp(axi.get_yticklabels(), visible=False)
                 axi.set_ylabel('', visible=False)
-            if grid[0] > 1 and count < (grid[1]-1)*grid[0]:
+            if grid[0] > 1 and count < (grid[0]-1)*grid[1]:
                 plt.setp(axi.get_xticklabels(), visible=False)
             axi.set_xlabel('', visible=False)
-            axi.annotate('%d' % info['order'], (10., 0.95))
+            axi.annotate('%d' % info['order'], (0.05, 0.9),
+                         xycoords='axes fraction')
             count += 1
 
         if self.infile is not None:
             ax.set_title('Spatial Profiles for %s' % self.infile)
         else:
             ax.set_title('Spatial Profiles')
-        ax.set_xlabel('Spatial Direction')
+        ax.set_xlabel('Spatial Direction (%s)' % xunits, fontsize=fontsize)
         ax.xaxis.set_label_coords(0.5, -0.05)
         ax.yaxis.set_label_coords(-0.03, 0.5)
 

@@ -525,9 +525,9 @@ class Spec2d(imf.Image):
     
     # -----------------------------------------------------------------------
 
-    def spatial_profile(self, pixrange=None, doplot=True, 
+    def spatial_profile(self, pixrange=None, doplot=True, pixscale=None,
                         title='Spatial Profile', model=None, normalize=False,
-                        showap=True, verbose=True):
+                        showap=True, verbose=True, debug=False, **kwargs):
         """
         Compresses a 2d spectrum along the dispersion axis to create a spatial
          profile, and then plots it if requested
@@ -541,7 +541,7 @@ class Spec2d(imf.Image):
         pflux = self.compress_spec(pixrange)
         pmax = pflux.max()
         if verbose:
-            print(pmax)
+            print('Profile max value (before normalization) %f' % pmax)
 
         """ Normalize the profile if requested """
         if normalize:
@@ -550,16 +550,22 @@ class Spec2d(imf.Image):
 
         """ Save the profile as a Spec1d instance """
         px = np.arange(pflux.shape[0])
-        profile = Spec1d(wav=px, flux=pflux, verbose=verbose)
+        if pixscale is not None:
+            wav = px * pixscale
+            units = 'arcsec'
+        else:
+            wav = px
+            units = 'pix'
+        profile = Spec1d(wav=wav, flux=pflux, verbose=debug)
 
         """
         Plot the compressed spectrum, showing the best-fit Gaussian if
         requested
         """
         if(doplot):
-            xlab = 'Spatial direction (0-indexed)'
+            xlab = 'Spatial direction (%s)' % units
             profile.plot(color=color, title=title, xlabel=xlab, model=model,
-                         showzero=False)
+                         showzero=False, **kwargs)
             if showap:
                 if self.profcent is not None:
                     plt.axvline(self.profcent + self.apmin, color='k')
@@ -837,7 +843,8 @@ class Spec2d(imf.Image):
 
         tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
                                            verbose=verbose)
-        print('    Done')
+        if verbose:
+            print('    Done')
 
         """ Fit a polynomial to the location of the trace """
         if fitmu:
@@ -929,7 +936,7 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def _extract_modelfit(self, usevar=True, extractrange=None, verbose=True):
+    def _extract_modelfit(self, usevar=True, extrange=None, verbose=True):
         """
 
         Does an extraction by fitting a n-component model + background to
@@ -959,18 +966,18 @@ class Spec2d(imf.Image):
         """ Do the extraction by calling fit_slices """
         if verbose:
             print('Extracting the spectrum.  Please be patient')
-            if extractrange is None:
+            if exttrange is None:
                 print(' Extraction range (pixels): 0 - %d' % self.npix)
             else:
                 print(' Extraction range (pixels): %d - %d' %
-                      extractrange[0], extractrange[1])
+                      extrange[0], extrange[1])
         fitpars, covar = self.fit_slices(mod0, 1, mu0arr=self.mu,
                                          sig0arr=self.sig)
         return fitpars, covar
 
     # -----------------------------------------------------------------------
 
-    def _extract_horne(self, profile, gain=1.0, rdnoise=0.0):
+    def _extract_horne(self, profile, gain=1.0, rdnoise=0.0, extrange=None):
         """
 
         STILL TO DO:
@@ -1153,19 +1160,30 @@ class Spec2d(imf.Image):
         Save the result as a Spec1d instance
         """
         # print('*** Number of nans: %d %d %d ***' % (nnans, nnanv, nnan))
-        print('')
-        self.spec1d = Spec1d(wav=self.wavelength, flux=flux, var=var, sky=bkgd)
+        if extrange is not None:
+            extmin = extrange[0]
+            extmax = extrange[1]
+            owav = self.wavelength[extmin:extmax]
+            oflux = flux[extmin:extmax]
+            ovar = var[extmin:extmax]
+            sky = bkgd[extmin:extmax]
+        else:
+            owav = self.wavelength.copy()
+            oflux = flux
+            ovar = var
+            sky = bkgd
+        self.spec1d = Spec1d(wav=owav, flux=oflux, var=ovar, sky=sky)
         self.apmask = apmask
 
         """ Clean up """
-        del(invar)
+        del(invar, flux, var, bkgd, owav, oflux, ovar, sky)
 
     # -----------------------------------------------------------------------
 
-    def extract(self, method='wtsum', weight='gauss', mod0=None, ncomp=1,
+    def extract(self, method='wtsum', weight='gauss', extrange=None,
                 sky=None, usevar=True, gain=1.0, rdnoise=0.0,
                 doplot=True, do_subplot=True, outfile=None,
-                outformat='text', verbose=True):
+                outformat='text', verbose=True, **kwargs):
         """
         Second step in reduction process.
 
@@ -1177,9 +1195,9 @@ class Spec2d(imf.Image):
 
         """ Extract the spectrum """
         if method == 'modelfit':
-            self._extract_modelfit(mod0, ncomp, usevar)
+            self._extract_modelfit(usevar=usevar, extrange=extrange)
         else:
-            self._extract_horne(weight, gain, rdnoise)
+            self._extract_horne(weight, gain, rdnoise, extrange=extrange)
 
         """ Plot the extracted spectrum if desired """
         if doplot:
@@ -1195,7 +1213,8 @@ class Spec2d(imf.Image):
                 xlab = 'Wavelength'
             else:
                 xlab = 'Pixel number along the %s axis' % self.dispaxis
-            self.spec1d.plot(xlabel=xlab, title='Extracted spectrum')
+            self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
+                             **kwargs)
 
         """ Save the extracted spectrum to a file if requested """
         if outfile is not None:

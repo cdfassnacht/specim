@@ -797,7 +797,7 @@ class Spec1d(df.Data1d):
 
     def plot(self, mode='input',
              xlabel='Wavelength (Angstroms)', ylabel='Relative Flux',
-             title='default', docolor=True, color='b', linestyle='',
+             title='default', docolor=True, color='b', linestyle='solid',
              showzero=True, model=None, modcolor='g',
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
@@ -854,8 +854,10 @@ class Spec1d(df.Data1d):
             plabel = 'Flux'
 
         """ Plot the spectrum """
-        ls = "steps%s" % linestyle
-        plt.plot(self['wav'], flux, color, linestyle=ls, label=plabel)
+        drawstyle = 'steps'
+        ls = "%s" % linestyle
+        plt.plot(self['wav'], flux, color, linestyle=ls, drawstyle=drawstyle,
+                 label=plabel)
         plt.tick_params(labelsize=fontsize)
         plt.xlabel(xlabel, fontsize=fontsize)
 
@@ -869,7 +871,6 @@ class Spec1d(df.Data1d):
         """ Plot the RMS spectrum if the variance spectrum exists """
         if var is not None:
             rms = np.sqrt(var) + rmsoffset
-            drawstyle = 'steps'
             if rmsls is None:
                 if docolor:
                     rlinestyle = 'solid'
