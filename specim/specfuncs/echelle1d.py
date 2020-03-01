@@ -121,7 +121,7 @@ class Ech1d(list):
 
     def plot_all(self, plotmode='single', mode='input', title=None, z=None,
                  showz=True, linetype='strongem', smo=None, pltylim=None,
-                 verbose=False, **kwargs):
+                 verbose=False, debug=False, **kwargs):
         """
 
         Plots all the spectra in the echelle data set in a single plot.
@@ -132,7 +132,8 @@ class Ech1d(list):
         wmin = 1.e12
         wmax = 0.
 
-        print(len(self))
+        if verbose:
+            print(len(self))
         """ Plot the spectra """
         for count, spec in enumerate(self):
 
@@ -141,16 +142,18 @@ class Ech1d(list):
                 if title is None:
                     title = 'Extracted Spectrum'
                 showz = True
-                print('Bang')
+                if debug:
+                    print('Bang')
             else:
                 tmptitle = title
                 title = None
                 showz = False
 
-            if title is not None:
-                print(count, title)
-            else:
-                print(count, 'None')
+            if verbose:
+                if title is not None:
+                    print(count, title)
+                else:
+                    print(count, 'None')
 
             """ Plot the spectrum """
             if smo is not None:
@@ -167,7 +170,8 @@ class Ech1d(list):
                 wmax = spec['wav'].max()
 
         """ Set final plot limits """
-        plt.xlim(wmin, wmax)
+        dw = wmax - wmin
+        plt.xlim(wmin-0.05*dw, wmax+0.05*dw)
         if pltylim is not None:
             plt.ylim(pltylim)
 

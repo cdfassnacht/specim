@@ -219,7 +219,7 @@ class Ech2d(list):
 
     def plot_profiles(self, bgsub=True, showfit=False, fitrange=None,
                       showap=True, xunits='default', maxx=140., fontsize=12,
-                      **kwargs):
+                      verbose=True, **kwargs):
         """
 
         Plots, in one figure, the spatial profiles for all the 10 orders
@@ -264,6 +264,9 @@ class Ech2d(list):
                 xunits = 'pix'
                 
         """ Loop through and plot the profiles """
+        if verbose:
+            print('Plotting spatial profiles')
+            print('-------------------------')
         count = 1
         for spec, info in zip(self, self.ordinfo):
             if self.ordinfo is not None:
@@ -281,7 +284,7 @@ class Ech2d(list):
                 pixscale = None
             spec.spatial_profile(normalize=normspec, title=None, model=mod,
                                  pixrange=pixrange, pixscale=pixscale,
-                                 fontsize=fontsize, **kwargs)
+                                 fontsize=fontsize, verbose=verbose, **kwargs)
             if xunits == 'pix':
                 plt.xlim(-1, maxx)
             if normspec:

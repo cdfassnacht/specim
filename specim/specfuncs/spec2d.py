@@ -977,7 +977,8 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def _extract_horne(self, profile, gain=1.0, rdnoise=0.0, extrange=None):
+    def _extract_horne(self, profile, gain=1.0, rdnoise=0.0, extrange=None,
+                       verbose=True):
         """
 
         STILL TO DO:
@@ -1172,7 +1173,8 @@ class Spec2d(imf.Image):
             oflux = flux
             ovar = var
             sky = bkgd
-        self.spec1d = Spec1d(wav=owav, flux=oflux, var=ovar, sky=sky)
+        self.spec1d = Spec1d(wav=owav, flux=oflux, var=ovar, sky=sky,
+                             verbose=verbose)
         self.apmask = apmask
 
         """ Clean up """
@@ -1197,7 +1199,8 @@ class Spec2d(imf.Image):
         if method == 'modelfit':
             self._extract_modelfit(usevar=usevar, extrange=extrange)
         else:
-            self._extract_horne(weight, gain, rdnoise, extrange=extrange)
+            self._extract_horne(weight, gain, rdnoise, extrange=extrange,
+                                verbose=verbose)
 
         """ Plot the extracted spectrum if desired """
         if doplot:
