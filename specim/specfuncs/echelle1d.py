@@ -203,7 +203,7 @@ class Ech1d(list):
          within this class, to one or more output files. 
         The output options are:
          1. 'multitab' - Writes a single output file, which is a 
-                         multiextention fits file.  Each extension contains
+                         multiextension fits file.  Each extension contains
                          a fits table ('fitstab' format in the Spec1d lingo)
          2. 'text'     - Produces several output files, one for each order.
                          The files are ascii text files, with columns for,
