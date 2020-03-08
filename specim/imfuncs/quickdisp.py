@@ -2,11 +2,11 @@
 Code to do a quick look at a fits file.  The file gets displayed with
 default parameters.
 
-Usage: python quickdisp [fitsfile]
+Usage: python quickdisp.py [fitsfile]
 
              -- or --
 
-   python quickdisp [-f [flatfile] [-fmax fmax] [fitsfile(s)]
+   python quickdisp.py [-f [flatfile] [-fmax fmax] [fitsfile(s)]
 
 Input parameters:
     fitsfile - Name of input fits file to be displayed
@@ -23,7 +23,8 @@ from specim import imfuncs as imf
 if len(sys.argv)<2:
     print('')
     print('Usage:')
-    print(' python quickdisp [fitsfile]')
+    print(' python quickdisp.py (flag1 flag1val flag2 flag2val...)'
+          ' [fitsfile]')
     print('')
     print('Required inputs:')
     print(' fitsfile - Name of fits file to be displayed')
@@ -41,6 +42,7 @@ if len(sys.argv)<2:
 """ Set up variables for later use """
 filestart = 1
 pixscale = None
+fmin = -1.
 fmax = 10.
 flat = None
 flatfile = None
@@ -77,6 +79,16 @@ while start_files is False and no_error:
             msg = 'ERROR: -fmax used but no fmax value is given'
             no_error = False
         filestart += 2
+    elif sys.argv[filestart] == '-fmin':
+        try:
+            fmin = float(sys.argv[filestart+1])
+        except ValueError:
+            msg = 'ERROR: fmin is not a floating point number'
+            no_error = False
+        except IndexError:
+            msg = 'ERROR: -fmin used but no fmin value is given'
+            no_error = False
+        filestart += 2
     else:
         start_files = True
 
@@ -104,7 +116,7 @@ im1 = imf.Image(infile)
 if flat is not None:
     im1.data /= flat
 im1.zoomsize = subimsize
-im1.display(fmax=fmax, mode='xy', title=im1.infile)
+im1.display(fmax=fmax, fmin=fmin, mode='xy', title=im1.infile)
 
 """ Run the interactive zooming and marking """
 im1.start_interactive()

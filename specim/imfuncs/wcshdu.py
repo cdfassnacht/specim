@@ -556,7 +556,8 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def cutout_xy(self, x1, y1, x2, y2, nanval=0., verbose=True):
+    def cutout_xy(self, x1, y1, x2, y2, nanval=0., fixnans=False,
+                  verbose=True):
         """
 
         Selects the data in the subimage defined by the bounds x1, x2, y1, y2.
@@ -579,11 +580,12 @@ class WcsHDU(pf.PrimaryHDU):
             data = self.data[y1:y2, x1:x2].copy()
 
         """ Fix NaNs """
-        if nanval == 'max':
-            goodmask = np.isfinite(data)
-            dmax = data[goodmask].max()
-            nanval = 10. * dmax
-        data[~np.isfinite(data)] = nanval
+        if fixnans:
+            if nanval == 'max':
+                goodmask = np.isfinite(data)
+                dmax = data[goodmask].max()
+                nanval = 10. * dmax
+            data[~np.isfinite(data)] = nanval
 
         """ Set output image properties """
         nx = x2 - x1
@@ -632,7 +634,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def cutout_radec(self, imcent, imsize, outscale=None,
+    def cutout_radec(self, imcent, imsize, outscale=None, fixnans=False,
                      nanval=0., theta_tol=1.e-5, verbose=True, debug=True):
         """
         Makes a cutout of the data based on a image center in (ra, dec)
@@ -675,7 +677,8 @@ class WcsHDU(pf.PrimaryHDU):
          parameters of the displayed HDU correctly
         """
         if imsize is None:
-            subim = self.cutout_xy(0, 0, nx, ny, verbose=False)
+            subim = self.cutout_xy(0, 0, nx, ny, fixnans=fixnans,
+                                   nanval=nanval, verbose=False)
             return subim
 
         """
@@ -701,7 +704,7 @@ class WcsHDU(pf.PrimaryHDU):
             centradec = np.zeros(hdr['naxis'])
             centradec[0] = imcent[0]
             centradec[1] = imcent[1]
-            xy = w.wcs_world2pix([centradec], 0)[0]
+            xy = w.all_world2pix([centradec], 1)[0]
             x = xy[0]
             y = xy[1]
 
@@ -755,7 +758,7 @@ class WcsHDU(pf.PrimaryHDU):
             x1, y1, x2, y2, = self.subim_bounds_xy(centpos, imsize)
             print(x1, y1, x2, y2)
             subim = self.cutout_xy(x1, y1, x2, y2, nanval=nanval,
-                                   verbose=verbose)
+                                   fixnans=fixnans, verbose=verbose)
             return subim
 
         """
@@ -792,7 +795,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         # *** Now need to deal with regions that extend outside the data
         # should be doable, since map_coordinates just takes coordinate pairs
-        # so masking the inputte ccdcoords arrays should be possible for
+        # so masking the inputted ccdcoords arrays should be possible for
         # coordinates < 0 or > nx, ny
 
         """ Get the data to be resampled """
@@ -802,11 +805,12 @@ class WcsHDU(pf.PrimaryHDU):
             data = indata.copy()
 
         """ Transform the coordinates """
-        if nanval == 'max':
-            goodmask = np.isfinite(data)
-            dmax = data[goodmask].max()
-            nanval = 10. * dmax
-        data[np.isnan(data)] = nanval
+        if fixnans:
+            if nanval == 'max':
+                goodmask = np.isfinite(data)
+                dmax = data[goodmask].max()
+                nanval = 10. * dmax
+            data[np.isnan(data)] = nanval
         outdata = ndimage.map_coordinates(data, icoords, order=5)
 
         """ Save the output as a ImageHDU object """

@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 
 from astropy.io import fits as pf
 from astropy.table import Table
+from astropy.modeling import models
 
 from cdfutils import datafuncs as df
 from .. import imfuncs as imf
@@ -647,22 +648,35 @@ class Spec2d(imf.Image):
             print('Fitting to the trace at %d segments' % len(xstep))
             print('  of the 2D spectrum with stepsize=%d pix ...' % stepsize)
 
-        """ Set up containers for parameter values along the trace """
-        partab = Table()
-        partab['x'] = xstep
-        for i in range(bgorder+1):
-            name = 'bkgd%d' % i
-            partab[name] = np.zeros(xstep.size)
-        for i in range(ncomp):
-            modcomp = i+1
-            partab['amp_%d' % modcomp] = np.zeros(xstep.size)
-            partab['mu_%d' % modcomp] = np.zeros(xstep.size)
-            partab['sig_%d' % modcomp] = np.zeros(xstep.size)
-        covar = []
-        
+        # """ Set up containers for parameter values along the trace """
+        # partab = Table()
+        # for param in mod0.param_names:
+        #     partab[param] = np.zeros(xstep.size)
+        # # partab['x'] = xstep
+        # # for i in range(bgorder+1):
+        # #     name = 'bkgd%d' % i
+        # #     partab[name] = np.zeros(xstep.size)
+        # # for i in range(ncomp):
+        # #     modcomp = i+1
+        # #     partab['amp_%d' % modcomp] = np.zeros(xstep.size)
+        # #     partab['mu_%d' % modcomp] = np.zeros(xstep.size)
+        # #     partab['sig_%d' % modcomp] = np.zeros(xstep.size)
+        # covar = []
+        # 
         """ Make a temporary profile that will be used in the fitting  """
         tmpprof = Spec1d((Table(self.profile).copy()), verbose=False)
-        
+
+        """ Set up a model set to hold the models """
+        p_order = len(mod0[0].param_names)
+        c0 = np.ones(xstep.size) * mod0[0].c0
+        m1 = np.ones(xstep.size) * mod0[1].mean
+        s1 = np.ones(xstep.size) * mod0[1].stddev
+        a1 = np.ones(xstep.size) * mod0[1].amplitude
+        bkgd = models.Polynomial1D(degree=p_order, c0=c0, n_models=c0.size)
+        comp1 = models.Gaussian1D(amplitude=a1, mean=m1, stddev=s1,
+                                  n_models=c0.size)
+        mod = bkgd + comp1
+        covar = []
         """
         Step through the data, slice by slice, fitting to the spatial profile
         in each slice along the way and storing the results in the mustep
@@ -675,25 +689,26 @@ class Spec2d(imf.Image):
                 mod0[1].mean = mu0arr[i]
             if sig0arr is not None:
                 mod0[1].stddev = sig0arr[i]
-            mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
-                                           verbose=debug)
+            tmpmod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+                                              verbose=debug)
             covar.append(fitinfo['param_cov'])
             # for j in range(bgorder + 1):
             #     partab['bkgd%d' % j][i] = mod[0].c0
-            partab['bkgd0'][i] = mod[0].c0.value
-            for j in range(1, ncomp+1):
-                partab['mu_%d' % j][i] = mod[j].mean.value
-                partab['sig_%d' % j][i] = mod[j].stddev.value
-                partab['amp_%d' % j][i] = mod[j].amplitude.value
+            # partab['c0'][i] = mod[0].c0.value
+            # for j in range(1, ncomp+1):
+            #     partab['mean_%d' % j][i] = mod[j].mean.value
+            #     partab['stddev_%d' % j][i] = mod[j].stddev.value
+            #     partab['amplitude_%d' % j][i] = mod[j].amplitude.value
 
         """
         Compute the integrated fluxes and then return all the fitted
         parameters
         """
-        for i in range(1, ncomp+1):
-            partab['flux_%d' % i] = sqrt(2. * pi) * partab['sig_%d' %i] \
-                * partab['amp_%d' %i]
-        return partab, covar
+        # for i in range(1, ncomp+1):
+        #     partab['flux_%d' % i] = sqrt(2. * pi) * partab['stddev_%d' %i] \
+        #         * partab['amplitude_%d' %i]
+        # return partab, covar
+        return mod, covar
     
     # -----------------------------------------------------------------------
 
@@ -841,12 +856,15 @@ class Spec2d(imf.Image):
             print('Running fit_trace')
             print('---------------------------------------------------------')
 
-        tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
-                                           verbose=verbose)
+        # tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
+        #                                    verbose=verbose)
+        tracemod, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
+                                          verbose=verbose)
         if verbose:
             print('    Done')
 
         """ Fit a polynomial to the location of the trace """
+        x = np.arange(len(mod.c0_0))
         if fitmu:
             if doplot:
                 if(do_subplot):
@@ -856,8 +874,9 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the location of the '
                   'trace' % muorder)
-            x = tracepars['x']
-            y = tracepars['mu_1']
+            # x = tracepars['x']
+            # y = tracepars['mu_1']
+            y = tracemod.mean_1
             y0 = self.mod0.mean_1
             self.mupoly, self.mu = \
                 self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
@@ -881,8 +900,9 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the width of the trace'
                   % sigorder)
-            x = tracepars['x']
-            y = tracepars['sig_1']
+            # x = tracepars['x']
+            # y = tracepars['sig_1']
+            y = mod.stddev_1
             y0 = self.mod0.stddev_1
             title = 'Width of Peak (Gaussian sigma)'
             ylab = 'Width of trace'
@@ -936,6 +956,38 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
+    def make_prof2d(self):
+        """
+
+        NOTE: this must be run after the find_and_trace step
+
+        Given the model parameters obtained from fitting the spatial
+         profile at each wavelength (done in the trace_spectrum method,
+         which is called by the find_and_trace method), creates a 2d
+         image that consists of the approriate normalized profile at each
+         wavelength.
+
+        """
+
+        """
+        Create a blank image
+        """
+        prof2d = np.zeros(self['input'].data.shape)
+
+        """
+        Set up the spatial-direction vector and a container for the
+         profile model
+        """
+        y = np.arange(self.nspat)
+        mod = self.mod0.copy()
+        
+        """
+        Step through the image, replacing the column or row at each
+        wavelength by the profile model for that wavelength
+        """
+
+    # -----------------------------------------------------------------------
+
     def _extract_modelfit(self, usevar=True, extrange=None, verbose=True):
         """
 
@@ -985,12 +1037,35 @@ class Spec2d(imf.Image):
           - possibly pass to this method a previously
             generated profile instead of generating it here
 
-        Extracts a 1d spectrum from the 2d spectrum by doing a weighted
-        sum across the spectrum in the spatial direction at each wavelength.
-        The extraction has now been set up to follow, at least partially,
-        the "optimal extraction" scheme of Horne (1986, PASP, 98, 609).
-        See more discussion of this scheme below the description of the
-        weighting.
+        Implements the "optimal extraction" method of Keith Horne (1986,
+        PASP, 98, 609) to extract a 1d spectrum from the 2d spectral data.
+        This is just a weighted average, where the output flux at a given
+        wavelength is
+          f_lambda = (Sum_i w_i x_i) / Sum_i w_i
+        and the index i runs along the spatial direction.
+        The Horne method uses the spatial profile of the spectrum, which
+         it implements as a probability density function (PDF), P to do
+         this.  The x variable in the above equation is x_i = (D_i - S) / P_i,
+         where D is the calibrated data in pixel i, S is the estimated sky
+         value in that pixel, and P_i is the PDF value in the pixel.
+         The weight factor is w_i = P_i^2 / V_i, where V_i is the 
+         estimated variance in pixel i  based on counts and the detector gain
+         and readnoise.
+        The final extracted flux is thus given by:
+
+                  Sum_i{ M_i * P_i * (D_i - S_i) / V_i }
+              f = --------------------------------------
+                     Sum_i{ M_i * P_i^2 / V_i }
+
+         and the variance on the extracted flux, sigma_f^2, is
+
+                            Sum_i{ M_i * P_i }
+             sigma_f^2 = --------------------------
+                         Sum_i{ M_i * P_i^2 / V_i }
+
+         where M_i is 1 if the pixel is good or 0 if the pixel is bad 
+         (e.g., from a cosmic ray, etc.)
+        NOTE: P must be normalized for each wavelength
 
         There are three components to the weighting:
          1. The aperture definition itself (stored in the apmin and apmax
@@ -1011,23 +1086,6 @@ class Spec2d(imf.Image):
              from a 2d sky spectrum if the sky has already been subtracted
              from the data) plus the gain and readnoise of the detector.
 
-        According to the Horne paper, the optimal extraction of a spectrum
-        that has a profile P and proper knowledge of the noise/variance
-        associated with each pixel is as follows.  Below D represents the
-        calibrated data, S is the sky, V is the pixel variance (based on counts
-        and the detector gain and readnoise):
-
-                  Sum{ P * (D - S) / V }
-              f = ---------------------
-                     Sum{ P^2 / V }
-
-        and the variance on the extracted flux, sigma_f^2, is
-
-                           Sum{ P }
-             sigma_f^2 = -------------
-                         Sum{ P^2 / V }
-
-        NOTE: P must be normalized for each wavelength
         """
 
         """

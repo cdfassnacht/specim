@@ -877,7 +877,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def poststamp_xy(self, centpos, imsize, dmode='input', outfile=None,
-                     nanval=0., verbose=True):
+                     fixnans=False, nanval=0., verbose=True):
         """
         Creates a subimage that is a cutout of the original image.  For
          this method, the image center is defined by its (x, y) coordinate
@@ -906,7 +906,7 @@ class Image(dict):
         """ Make the cutout """
         x1, y1, x2, y2 = self[dmode].subim_bounds_xy(centpos, imsize)
         cutout = self[dmode].cutout_xy(x1, y1, x2, y2, nanval=nanval,
-                                       verbose=verbose)
+                                       fixnans=fixnans, verbose=verbose)
         subim = WcsHDU(cutout.data, cutout.header, verbose=verbose,
                        wcsverb=False)
 
@@ -924,7 +924,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def imcopy(self, x1, y1, x2, y2, dmode='input', outfile=None,
-               verbose=True):
+               fixnans=False, verbose=True):
         """
         Description: Given the x and y coordinates of
         the lower left corner and the upper right corner, creates a new
@@ -939,7 +939,8 @@ class Image(dict):
         """
 
         """ Make the cutout """
-        cutout = self[dmode].cutout_xy(x1, y1, x2, y2, verbose=verbose)
+        cutout = self[dmode].cutout_xy(x1, y1, x2, y2, fixnans=fixnans,
+                                       verbose=verbose)
         subim = WcsHDU(cutout.data, cutout.header, verbose=verbose,
                        wcsverb=False)
 
@@ -957,8 +958,8 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def poststamp_radec(self, imcent, imsize, dmode='input', outscale=None,
-                        docdmatx=False, nanval=0.,  outfile=None,
-                        verbose=True, debug=False):
+                        docdmatx=False, fixnans=False, nanval=0.,
+                        outfile=None, verbose=True, debug=False):
         """
         Given a central coordinate (RA, dec) and an image size in arcseconds,
          creates an output cutout image
@@ -1000,7 +1001,8 @@ class Image(dict):
 
         """ Create the postage stamp data """
         cutout = self[dmode].cutout_radec(imcent, imsize, outscale=outscale,
-                                          nanval=nanval, verbose=verbose)
+                                          nanval=nanval, fixnans=fixnans,
+                                          verbose=verbose)
         subim = WcsHDU(cutout.data, cutout.header, verbose=verbose,
                        wcsverb=False)
 
@@ -1419,7 +1421,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def set_subim(self, imcent=None, imsize=None, mode='radec',
-                  dmode='input', verbose=False):
+                  dmode='input', fixnans=False, verbose=False):
         """
         Sets the region of the image to be displayed
 
@@ -1458,9 +1460,10 @@ class Image(dict):
         """
         if mode == 'radec':
             plthdu = self.poststamp_radec(imcent, imsize, dmode=dmode,
-                                          verbose=verbose)
+                                          fixnans=fixnans, verbose=verbose)
         else:
-            plthdu = self.poststamp_xy(imcent, imsize, dmode=dmode)
+            plthdu = self.poststamp_xy(imcent, imsize, dmode=dmode,
+                                       fixnans=fixnans)
         print('')
 
         return plthdu
@@ -1518,7 +1521,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def display(self, dmode='input', mode='radec', imcent=None, imsize=None,
-                fscale='linear', axlabel=True, fontsize=None,
+                fixnans=False, fscale='linear', axlabel=True, fontsize=None,
                 show_xyproj=False, verbose=False, debug=False, **kwargs):
         """
 
@@ -1586,7 +1589,8 @@ class Image(dict):
         """
         try:
             self['plotim'] = self.set_subim(imcent, imsize, mode=mode,
-                                            dmode=dmode, verbose=verbose)
+                                            dmode=dmode, fixnans=fixnans,
+                                            verbose=verbose)
         except (TypeError, IOError):
             print('ERROR: Could not create image cutout')
             print('')
