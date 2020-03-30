@@ -639,7 +639,8 @@ class Spec2d(imf.Image):
          inputs to the spatial profile modeling
         """
         if stepsize == 'default':
-            stepsize = int(self.npix / 50)
+            nbins = 25
+            stepsize = int(self.npix / nbins)
         if stepsize == 1:
             xstep = np.arange(self.npix)
         else:
@@ -648,57 +649,46 @@ class Spec2d(imf.Image):
             print('Fitting to the trace at %d segments' % len(xstep))
             print('  of the 2D spectrum with stepsize=%d pix ...' % stepsize)
 
-        # """ Set up containers for parameter values along the trace """
-        # partab = Table()
-        # for param in mod0.param_names:
-        #     partab[param] = np.zeros(xstep.size)
-        # # partab['x'] = xstep
-        # # for i in range(bgorder+1):
-        # #     name = 'bkgd%d' % i
-        # #     partab[name] = np.zeros(xstep.size)
-        # # for i in range(ncomp):
-        # #     modcomp = i+1
-        # #     partab['amp_%d' % modcomp] = np.zeros(xstep.size)
-        # #     partab['mu_%d' % modcomp] = np.zeros(xstep.size)
-        # #     partab['sig_%d' % modcomp] = np.zeros(xstep.size)
-        # covar = []
-        # 
+        """
+        Set up containers for parameter values and covariances along the trace
+        """
+        partab = Table()
+        partab['x'] = xstep
+        for param in mod0.param_names:
+            partab[param] = np.zeros(xstep.size)
+        partab['flux'] = np.zeros(xstep.size)
+        covar = []
+        
         """ Make a temporary profile that will be used in the fitting  """
         tmpprof = Spec1d((Table(self.profile).copy()), verbose=False)
 
-        """ Set up a model set to hold the models """
-        p_order = len(mod0[0].param_names)
-        c0 = np.ones(xstep.size) * mod0[0].c0
-        m1 = np.ones(xstep.size) * mod0[1].mean
-        s1 = np.ones(xstep.size) * mod0[1].stddev
-        a1 = np.ones(xstep.size) * mod0[1].amplitude
-        bkgd = models.Polynomial1D(degree=p_order, c0=c0, n_models=c0.size)
-        comp1 = models.Gaussian1D(amplitude=a1, mean=m1, stddev=s1,
-                                  n_models=c0.size)
-        mod = bkgd + comp1
-        covar = []
         """
         Step through the data, slice by slice, fitting to the spatial profile
-        in each slice along the way and storing the results in the mustep
-        and sigstep arrays
+        in each slice along the way and storing the results in the parameter
+        table
         """
         for i, x in enumerate(xstep):
+            """ Create the data slice"""
             pixrange = [x, x+stepsize]
             tmpprof['flux'] = self.compress_spec(pixrange)
+
+            """ Fix the input model parameters (this code will change) """
             if mu0arr is not None:
                 mod0[1].mean = mu0arr[i]
             if sig0arr is not None:
                 mod0[1].stddev = sig0arr[i]
-            tmpmod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
-                                              verbose=debug)
+
+            """ Do the model fitting """
+            mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+                                           verbose=debug)
+
+            """
+            Store the fitted parameters in the parameter table and the
+            covariances in the covar list
+            """
+            for param, val in zip(mod.param_names, mod.parameters):
+                partab[param][i] = val
             covar.append(fitinfo['param_cov'])
-            # for j in range(bgorder + 1):
-            #     partab['bkgd%d' % j][i] = mod[0].c0
-            # partab['c0'][i] = mod[0].c0.value
-            # for j in range(1, ncomp+1):
-            #     partab['mean_%d' % j][i] = mod[j].mean.value
-            #     partab['stddev_%d' % j][i] = mod[j].stddev.value
-            #     partab['amplitude_%d' % j][i] = mod[j].amplitude.value
 
         """
         Compute the integrated fluxes and then return all the fitted
@@ -707,8 +697,7 @@ class Spec2d(imf.Image):
         # for i in range(1, ncomp+1):
         #     partab['flux_%d' % i] = sqrt(2. * pi) * partab['stddev_%d' %i] \
         #         * partab['amplitude_%d' %i]
-        # return partab, covar
-        return mod, covar
+        return partab, covar
     
     # -----------------------------------------------------------------------
 
@@ -856,15 +845,12 @@ class Spec2d(imf.Image):
             print('Running fit_trace')
             print('---------------------------------------------------------')
 
-        # tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
-        #                                    verbose=verbose)
-        tracemod, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
-                                          verbose=verbose)
+        tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
+                                           verbose=verbose)
         if verbose:
             print('    Done')
 
         """ Fit a polynomial to the location of the trace """
-        x = np.arange(len(mod.c0_0))
         if fitmu:
             if doplot:
                 if(do_subplot):
@@ -874,9 +860,8 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the location of the '
                   'trace' % muorder)
-            # x = tracepars['x']
-            # y = tracepars['mu_1']
-            y = tracemod.mean_1
+            x = tracepars['x']
+            y = tracepars['mean_1']
             y0 = self.mod0.mean_1
             self.mupoly, self.mu = \
                 self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
@@ -900,9 +885,8 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the width of the trace'
                   % sigorder)
-            # x = tracepars['x']
-            # y = tracepars['sig_1']
-            y = mod.stddev_1
+            x = tracepars['x']
+            y = tracepars['stddev_1']
             y0 = self.mod0.stddev_1
             title = 'Width of Peak (Gaussian sigma)'
             ylab = 'Width of trace'
