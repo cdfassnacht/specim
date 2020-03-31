@@ -701,40 +701,79 @@ class Spec2d(imf.Image):
     
     # -----------------------------------------------------------------------
 
-    def fit_poly_to_trace(self, x, data, fitorder, data0, fitrange=None,
-                          nsig=3.0, doplot=True, markformat='bo',
-                          ylabel='Centroid of Trace (0-indexed)',
-                          title='Location of the Peak'):
+    def fit_poly_to_trace(self, coarsepars, mod0, fitorder=None,
+                          fitrange=None, nsig=3.0, doplot=True,
+                          markformat='bo',
+                          ylabel='default',
+                          title='default', verbose=True):
 
-        """ Do a sigma clipping to reject clear outliers """
+        """
+        Select the region of the spectrum to use when fitting polynomials
+        to the trace parameters
+        """
+        x0 = coarsepars['x']
         if fitrange is None:
-            tmpfitdat = data.copy()
+            xmask = np.ones(len(x0), dtype=boolean)
+            fittab = coarsepars.copy()
         else:
-            fitmask = np.logical_and(x >= fitrange[0], x < fitrange[1])
-            tmpfitdat = data[fitmask]
-        dmu, dsig = df.sigclip(tmpfitdat, nsig=nsig)
-        goodmask = np.absolute(data - dmu) < nsig * dsig
-        badmask = np.absolute(data - dmu) >= nsig * dsig
-        dgood = data[goodmask]
-        dbad = data[badmask]
-        xgood = x[goodmask]
-        xbad = x[badmask]
+            xmask = np.logical_and(x0 >= fitrange[0], x0 < fitrange[1])
+            fittab = coarsepars[xmask]
 
+        """
+        Set up containers to hold the polynomial fit parameters and the
+        points that were excluded from the polynomial fits
+        """
+        polypars = {}
+        exclude_masks = {}
+
+        """
+        Loop over the parameters and only fit to the ones that define
+        location or shape
+        """
+        for p in coarsepars.colnames:
+
+            """ Select the location and shape parameters only """
+            if p[:4] == 'mean' or p[:6] == 'stddev' or p[:2] == 'x0':
+                    
+                """ Select the column to be fitted """
+                data0 = coarsepars[p]
+                
+                """ Do a sigma clipping to reject clear outliers """
+                dmu, dsig = df.sigclip(data0[xmask], nsig=nsig)
+                goodmask = np.absolute(data0 - dmu) < nsig * dsig
+
+                """
+                Select the points to be fitted by combining the two masks
+                """
+                fitmask = np.logical_and(xmask, goodmask)
+                exclude_masks[p] = np.logical_not(fitmask)
+                x = coarsepars['x'][fitmask]
+                data = data0[fitmask]
+
+                """ Get the order of the polynomial to be fit """
+                if isinstance(fitorder, dict) and p in fitorder.keys():
+                    polyorder = int(fitorder[p])
+                else:
+                    polyorder = 3
+
+                """ Fit a polynomial to the trace parameter """
+                if polyorder == -1:
+                    polypars[p] = np.nan
+                    for n0, p0 in zip(mod0.param_names, mod0.parameters):
+                        if n0 == p:
+                            polypars[p] = np.array([p0])
+                    if verbose and np.isfinite(polypars[p]):
+                        print('Setting %d to value from initial fit to '
+                              'the spatial profile')
+                else:
+                    if verbose:
+                        print('Fitting polynomial of degree %d to parameter:'
+                              ' %s' % (polyorder, p))
+                    polypars[p] = np.polyfit(x, data, polyorder)
+
+        return polypars, exclude_masks
+                
         """ Fit a polynomial to the trace """
-
-        if fitrange is None:
-            xpoly = xgood
-            dpoly = dgood
-        else:
-            fitmask = np.logical_and(xgood >= fitrange[0], xgood < fitrange[1])
-            xpoly = xgood[fitmask]
-            dpoly = dgood[fitmask]
-
-        if fitorder == -1:
-            polyorder = 0
-        else:
-            polyorder = fitorder
-        dpoly = np.polyfit(xpoly, dpoly, polyorder)
 
         if fitorder == -1:
             dpoly[0] = data0
@@ -788,7 +827,8 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def trace_spectrum(self, mod0, ngauss=1, stepsize='default', meantol=0.5,
-                       muorder=3, sigorder=4, fitrange=None, doplot=True,
+                       fitrange=None, fitorder={'mean_1': 3, 'stddev_1': 4},
+                       doplot=True,
                        do_subplot=False, verbose=True):
         """
         Fits a gaussian plus background to the spatial profile of the spectrum
@@ -820,37 +860,23 @@ class Spec2d(imf.Image):
             msg = 'Invalid input model.  Run locate_trace first'
             raise ValueError(msg)
 
-        """
-        As a first step, see if either muorder or sigorder are set to -1.
-        If that is the case, then we can skip the fitting entirely for
-        that parameter
-
-        NOTE: This will only affect the first Gaussian if there are multiple
-          Gaussians in the model.
-        """
-        fitmu = True
-        fitsig = True
-        if muorder == -1:
-            self.mu = np.ones(self.npix) * mod0.mean_1
-            mod0.mean_1.fixed = True
-            fitmu = False
-        if sigorder == -1:
-            self.sig = np.ones(self.npix) * mod0.stddev_1
-            mod0.stddev_1.fixed = True
-            fitsig = False
-
         """ Trace the spectrum down the chip """
         if verbose:
             print('')
             print('Running fit_trace')
             print('---------------------------------------------------------')
 
-        tracepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
-                                           verbose=verbose)
+        coarsepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
+                                            verbose=verbose)
         if verbose:
             print('    Done')
 
         """ Fit a polynomial to the location of the trace """
+        polypars, exclude_masks = \
+            self.fit_poly_to_trace(coarsepars, mod0, fitrange=fitrange,
+                                   fitorder=fitorder)
+        return polypars
+        x = coarsepars['x']
         if fitmu:
             if doplot:
                 if(do_subplot):
@@ -860,8 +886,7 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the location of the '
                   'trace' % muorder)
-            x = tracepars['x']
-            y = tracepars['mean_1']
+            y = coarsepars['mean_1']
             y0 = self.mod0.mean_1
             self.mupoly, self.mu = \
                 self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
@@ -885,8 +910,7 @@ class Spec2d(imf.Image):
                     plt.clf()
             print('Fitting a polynomial of order %d to the width of the trace'
                   % sigorder)
-            x = tracepars['x']
-            y = tracepars['stddev_1']
+            y = coarsepars['stddev_1']
             y0 = self.mod0.stddev_1
             title = 'Width of Peak (Gaussian sigma)'
             ylab = 'Width of trace'
@@ -898,7 +922,8 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def find_and_trace(self, ngauss=1, bgorder=0, stepsize='default',
-                       muorder=3, sigorder=4, fitrange=None, doplot=True,
+                       fitorder={'mean_1': 3, 'stddev_1': 4},
+                       fitrange=None, doplot=True,
                        do_subplot=True, verbose=True):
 
         """
@@ -933,10 +958,14 @@ class Spec2d(imf.Image):
                               ngauss=ngauss, pixrange=fitrange,
                               verbose=verbose)
 
-        self.trace_spectrum(self.mod0, ngauss, stepsize, muorder=muorder,
-                            sigorder=sigorder, fitrange=fitrange,
-                            doplot=doplot, do_subplot=do_subplot,
-                            verbose=verbose)
+        self.polypars = \
+            self.trace_spectrum(self.mod0, ngauss, stepsize,
+                                fitorder=fitorder, fitrange=fitrange,
+                                doplot=doplot, do_subplot=do_subplot,
+                                verbose=verbose)
+        x = np.arange(self.npix)
+        self.mu = np.polyval(self.polypars['mean_1'], x)
+        self.sig = np.polyval(self.polypars['stddev_1'], x)
 
     # -----------------------------------------------------------------------
 
