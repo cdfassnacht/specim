@@ -921,6 +921,78 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
+    def make_prof2d(self, polypars, mod0):
+        """
+
+        Creates a two-dimensional profile based on the fits to the
+         parameters that describe the shape of the trace as a function
+         of position on the chip.
+        This profile is used as one component of the weighting in the
+         extraction of the spectrum if the default 'optimal' extraction
+         method is chosen.
+
+        Inputs:
+         polypars - parameters of the polynomials that were fit to the
+                     trace parameters produced in the trace_spectrum
+                     method.  Polynomials are only fit to the trace location
+                     (e.g., Gaussian mean) and shape (e.g., Gaussian
+                     sigma), but not to the background level or amplitude
+         mod0     - Original model fit to the spatial profile of the
+                     trace.  This is used to define which type of
+                     components will be used to generate the 2d profile
+        """
+
+        """
+        Set up parameters that will be used to generate and hold the
+        two-dimension profile
+        """
+        x = np.arange(self.npix)
+        y2d, x2d = np.indices(self['input'].data.shape)
+        profdat = np.zeros(self['input'].data.shape)
+        profmods = []
+
+        """
+        Loop on the number of components (e.g., Gaussian1D) that make
+         up the model fit to the profile.  Ignore the Polynomial1D component
+         since it is used to fit to the sky level and won't be used in
+         the 2d profile created by this method.
+        """
+        amp0 = -1
+        for i, mod in enumerate(mod0):
+            if isinstance(mod, models.Gaussian1D):
+                if amp0 == -1:
+                    amp0 = mod.amplitude.value
+
+                """
+                Use the polynomial parameters to generate the profile
+                values at each wavelength step along the chip
+                """
+                amp = np.ones(self.npix) * mod.amplitude.value / amp0
+                mean = np.polyval(polypars['mean_%d' % i], x)
+                stddev = np.polyval(polypars['stddev_%d' % i], x)
+
+                """ Create a model set using the profile values """
+                mod = models.Gaussian1D(amplitude=amp, mean=mean,
+                                        stddev=stddev, n_models=self.npix)
+
+                """
+                Use the model set to generate the output 2D profile.
+                NOTE: The two transposes (set by the .T calls) are needed
+                because the 'orientation' of the model set is the 
+                opposite to the orientation of the data
+                """
+                profdat += (mod(y2d.T)).T
+                profmods.append(mod)
+
+        """
+        Clean up and return the profile and the model sets used to
+        generate it
+        """
+        del x, x2d, y2d
+        return profdat, profmods
+    
+    # -----------------------------------------------------------------------
+
     def find_and_trace(self, ngauss=1, bgorder=0, stepsize='default',
                        fitorder={'mean_1': 3, 'stddev_1': 4},
                        fitrange=None, doplot=True,
@@ -958,46 +1030,22 @@ class Spec2d(imf.Image):
                               ngauss=ngauss, pixrange=fitrange,
                               verbose=verbose)
 
-        self.polypars = \
+        polypars = \
             self.trace_spectrum(self.mod0, ngauss, stepsize,
                                 fitorder=fitorder, fitrange=fitrange,
                                 doplot=doplot, do_subplot=do_subplot,
                                 verbose=verbose)
-        x = np.arange(self.npix)
-        self.mu = np.polyval(self.polypars['mean_1'], x)
-        self.sig = np.polyval(self.polypars['stddev_1'], x)
 
-    # -----------------------------------------------------------------------
-
-    def make_prof2d(self):
-        """
-
-        NOTE: this must be run after the find_and_trace step
-
-        Given the model parameters obtained from fitting the spatial
-         profile at each wavelength (done in the trace_spectrum method,
-         which is called by the find_and_trace method), creates a 2d
-         image that consists of the approriate normalized profile at each
-         wavelength.
+        self.prof2d, self.profmods = self.make_prof2d(polypars, self.mod0)
 
         """
-
+        The following two lines are here temporarily so that the extract
+        method still works as it was previously written.  Once the
+        extraction code has been updated to use the prof2d array, then
+        these two lines will be deleted.
         """
-        Create a blank image
-        """
-        prof2d = np.zeros(self['input'].data.shape)
-
-        """
-        Set up the spatial-direction vector and a container for the
-         profile model
-        """
-        y = np.arange(self.nspat)
-        mod = self.mod0.copy()
-        
-        """
-        Step through the image, replacing the column or row at each
-        wavelength by the profile model for that wavelength
-        """
+        self.mu = self.profmods[0].mean.value
+        self.sig = self.profmods[0].stddev.value
 
     # -----------------------------------------------------------------------
 
@@ -1253,7 +1301,7 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
-    def extract(self, method='wtsum', weight='gauss', extrange=None,
+    def extract(self, method='optimal', weight='gauss', extrange=None,
                 sky=None, usevar=True, gain=1.0, rdnoise=0.0,
                 doplot=True, do_subplot=True, outfile=None,
                 outformat='text', verbose=True, **kwargs):
