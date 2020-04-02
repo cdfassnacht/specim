@@ -984,6 +984,11 @@ class Spec2d(imf.Image):
                 profdat += (mod(y2d.T)).T
                 profmods.append(mod)
 
+        """ Normalize the profile in the spatial direction """
+        Pnorm = (profdat.sum(axis=self.spaceaxis))
+        Pnorm = Pnorm.repeat(self.nspat).reshape(newdim).T
+        profdat /= Pnorm
+        
         """
         Clean up and return the profile and the model sets used to
         generate it
