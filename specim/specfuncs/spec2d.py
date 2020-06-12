@@ -1133,19 +1133,17 @@ class Spec2d(imf.Image):
          (e.g., from a cosmic ray, etc.)
         NOTE: P must be normalized for each wavelength
 
-        There are three components to the weighting:
+        There are, therefore, three components to the weighting:
          1. The aperture definition itself (stored in the apmin and apmax
              variables that are part of the Spec2d class definition).
              This weighting is, in fact, not really a weighting but just a mask
              set up so that a pixel will get a weight of 1.0 if it is inside
              the aperture and 0.0 if it is outside.
-         2. The profile of the trace, P, i.e., aperture weighting (for now only
-             uniform or a single gaussian are implemented).  In future, this
-             may be provided in terms of an already constructed profile image
-             rather than calculated within this method.
+         2. The profile of the trace, P, i.e., aperture weighting.  This
+             profile has been created by the make_prof2d method
          3. The statistical errors associated with the detector, etc.,
              in the form of inverse variance weighting.
-            The variance can either be provided as an external variance image,
+            The variance can be provided as an external variance image,
              if the previous reduction / processing has provided this.
             If no external variance spectrum is provided, then the variance
              image will be constructed from the data counts (including counts
@@ -1177,7 +1175,7 @@ class Spec2d(imf.Image):
         """
         
         """
-        First "weighting"/mask: Aperture limits
+        Set the aperture limits
         ----------------------------------------
         Put in the aperture limits, delimited by apmin and apmax
         """
@@ -1186,29 +1184,6 @@ class Spec2d(imf.Image):
         ydiff = y - self.mu2d
         apmask = (ydiff > self.apmin - 1) & (ydiff < self.apmax)
         # bkgdmask = np.logical_not(apmask)
-
-        """
-        Second weighting: Aperture profile
-        ---------------------------------
-        NOTE: in future, this may be moved into the find_and_trace code
-        """
-        if profile.lower() == 'uniform':
-            P = ydiff * 0.
-            P[apmask] = 1.
-
-        elif profile.lower() == 'gauss' or profile.lower() == 'gaussian':
-            self.sig2d = self.sig.repeat(self.nspat).reshape(newdim).T
-            P = (1./(self.sig2d * sqrt(2.*pi))) * \
-                np.exp(-0.5 * (ydiff/self.sig2d)**2)
-
-        else:
-            raise ValueError('Extraction weighting profile must be '
-                             '"uniform" or "gauss"')
-
-        """ Make sure the profile is normalized in the spatial direction """
-        Pnorm = (P.sum(axis=self.spaceaxis))
-        Pnorm = Pnorm.repeat(self.nspat).reshape(newdim).T
-        self.prof2d = P / Pnorm
 
         """
         Third weighting: Inverse variance

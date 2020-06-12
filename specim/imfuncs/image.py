@@ -74,8 +74,15 @@ class Image(dict):
                    1. a filename, the most common case
                    2. a HDU list.
                    3. a single PrimaryHDU or ImageHDU
+                   4. a numpy.ndarray, which will be interpreted as the data
+                      portion of a data / header pair to be put into a HDU.
+                      In this case, the header information, if it exists,
+                      should be passed via the optional inhdr parameter.
+                      If inhdr is None, then a minimal header will be
+                      automatically generated.
 
         **kwargs optional inputs:
+          inhdr
           hext
           wcsext
           verbose
@@ -121,6 +128,8 @@ class Image(dict):
          - The display min and max values are stored as self.fmin and self.fmax
          - For more information see the set_display_limits method
         """
+        self.rms_clip = None
+        self.mean_clip = None
         self.fmin = None             # Lower flux limit used in image display
         self.fmax = None             # Upper flux limit used in image display
         self.statsize = 2048         # Stats region size if image is too big
