@@ -34,7 +34,7 @@ class Spec1d(df.Data1d):
 
     def __init__(self, inspec=None, informat='text',
                  wav=None, flux=None, var=None, sky=None, logwav=False,
-                 wavcol='wav', fluxcol='flux', varcol='var', skycol='sky',
+                 colnames=['wav', 'flux', 'var', 'sky'], tabext=1,
                  trimsec=None, verbose=True, debug=False):
         """
 
@@ -92,6 +92,8 @@ class Spec1d(df.Data1d):
               HDU2 - binary table with red-side spectral info
               In each table there are columns for wavelength, flux,
                variance, and sky (among many others)
+           deimos_pypeit: A binary table HDU that contains wavelength,
+              flux, and inverse variance among many others.
            mwa:  A multi-extension fits file with wavelength info in
               the fits header
               Extension 1 is the extracted spectrum (flux)
@@ -166,7 +168,8 @@ class Spec1d(df.Data1d):
                 """ Input as a filename """
                 self.infile = inspec
                 try:
-                    spec0 = self.read_file(inspec, informat, verbose=verbose,
+                    spec0 = self.read_file(inspec, informat, colnames=colnames,
+                                           tabext=tabext, verbose=verbose,
                                            debug=debug)
                 except IOError:
                     print('')
@@ -176,12 +179,11 @@ class Spec1d(df.Data1d):
 
             elif isinstance(inspec, Table):
                 """ Input as a astropy Table """
-                spec0 = self.read_table(inspec, wavcol, fluxcol, varcol,
-                                        skycol)
+                spec0 = self.read_table(inspec, colnames)
 
             elif isinstance(inspec, pf.BinTableHDU):
                 """ Input as a previously loaded HDU """
-                spec0 = self.read_hdu(inspec)
+                spec0 = self.read_hdu(inspec, colnames)
 
             else:
                 print('')
@@ -258,7 +260,8 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def read_file(self, infile, informat, tabext=1, verbose=True,
+    def read_file(self, infile, informat, tabext=1,
+                  colnames=['wav', 'flux', 'var', 'sky'], verbose=True,
                   debug=False):
         """
 
@@ -268,6 +271,7 @@ class Spec1d(df.Data1d):
           fitstab
           fitsflux
           deimos
+          deimos_pypeit
           mwa
           text
 
@@ -302,7 +306,7 @@ class Spec1d(df.Data1d):
         elif informat == 'fitstab':
             hdu = pf.open(infile)
             thdu = hdu[tabext]
-            tmp = self.read_hdu(thdu)
+            tmp = self.read_hdu(thdu, colnames)
             wav = tmp['wav'].copy()
             flux = tmp['flux'].copy()
             if 'var' in tmp.colnames:
@@ -417,8 +421,7 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def read_table(self, inspec, wavcol='wav', fluxcol='flux', varcol='var',
-                   skycol='sky'):
+    def read_table(self, inspec, colnames=['wav', 'flux', 'var', 'sky']):
         """
 
         Read the spectrum from an astropy Table
@@ -430,15 +433,15 @@ class Spec1d(df.Data1d):
         sky = None
 
         """ Read the relevant columns of the input table """
-        wav = inspec[wavcol]
-        if fluxcol not in inspec.colnames:
+        wav = inspec[colnames[0]]
+        if colnames[1] not in inspec.colnames:
             flux = np.ones(len(inspec))
         else:
-            flux = inspec[fluxcol]
-        if varcol in inspec.colnames:
-            var = inspec[varcol]
-        if skycol in inspec.colnames:
-            sky = inspec[skycol]
+            flux = inspec[colnames[1]]
+        if colnames[2] in inspec.colnames:
+            var = inspec[colnames[2]]
+        if colnames[3] in inspec.colnames:
+            sky = inspec[colnames[3]]
 
         """ Save the columns in a new table and return """
         spec0 = Table([wav, flux], names=(['wav', 'flux']))
@@ -450,11 +453,11 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def read_hdu(self, hdu):
+    def read_hdu(self, hdu, colnames=['wav', 'flux', 'var', 'sky']):
         """
 
-        Read the spectrum from an previously loaded HDU, for which the
-        data block is a fits table.
+        Read the spectrum from an previously loaded HDU, which is in a
+        binary table format
 
         """
 
@@ -467,16 +470,16 @@ class Spec1d(df.Data1d):
         """ Read the data """
         tdat = hdu.data
         try:
-            wav = tdat['wav']
+            wav = tdat[colnames[0]]
         except KeyError:
             wav = tdat.field(0)
         try:
-            flux = tdat['flux']
+            flux = tdat[colnames[1]]
         except KeyError:
             flux = tdat.field(1)
         if len(tdat.columns) > 2:
             try:
-                var = tdat['var']
+                var = tdat[colnames[2]]
             except KeyError:
                 var = tdat.field(2)
 
@@ -485,7 +488,7 @@ class Spec1d(df.Data1d):
         """
         if len(tdat.columns) > 3:
             try:
-                sky = tdat['sky']
+                sky = tdat[colnames[3]]
             except KeyError:
                 pass
 
