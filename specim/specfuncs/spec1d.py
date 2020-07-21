@@ -972,8 +972,8 @@ class Spec1d(df.Data1d):
 
     def smooth(self, filtwidth, smfunc='boxcar', mode='input', doplot=True,
                outfile=None, **kwargs):
-        """
 
+        """
         Smooths the spectrum using the requested function.  The smoothing
         function is set by the smfunc parameter.  Available functions are:
           'boxcar' - the default value and only available value for now
