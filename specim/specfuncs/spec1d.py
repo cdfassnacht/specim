@@ -395,7 +395,7 @@ class Spec1d(df.Data1d):
             if len(spectab.columns) > 3:
                 sky = spectab.columns[3].data
                 self.sky = True
-            
+
 
         """ Fix var=0 values, since they will cause things to crash """
         if hasvar:
@@ -768,17 +768,17 @@ class Spec1d(df.Data1d):
         tmp *= spec['flux'].max() * scale
         tmp += offset
         if plabel is not None:
-            plt.plot(self['wav'], tmp, color, linestyle=pltls, label=plabel)
+            self.ax1.plot(self['wav'], tmp, color, linestyle=pltls, label=plabel)
         else:
-            plt.plot(self['wav'], tmp, color, linestyle=pltls)
+            self.ax1.plot(self['wav'], tmp, color, linestyle=pltls)
 
         """ Label things if requested """
         if xlabel:
-            plt.xlabel(xlabel)
+            self.ax1.xlabel(xlabel)
         if ylabel:
-            plt.ylabel(ylabel)
+            self.ax1.ylabel(ylabel)
         if title:
-            plt.title(title)
+            self.ax1.title(title)
 
         """ Clean up """
         del tmp
@@ -871,7 +871,7 @@ class Spec1d(df.Data1d):
              showzero=True, model=None, modcolor='g',
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
-             atmls='-', atmmodfile='default', usesmooth=False, verbose=True):
+             atmls='-', atmmodfile='default', usesmooth=False, verbose=True, fig=None):
         """
         Plots the spectrum
 
@@ -889,6 +889,11 @@ class Spec1d(df.Data1d):
         The default is to just use the unmodified input spectrum
          (mode='input')
         """
+        if fig is None:
+            self.fig = plt.figure()
+        else:
+            self.fig = fig
+        self.ax1 = self.fig.add_subplot(111)
         if usesmooth:
             mode = 'smooth'
         spec = self.select_mode(mode)
@@ -915,7 +920,7 @@ class Spec1d(df.Data1d):
 
         """ Draw the flux=0 line"""
         if showzero:
-            plt.axhline(color='k')
+            self.ax1.axhline(color='k')
 
         """ Set the label """
         if label is not None:
@@ -926,17 +931,17 @@ class Spec1d(df.Data1d):
         """ Plot the spectrum """
         drawstyle = 'steps'
         ls = "%s" % linestyle
-        plt.plot(self['wav'], flux, color, linestyle=ls, drawstyle=drawstyle,
+        self.ax1.plot(self['wav'], flux, color, linestyle=ls, drawstyle=drawstyle,
                  label=plabel)
-        plt.tick_params(labelsize=fontsize)
-        plt.xlabel(xlabel, fontsize=fontsize)
+        self.ax1.tick_params(labelsize=fontsize)
+        self.ax1.set_xlabel(xlabel, fontsize=fontsize)
 
         """
         Plot the model, given as an astropy.modeling model, if requested
         """
         if model is not None:
             fmod = model(wav)
-            plt.plot(wav, fmod, color=modcolor)
+            self.ax1.plot(wav, fmod, color=modcolor)
 
         """ Plot the RMS spectrum if the variance spectrum exists """
         if var is not None:
@@ -950,17 +955,17 @@ class Spec1d(df.Data1d):
                     rlw = 2
             else:
                 rlinestyle = '%s' % rmsls
-            plt.plot(self['wav'], rms, rmscolor, linestyle=rlinestyle,
+            self.ax1.plot(self['wav'], rms, rmscolor, linestyle=rlinestyle,
                      drawstyle=drawstyle, label='RMS', lw=rlw)
 
         """ More plot labels """
-        plt.ylabel(ylabel, fontsize=fontsize)
+        self.ax1.set_ylabel(ylabel, fontsize=fontsize)
         if title is not None:
-            plt.title(title)
+            self.ax1.set_title(title)
         if(wav[0] > wav[-1]):
-            plt.xlim([wav[-1], wav[0]])
+            self.ax1.set_xlim([wav[-1], wav[0]])
         else:
-            plt.xlim([wav[0], wav[-1]])
+            self.ax1.set_xlim([wav[0], wav[-1]])
         # print(self['wav'][0], self['wav'][-1])
 
         """ Plot the atmospheric transmission if requested """
@@ -968,7 +973,7 @@ class Spec1d(df.Data1d):
             self.plot_atm_trans(mode=mode, ls=atmls, scale=atmscale,
                                 offset=atmoffset, fwhm=atmfwhm,
                                 modfile=atmmodfile)
-
+        return self.fig
     # -----------------------------------------------------------------------
 
     def plot_sky(self, color='g', linestyle='-', xlabel='default',
@@ -1034,8 +1039,8 @@ class Spec1d(df.Data1d):
 
     def smooth(self, filtwidth, smfunc='boxcar', mode='input', doplot=True,
                outfile=None, **kwargs):
-        """
 
+        """
         Smooths the spectrum using the requested function.  The smoothing
         function is set by the smfunc parameter.  Available functions are:
           'boxcar' - the default value and only available value for now
@@ -1181,7 +1186,7 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def draw_tick(self, lam, linetype, ticklen, usesmooth=False, labww=20.,
+    def draw_tick(self, lam, linetype, ticklen, axes, usesmooth=False, labww=20.,
                   tickfac=0.75):
         """
         This method is called by mark_lines
@@ -1219,7 +1224,8 @@ class Spec1d(df.Data1d):
         labstart = tickstart + pm * 1.5 * ticklen
 
         """ Draw the tick mark """
-        plt.plot([lam, lam], [tickstart, tickend], 'k')
+        
+        axes.plot([lam, lam], [tickstart, tickend], 'k')
 
         """ Return relevant info for plotting """
         return labstart, labva
@@ -1229,7 +1235,7 @@ class Spec1d(df.Data1d):
     def mark_lines(self, linetype, z, usesmooth=False, marktype='tick',
                    labww=20., labfs=12, tickfrac=0.05, tickfac=0.75,
                    showz=True, zstr='z', zfs=16, labloc='default',
-                   labcolor='k', namepos='top', markatm=True):
+                   labcolor='k', namepos='top', markatm=True, fig=None):
         """
         A generic routine for marking spectral lines in the plotted spectrum.
         The required linetype parameter can be either 'abs' or 'em' and will
@@ -1248,6 +1254,8 @@ class Spec1d(df.Data1d):
         """
 
         """ Check linetype """
+        self.fig = fig
+        self.ax = self.fig.gca()
         if linetype == 'abs':
             labva = 'top'
         elif linetype == 'em' or linetype == 'strongem':
@@ -1260,8 +1268,8 @@ class Spec1d(df.Data1d):
 
         """ Set the display limits """
         lammin, lammax = self['wav'].min(), self['wav'].max()
-        x0, x1 = plt.xlim()
-        y0, y1 = plt.ylim()
+        x0, x1 = self.ax.get_xlim()
+        y0, y1 = self.ax.get_ylim()
         if x0 > lammin:
             lammin = x0
         if x1 < lammax:
@@ -1314,7 +1322,7 @@ class Spec1d(df.Data1d):
                 labstart, labva = \
                     self.draw_tick(xarr[i], linetype, ticklen,
                                    usesmooth=usesmooth, labww=labww,
-                                   tickfac=tickfac)
+                                   tickfac=tickfac, axes=self.ax)
                 # tmpmask = np.fabs(self['wav']-xarr[i]) < dlocwin
                 # if linetype == 'em' or linetype == 'strongem':
                 #     specflux = flux[tmpmask].max()
@@ -1326,7 +1334,7 @@ class Spec1d(df.Data1d):
                 # plt.plot([xarr[i], xarr[i]], [tickstart, tickend], 'k')
                 labha = 'center'
             else:
-                plt.axvline(xarr[i], color='k', ls='--')
+                self.ax.axvline(xarr[i], color='k', ls='--')
                 labha = 'right'
                 if namepos == 'bottom':
                     labstart = y0 + 0.05 * ydiff
@@ -1336,23 +1344,22 @@ class Spec1d(df.Data1d):
 
             """ Label the lines """
             if info['plot']:
-                plt.text(xarr[i] + info['dxlab'], labstart, info['label'],
+                self.ax.text(xarr[i] + info['dxlab'], labstart, info['label'],
                          rotation='vertical', ha=labha, va=labva,
                          color=labcolor, fontsize=labfs)
 
         """ Label the plot with the redshift, if requested """
-        ax = plt.gca()
         if showz:
             if labloc == 'topright':
                 labx = 0.99
-                laby = 0.9
+                laby = 0.9  
                 ha = 'right'
             else:
                 labx = 0.01
                 laby = 0.99
                 ha = 'left'
-            plt.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='top',
-                     color=labcolor, fontsize=zfs, transform=ax.transAxes)
+            self.ax.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='top',
+                     color=labcolor, fontsize=zfs, transform=self.ax.transAxes)
 
     # -----------------------------------------------------------------------
 
