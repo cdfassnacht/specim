@@ -592,6 +592,73 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
+    def __add__(self, other):
+        """
+
+        Do a variance-weighted sum of this spectrum with another
+
+        """
+        
+        """ Initialize """
+        nx = self['wav'].size
+        mask = self['var'] != 0
+        wtsum = np.zeros(nx)
+        wtsum[mask] = 1.0 / self['var'][mask]
+        wtflux = wtsum * self['flux']
+        if self.sky:
+            skysum = self['sky']
+        else:
+            skysum = np.zeros(nx)
+
+        """ Create the weighted sum """
+        wt = np.zeros(nx)
+        mask = other['var'] != 0
+        wt[mask] = 1.0 / other['var'][mask]
+        wtflux += wt * other['flux']
+        if other.sky:
+            skysum += other['sky']
+        wtsum += wt
+        del wt
+
+        """
+        Normalize the flux, and calculate the variance of the coadded
+         spectrum.
+        Note that the equation below for the variance only works for the case
+         of inverse variance weighting.
+        """
+        wtflux[wtsum == 0] = 0
+        wtsum[wtsum == 0] = 1
+        outflux = wtflux / wtsum
+        outvar = 1.0 / wtsum
+        if self.sky is None:
+            outsky = None
+        else:
+            outsky = skysum / 2.
+
+        """ Return the coadded spectrum as a Spec1d object """
+        return Spec1d(wav=self['wav'], flux=outflux, var=outvar,
+                      sky=outsky)
+
+    # -----------------------------------------------------------------------
+
+    def __radd__(self, other):
+        """
+
+        This is the "reverse add" method that is needed in order to sum
+        spectra with the sum function
+
+        NOTE: This doesn't seem to be working yet
+
+        """
+        
+        if isinstance(other, (int, float)):
+            return self
+        else:
+            return self.__add__(other)
+    
+
+    # -----------------------------------------------------------------------
+
     def make_atm_trans(self, fwhm=15., modfile='default'):
         """
         Creates an extension to the class that contains the
