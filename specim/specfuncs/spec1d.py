@@ -1186,8 +1186,8 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def draw_tick(self, lam, linetype, ticklen, axes, usesmooth=False, labww=20.,
-                  tickfac=0.75):
+    def draw_tick(self, lam, linetype, ticklen, axes, usesmooth=False,
+                  labww=20., tickfac=0.75):
         """
         This method is called by mark_lines
         It labels a spectral line by drawing a tickmark above or below the
@@ -1254,7 +1254,10 @@ class Spec1d(df.Data1d):
         """
 
         """ Check linetype """
-        self.fig = fig
+        if fig == None:
+            self.fig = plt.gcf()
+        else:
+            self.fig = fig
         self.ax = self.fig.gca()
         if linetype == 'abs':
             labva = 'top'
