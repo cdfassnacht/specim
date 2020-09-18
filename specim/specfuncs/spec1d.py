@@ -17,6 +17,9 @@ from astropy.io import fits as pf
 
 from cdfutils import datafuncs as df
 
+import sys
+pyversion = sys.version_info.major
+
 # ===========================================================================
 #
 # Start of Spec1d class
@@ -247,8 +250,11 @@ class Spec1d(df.Data1d):
         else:
             var = None
             names = self.names0[:-1]
-        super(Spec1d, self).__init__(spec0['wav'], spec0['flux'], var,
-                                     names=names)
+        if pyversion == 2:
+            super(Spec1d, self).__init__(spec0['wav'], spec0['flux'], var,
+                                         names=names)
+        else:
+            super().__init__(spec0['wav'], spec0['flux'], var, names=names)
 
         """ Add the sky vector to the Table structure if it is not none """
         if 'sky' in spec0.colnames:
@@ -871,7 +877,8 @@ class Spec1d(df.Data1d):
              showzero=True, model=None, modcolor='g',
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
-             atmls='-', atmmodfile='default', usesmooth=False, verbose=True, fig=None):
+             atmls='-', atmmodfile='default', usesmooth=False, verbose=True,
+             fig=None, ax=None):
         """
         Plots the spectrum
 
@@ -893,7 +900,10 @@ class Spec1d(df.Data1d):
             self.fig = plt.figure()
         else:
             self.fig = fig
-        self.ax1 = self.fig.add_subplot(111)
+        if ax is not None:
+            self.ax1 = ax
+        else:
+            self.ax1 = self.fig.add_subplot(111)
         if usesmooth:
             mode = 'smooth'
         spec = self.select_mode(mode)
@@ -931,8 +941,8 @@ class Spec1d(df.Data1d):
         """ Plot the spectrum """
         drawstyle = 'steps'
         ls = "%s" % linestyle
-        self.ax1.plot(self['wav'], flux, color, linestyle=ls, drawstyle=drawstyle,
-                 label=plabel)
+        self.ax1.plot(self['wav'], flux, color, linestyle=ls,
+                      drawstyle=drawstyle, label=plabel)
         self.ax1.tick_params(labelsize=fontsize)
         self.ax1.set_xlabel(xlabel, fontsize=fontsize)
 

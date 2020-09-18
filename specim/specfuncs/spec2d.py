@@ -472,7 +472,7 @@ class Spec2d(imf.Image):
 
             """ Plot an estimate of the 1D sky spectrum """
             ax3 = plt.subplot(212, sharex=ax1)
-            self.sky1d.plot(title=None, xlabel='x (pix)')
+            self.sky1d.plot(title=None, xlabel='x (pix)', ax=ax3)
         self.found_rms = False
 
         """
@@ -483,14 +483,14 @@ class Spec2d(imf.Image):
         if self.npix > sfac * self.nspat:
             xmin = int(self.npix / 2. - (sfac/2.) * self.nspat)
             xmax = int(self.npix / 2. + (sfac/2.) * self.nspat)
-            plt.xlim(xmin, xmax)
+            ax3.set_xlim(xmin, xmax)
 
             """ Scale the portion of the spectrum that is being displayed """
             w = self.sky1d['wav']
             flux = self.sky1d['flux'][(w >= xmin) & (w <= xmax)]
-            ymin, ymax = plt.ylim()
+            ymin, ymax = ax3.get_ylim()
             ydiff = flux.max() - ymin
-            plt.ylim(ymin, (ymin + 1.05 * ydiff))
+            ax3.set_ylim(ymin, (ymin + 1.05 * ydiff))
 
     # -----------------------------------------------------------------------
 
@@ -577,8 +577,9 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def locate_trace(self, pixrange=None, init=None, fix=None,
-                     doplot=True, do_subplot=False, ngauss=1,
-                     title='Spatial Profile', verbose=True, **kwargs):
+                     doplot=True, ngauss=1, axes=None,
+                     title='Spatial Profile', verbose=True,
+                     **kwargs):
         """
         Compresses a 2d spectrum along the dispersion axis so that
          the trace of the spectrum can be automatically located by fitting
@@ -607,14 +608,13 @@ class Spec2d(imf.Image):
 
         """ Now plot the spatial profile, showing the best fit """
         if doplot:
-            if(do_subplot):
-                plt.subplot(221)
+            if axes is not None:
+                ax = axes[0]
             else:
-                plt.figure(1)
-                plt.clf()
+                ax = plt.subplot(111)
             xlab = 'Spatial direction (0-indexed)'
             profile.plot(title=title, xlabel=xlab, model=mod, showzero=False,
-                         **kwargs)
+                         ax=ax, **kwargs)
             plt.axvline(self.profcent + self.apmin, color='k')
             plt.axvline(self.profcent + self.apmax, color='k')
 
@@ -703,9 +703,8 @@ class Spec2d(imf.Image):
 
     def fit_poly_to_trace(self, coarsepars, mod0, fitorder=None,
                           fitrange=None, nsig=3.0, doplot=True,
-                          markformat='bo',
-                          ylabel='default',
-                          title='default', verbose=True):
+                          markformat='bo', ylabel='default',
+                          title='default', axes=None, verbose=True):
 
         """
         Select the region of the spectrum to use when fitting polynomials
@@ -713,7 +712,7 @@ class Spec2d(imf.Image):
         """
         x0 = coarsepars['x']
         if fitrange is None:
-            xmask = np.ones(len(x0), dtype=boolean)
+            xmask = np.ones(len(x0), dtype=bool)
             fittab = coarsepars.copy()
         else:
             xmask = np.logical_and(x0 >= fitrange[0], x0 < fitrange[1])
@@ -791,32 +790,36 @@ class Spec2d(imf.Image):
         ymin = dmu - 4.5*dsig
         ymax = dmu + 4.5*dsig
         if doplot:
-            plt.plot(x, data, markformat)
-            plt.xlabel("Pixel (dispersion direction)")
-            plt.ylabel(ylabel)
-            plt.title(title)
+            if axes is not None:
+                ax = axes[1]
+            else:
+                ax = plt.subplot(111)
+            ax.plot(x, data, markformat)
+            ax.set_xlabel("Pixel (dispersion direction)")
+            ax.set_ylabel(ylabel)
+            ax.set_title(title)
 
             """ Show the value from the compressed spatial profile """
-            plt.axhline(data0, color='k', linestyle='--')
+            ax.axhline(data0, color='k', linestyle='--')
 
             """ Mark the bad points that were not included in the fit """
-            plt.plot(xbad, dbad, "rx", markersize=10, markeredgewidth=2)
+            ax.plot(xbad, dbad, "rx", markersize=10, markeredgewidth=2)
 
             """ Show the fitted function """
-            plt.plot(fitx, fity, "r")
+            ax.plot(fitx, fity, "r")
 
             """
             Show the range of points included in the fit, if fitrange was set
             """
             if fitrange is not None:
-                plt.axvline(fitrange[0], color='k', linestyle=':')
-                plt.axvline(fitrange[1], color='k', linestyle=':')
+                ax.axvline(fitrange[0], color='k', linestyle=':')
+                ax.axvline(fitrange[1], color='k', linestyle=':')
                 xtmp = 0.5 * (fitrange[1] + fitrange[0])
                 xerr = xtmp - fitrange[0]
                 ytmp = fity.min() - 0.2 * fity.min()
-                plt.errorbar(xtmp, ytmp, xerr=xerr, ecolor="g", capsize=10)
-            plt.xlim(0, self.npix)
-            plt.ylim(ymin, ymax)
+                ax.errorbar(xtmp, ytmp, xerr=xerr, ecolor="g", capsize=10)
+            ax.set_xlim(0, self.npix)
+            ax.set_ylim(ymin, ymax)
 
         """
         Return the parameters produced by the fit and the fitted function
@@ -828,8 +831,7 @@ class Spec2d(imf.Image):
 
     def trace_spectrum(self, mod0, ngauss=1, stepsize='default', meantol=0.5,
                        fitrange=None, fitorder={'mean_1': 3, 'stddev_1': 4},
-                       doplot=True,
-                       do_subplot=False, verbose=True):
+                       doplot=True, axes=None, verbose=True):
         """
         Fits a gaussian plus background to the spatial profile of the spectrum
          This is done in binned segments, because for nearly all cases the SNR
@@ -874,50 +876,53 @@ class Spec2d(imf.Image):
         """ Fit a polynomial to the location of the trace """
         polypars, exclude_masks = \
             self.fit_poly_to_trace(coarsepars, mod0, fitrange=fitrange,
-                                   fitorder=fitorder)
+                                   fitorder=fitorder, axes=axes)
         return polypars
-        x = coarsepars['x']
-        if fitmu:
-            if doplot:
-                if(do_subplot):
-                    plt.subplot(222)
-                else:
-                    plt.figure(2)
-                    plt.clf()
-            print('Fitting a polynomial of order %d to the location of the '
-                  'trace' % muorder)
-            y = coarsepars['mean_1']
-            y0 = self.mod0.mean_1
-            self.mupoly, self.mu = \
-                self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
-                                       doplot=doplot)
-            # The following lines may get incorporated if the generic
-            #  data structures in the CDFutils package get updated.
-            #
-            # tmpdat = df.Data1d(xstep, mustep[:, 0])
-            # mupoly, mu = tmpdat.fit_poly(muorder, fitrange=fitrange,
-            #                              y0=self.p0[1], doplot=doplot)
-            # self.mupoly = mupoly
-            # self.mu = mu
-
-        """ Fit a polynomial to the width of the trace """
-        if fitsig:
-            if doplot:
-                if(do_subplot):
-                    plt.subplot(223)
-                else:
-                    plt.figure(3)
-                    plt.clf()
-            print('Fitting a polynomial of order %d to the width of the trace'
-                  % sigorder)
-            y = coarsepars['stddev_1']
-            y0 = self.mod0.stddev_1
-            title = 'Width of Peak (Gaussian sigma)'
-            ylab = 'Width of trace'
-            self.sigpoly, self.sig = \
-                self.fit_poly_to_trace(x, y, sigorder, y0, fitrange,
-                                       markformat='go', title=title,
-                                       ylabel=ylab, doplot=doplot)
+    
+        # x = coarsepars['x']
+        # if fitmu:
+        #     if doplot:
+        #         if axes is not None:
+        #             ax2 = axes[1]
+        #         else:
+        #             plt.figure(2)
+        #             plt.clf()
+        #             ax2 = None
+        #     print('Fitting a polynomial of order %d to the location of the '
+        #           'trace' % muorder)
+        #     y = coarsepars['mean_1']
+        #     y0 = self.mod0.mean_1
+        #     self.mupoly, self.mu = \
+        #         self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
+        #                                doplot=doplot, ax=ax2)
+        #     # The following lines may get incorporated if the generic
+        #     #  data structures in the CDFutils package get updated.
+        #     #
+        #     # tmpdat = df.Data1d(xstep, mustep[:, 0])
+        #     # mupoly, mu = tmpdat.fit_poly(muorder, fitrange=fitrange,
+        #     #                              y0=self.p0[1], doplot=doplot)
+        #     # self.mupoly = mupoly
+        #     # self.mu = mu
+        # 
+        # """ Fit a polynomial to the width of the trace """
+        # if fitsig:
+        #     if doplot:
+        #         if axes is not None:
+        #             ax3 = axes[2]
+        #         else:
+        #             plt.figure(3)
+        #             plt.clf()
+        #             ax3 = None
+        #     print('Fitting a polynomial of order %d to the width of the trace'
+        #           % sigorder)
+        #     y = coarsepars['stddev_1']
+        #     y0 = self.mod0.stddev_1
+        #     title = 'Width of Peak (Gaussian sigma)'
+        #     ylab = 'Width of trace'
+        #     self.sigpoly, self.sig = \
+        #         self.fit_poly_to_trace(x, y, sigorder, y0, fitrange,
+        #                                markformat='go', title=title,
+        #                                ylabel=ylab, doplot=doplot, ax=ax3)
 
     # -----------------------------------------------------------------------
 
@@ -986,6 +991,7 @@ class Spec2d(imf.Image):
 
         """ Normalize the profile in the spatial direction """
         Pnorm = (profdat.sum(axis=self.spaceaxis))
+        newdim = (self.npix, self.nspat)
         Pnorm = Pnorm.repeat(self.nspat).reshape(newdim).T
         profdat /= Pnorm
         
@@ -1030,16 +1036,23 @@ class Spec2d(imf.Image):
            sigorder
         """
 
+        """ Set up the plotting parameters """
+        if do_subplot:
+            ax1 = plt.axes([0.05, 0.05, 0.25, 0.9])
+            ax2 = plt.axes([0.35, 0.55, 0.6, 0.4])
+            ax3 = plt.axes([0.35, 0.05, 0.6, 0.4])
+            axes = [ax1, ax2, ax3]
+        else:
+            axes = None
+            
         self.profile, self.mod0 = \
-            self.locate_trace(doplot=doplot, do_subplot=do_subplot,
-                              ngauss=ngauss, pixrange=fitrange,
-                              verbose=verbose)
+            self.locate_trace(doplot=doplot, ngauss=ngauss, pixrange=fitrange,
+                              axes=axes, verbose=verbose)
 
         polypars = \
-            self.trace_spectrum(self.mod0, ngauss, stepsize,
+            self.trace_spectrum(self.mod0, ngauss=ngauss, stepsize=stepsize,
                                 fitorder=fitorder, fitrange=fitrange,
-                                doplot=doplot, do_subplot=do_subplot,
-                                verbose=verbose)
+                                doplot=doplot, axes=axes, verbose=verbose)
 
         self.prof2d, self.profmods = self.make_prof2d(polypars, self.mod0)
 
@@ -1084,7 +1097,7 @@ class Spec2d(imf.Image):
         """ Do the extraction by calling fit_slices """
         if verbose:
             print('Extracting the spectrum.  Please be patient')
-            if exttrange is None:
+            if extrange is None:
                 print(' Extraction range (pixels): 0 - %d' % self.npix)
             else:
                 print(' Extraction range (pixels): %d - %d' %
@@ -1306,11 +1319,6 @@ class Spec2d(imf.Image):
             if verbose:
                 print('')
                 print('Plotting the spectrum')
-            if(do_subplot):
-                plt.subplot(224)
-            else:
-                plt.figure(4)
-                plt.clf()
             if self.has_cdmatx:
                 xlab = 'Wavelength'
             else:

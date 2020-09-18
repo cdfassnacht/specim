@@ -11,6 +11,8 @@ from astropy.modeling import models, fitting
 
 from cdfutils import datafuncs as df
 
+# -----------------------------------------------------------------------
+
 def tie_alpha(model):
     return model.alpha_0
     
