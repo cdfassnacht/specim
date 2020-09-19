@@ -615,8 +615,8 @@ class Spec2d(imf.Image):
             xlab = 'Spatial direction (0-indexed)'
             profile.plot(title=title, xlabel=xlab, model=mod, showzero=False,
                          ax=ax, **kwargs)
-            plt.axvline(self.profcent + self.apmin, color='k')
-            plt.axvline(self.profcent + self.apmax, color='k')
+            ax.axvline(self.profcent + self.apmin, color='k')
+            ax.axvline(self.profcent + self.apmax, color='k')
 
         """ Return the model """
         return profile, mod
@@ -727,8 +727,10 @@ class Spec2d(imf.Image):
 
         """
         Loop over the parameters and only fit to the ones that define
-        location or shape
+        centroid or shape
         """
+        fitinfo = {}
+        count = 1
         for p in coarsepars.colnames:
 
             """ Select the location and shape parameters only """
@@ -748,6 +750,7 @@ class Spec2d(imf.Image):
                 exclude_masks[p] = np.logical_not(fitmask)
                 x = coarsepars['x'][fitmask]
                 data = data0[fitmask]
+                fitinfo[p] = [x, data]
 
                 """ Get the order of the polynomial to be fit """
                 if isinstance(fitorder, dict) and p in fitorder.keys():
@@ -769,6 +772,72 @@ class Spec2d(imf.Image):
                         print('Fitting polynomial of degree %d to parameter:'
                               ' %s' % (polyorder, p))
                     polypars[p] = np.polyfit(x, data, polyorder)
+
+        if doplot:
+            print('Plotting centroid and width of model component 1')
+            if axes is not None:
+                ax1 = axes[1]
+                ax2 = axes[2]
+            else:
+                ax1 = plt.subplot(111)
+                ax2 = plt.subplot(111)
+                
+            """ Get the data for the centroid """
+            pars = []
+            modpars = []
+            if 'mean_1' in fitinfo.keys():
+                pars.append('mean_1')
+                modpars.append('mean')
+            elif 'x0_1' in fitinfo.keys():
+                pars.append('x0_1')
+                modpars.append('x0') 
+            else:
+                pars.append(None)
+                modpars.append(None)
+
+            """ Get the data for the width """
+            if 'stddev_1' in fitinfo.keys():
+                pars.append('stddev_1')
+                modpars.append('stddev_1')
+            else:
+                pars.append(None)
+                modpars.append(None)
+
+            """  Plot the fits """
+            xfit = np.arange(self.npix).astype(float)
+            ptstyle = ['bo', 'g^']
+            axislist = [ax1, ax2]
+            for par, modpar, style, ax in zip(pars, modpars, ptstyle,
+                                              axislist):
+                if par is not None:
+                    x1 = fitinfo[par][0]
+                    y1 = fitinfo[par][1]
+                    yfit = np.polyval(polypars[par], xfit)
+                    # y0 = mod0[modpar].value
+                    ax.plot(x1, y1, style)
+                    # ax.axhline(y0, color='k', linestyle='--')
+                    ax.plot(xfit, yfit, 'r')
+            # if widpar is not None:
+            #     x2 = fitinfo[widpar][0]
+            #     y2 = fitinfo[widpar][1]
+            #     yfit = np.polyval(polypars[widpar], xfit)
+            #     ax2.plot(x2, y2, 'g^')
+            #     ax2.plot(xfit, yfit, 'r')
+            # if centpar is not None:
+            #     x1 = fitinfo[centpar][0]
+            #     y1 = fitinfo[centpar][1]
+            #     yfit = np.polyval(polypars[centpar], xfit)
+            #     y0 = mod0[centpar].value
+            #     ax1.plot(x1, y1, 'bo')
+            #     ax1.axhline(y0, color='k', linestyle='--'
+            #     ax1.plot(xfit, yfit, 'r')
+            # if widpar is not None:
+            #     x2 = fitinfo[widpar][0]
+            #     y2 = fitinfo[widpar][1]
+            #     yfit = np.polyval(polypars[widpar], xfit)
+            #     ax2.plot(x2, y2, 'g^')
+            #     ax2.plot(xfit, yfit, 'r')
+            ax2.set_xlabel('%s (pixels)' % self.dispaxis)
 
         return polypars, exclude_masks
                 
@@ -831,7 +900,7 @@ class Spec2d(imf.Image):
 
     def trace_spectrum(self, mod0, ngauss=1, stepsize='default', meantol=0.5,
                        fitrange=None, fitorder={'mean_1': 3, 'stddev_1': 4},
-                       doplot=True, axes=None, verbose=True):
+                       doplot=True, axes=None, verbose=True, debug=False):
         """
         Fits a gaussian plus background to the spatial profile of the spectrum
          This is done in binned segments, because for nearly all cases the SNR
@@ -870,6 +939,8 @@ class Spec2d(imf.Image):
 
         coarsepars, covar = self.fit_slices(mod0, stepsize, ncomp=ngauss,
                                             verbose=verbose)
+        if debug:
+            print(coarsepars)
         if verbose:
             print('    Done')
 
@@ -879,51 +950,6 @@ class Spec2d(imf.Image):
                                    fitorder=fitorder, axes=axes)
         return polypars
     
-        # x = coarsepars['x']
-        # if fitmu:
-        #     if doplot:
-        #         if axes is not None:
-        #             ax2 = axes[1]
-        #         else:
-        #             plt.figure(2)
-        #             plt.clf()
-        #             ax2 = None
-        #     print('Fitting a polynomial of order %d to the location of the '
-        #           'trace' % muorder)
-        #     y = coarsepars['mean_1']
-        #     y0 = self.mod0.mean_1
-        #     self.mupoly, self.mu = \
-        #         self.fit_poly_to_trace(x, y, muorder, y0, fitrange,
-        #                                doplot=doplot, ax=ax2)
-        #     # The following lines may get incorporated if the generic
-        #     #  data structures in the CDFutils package get updated.
-        #     #
-        #     # tmpdat = df.Data1d(xstep, mustep[:, 0])
-        #     # mupoly, mu = tmpdat.fit_poly(muorder, fitrange=fitrange,
-        #     #                              y0=self.p0[1], doplot=doplot)
-        #     # self.mupoly = mupoly
-        #     # self.mu = mu
-        # 
-        # """ Fit a polynomial to the width of the trace """
-        # if fitsig:
-        #     if doplot:
-        #         if axes is not None:
-        #             ax3 = axes[2]
-        #         else:
-        #             plt.figure(3)
-        #             plt.clf()
-        #             ax3 = None
-        #     print('Fitting a polynomial of order %d to the width of the trace'
-        #           % sigorder)
-        #     y = coarsepars['stddev_1']
-        #     y0 = self.mod0.stddev_1
-        #     title = 'Width of Peak (Gaussian sigma)'
-        #     ylab = 'Width of trace'
-        #     self.sigpoly, self.sig = \
-        #         self.fit_poly_to_trace(x, y, sigorder, y0, fitrange,
-        #                                markformat='go', title=title,
-        #                                ylabel=ylab, doplot=doplot, ax=ax3)
-
     # -----------------------------------------------------------------------
 
     def make_prof2d(self, polypars, mod0):
@@ -1006,8 +1032,8 @@ class Spec2d(imf.Image):
 
     def find_and_trace(self, ngauss=1, bgorder=0, stepsize='default',
                        fitorder={'mean_1': 3, 'stddev_1': 4},
-                       fitrange=None, doplot=True,
-                       do_subplot=True, verbose=True):
+                       fitrange=None, doplot=True, do_subplot=True,
+                       axes=None, verbose=True):
 
         """
         The first step in the spectroscopy reduction process.
@@ -1037,13 +1063,11 @@ class Spec2d(imf.Image):
         """
 
         """ Set up the plotting parameters """
-        if do_subplot:
+        if do_subplot and axes is None:
             ax1 = plt.axes([0.05, 0.05, 0.25, 0.9])
             ax2 = plt.axes([0.35, 0.55, 0.6, 0.4])
             ax3 = plt.axes([0.35, 0.05, 0.6, 0.4])
             axes = [ax1, ax2, ax3]
-        else:
-            axes = None
             
         self.profile, self.mod0 = \
             self.locate_trace(doplot=doplot, ngauss=ngauss, pixrange=fitrange,
