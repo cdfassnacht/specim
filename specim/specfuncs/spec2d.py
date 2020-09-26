@@ -670,7 +670,7 @@ class Spec2d(imf.Image):
         for i, x in enumerate(xstep):
             """ Create the data slice"""
             pixrange = [x, x+stepsize]
-            tmpprof['flux'] = self.compress_spec(pixrange)
+            tmpprof.y = self.compress_spec(pixrange)
 
             """ Fix the input model parameters (this code will change) """
             if mu0arr is not None:

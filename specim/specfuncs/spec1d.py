@@ -402,7 +402,6 @@ class Spec1d(df.Data1d):
                 sky = spectab.columns[3].data
                 self.sky = True
 
-
         """ Fix var=0 values, since they will cause things to crash """
         if hasvar:
             mask = var <= 0.
@@ -604,7 +603,7 @@ class Spec1d(df.Data1d):
         Do a variance-weighted sum of this spectrum with another
 
         """
-        
+
         """ Initialize """
         nx = self['wav'].size
         mask = self['var'] != 0
@@ -656,12 +655,10 @@ class Spec1d(df.Data1d):
         NOTE: This doesn't seem to be working yet
 
         """
-        
         if isinstance(other, (int, float)):
             return self
         else:
             return self.__add__(other)
-    
 
     # -----------------------------------------------------------------------
 
@@ -767,16 +764,17 @@ class Spec1d(df.Data1d):
             plabel = 'atmTrans'
         elif label is None:
             plabel = None
-        pltls = "steps%s" % ls
 
         """ Now do the plotting """
         tmp = self.atm_trans.copy()
         tmp *= spec['flux'].max() * scale
         tmp += offset
         if plabel is not None:
-            self.ax1.plot(self['wav'], tmp, color, linestyle=pltls, label=plabel)
+            self.ax1.plot(self['wav'], tmp, color, linestyle=ls,
+                          drawstyle='steps', label=plabel)
         else:
-            self.ax1.plot(self['wav'], tmp, color, linestyle=pltls)
+            self.ax1.plot(self['wav'], tmp, color, linestyle=ls,
+                          drawstyle='steps')
 
         """ Label things if requested """
         if xlabel:
@@ -966,7 +964,7 @@ class Spec1d(df.Data1d):
             else:
                 rlinestyle = '%s' % rmsls
             self.ax1.plot(self['wav'], rms, rmscolor, linestyle=rlinestyle,
-                     drawstyle=drawstyle, label='RMS', lw=rlw)
+                          drawstyle=drawstyle, label='RMS', lw=rlw)
 
         """ More plot labels """
         self.ax1.set_ylabel(ylabel, fontsize=fontsize)
@@ -1017,7 +1015,8 @@ class Spec1d(df.Data1d):
             raise KeyError('No sky or variance information in the spectrum')
 
         """ Set up for plotting """
-        ls = 'steps%s' % linestyle
+        ls = '%s' % linestyle
+        ds = 'steps'
         if xlabel == 'default':
             xlab = 'Wavelength (Angstroms)'
         else:
@@ -1029,9 +1028,10 @@ class Spec1d(df.Data1d):
 
         """ Plot the spectrum """
         if lab is not None:
-            plt.plot(self['wav'], skyflux, ls=ls, color=color, label=lab)
+            plt.plot(self['wav'], skyflux, ls=ls, ds=ds, color=color,
+                     label=lab)
         else:
-            plt.plot(self['wav'], skyflux, ls=ls, color=color)
+            plt.plot(self['wav'], skyflux, ls=ls, ds=ds, color=color)
         if title == 'default':
             plttitle = 'Sky Spectrum'
         else:
@@ -1234,7 +1234,6 @@ class Spec1d(df.Data1d):
         labstart = tickstart + pm * 1.5 * ticklen
 
         """ Draw the tick mark """
-        
         axes.plot([lam, lam], [tickstart, tickend], 'k')
 
         """ Return relevant info for plotting """
@@ -1264,7 +1263,7 @@ class Spec1d(df.Data1d):
         """
 
         """ Check linetype """
-        if fig == None:
+        if fig is None:
             self.fig = plt.gcf()
         else:
             self.fig = fig
@@ -1358,21 +1357,22 @@ class Spec1d(df.Data1d):
             """ Label the lines """
             if info['plot']:
                 self.ax.text(xarr[i] + info['dxlab'], labstart, info['label'],
-                         rotation='vertical', ha=labha, va=labva,
-                         color=labcolor, fontsize=labfs)
+                             rotation='vertical', ha=labha, va=labva,
+                             color=labcolor, fontsize=labfs)
 
         """ Label the plot with the redshift, if requested """
         if showz:
             if labloc == 'topright':
                 labx = 0.99
-                laby = 0.9  
+                laby = 0.9
                 ha = 'right'
             else:
                 labx = 0.01
                 laby = 0.99
                 ha = 'left'
             self.ax.text(labx, laby, '%s = %5.3f' % (zstr, z), ha=ha, va='top',
-                     color=labcolor, fontsize=zfs, transform=self.ax.transAxes)
+                         color=labcolor, fontsize=zfs,
+                         transform=self.ax.transAxes)
 
     # -----------------------------------------------------------------------
 
@@ -1483,7 +1483,9 @@ class Spec1d(df.Data1d):
         wrange = waveobs.max() - waveobs.min()
         xmin = waveobs.min() - 0.05*wrange
         xmax = waveobs.max() + 0.05*wrange
-        skymod.plot(color='r', label='Model sky')
+        fig = plt.gcf()
+        ax = plt.gca()
+        skymod.plot(color='r', label='Model sky', fig=fig, ax=ax)
         plt.legend()
         plt.xlim(xmin, xmax)
 
@@ -1809,9 +1811,9 @@ def make_sky_model(wavelength, smooth=25., doplot=False, verbose=True):
     if verbose:
         print('Making model sky')
         print('--------------------------------------')
-        print('Model starting wavelength: %f') % wstart
-        print('Model ending wavelength:    %f') % wend
-        print('Model dispersion:             %f') % disp
+        print('Model starting wavelength: %f' % wstart)
+        print('Model ending wavelength:    %f' % wend)
+        print('Model dispersion:             %f' % disp)
 
     """
     Resample and smooth the model spectrum.
