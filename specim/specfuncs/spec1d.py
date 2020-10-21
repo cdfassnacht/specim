@@ -279,6 +279,7 @@ class Spec1d(df.Data1d):
           deimos
           deimos_pypeit
           mwa
+          iraf
           text
 
         """
@@ -321,9 +322,29 @@ class Spec1d(df.Data1d):
             if 'sky' in tmp.colnames:
                 sky = tmp['sky'].copy()
             del hdu, tmp
+        elif informat == 'iraf':
+            hdu = pf.open(infile)
+            hdr = hdu[0].header
+            specdat = hdu[0].data
+            if specdat.ndim == 3:
+                flux = specdat[0, 0, :]
+                flux_nowht = specdat[1, 0, :]
+                bkgd = specdat[2, 0, :]
+                rms = specdat[3, 0, :]
+                var = rms**2
+            else:
+                flux = specdat[0, :]
+            wav = np.arange(flux.size)
+            if self.logwav:
+                wav = 10.**(hdr['crval1'] + wav * hdr['cd1_1'])
+            else:
+                wav = hdr['crval1'] + wav*hdr['cd1_1']
+            print('flux: ',flux.shape)
+            print('wav: ',wav.shape)
+            del hdu, specdat
         elif informat == 'fitsflux':
             hdu = pf.open(infile)
-            if len(hdu[0].data.shape) == 2:
+            if hdu[0].data.ndim == 2:
                 flux = hdu[0].data[0, :]
             else:
                 flux = hdu[0].data.copy()
