@@ -602,12 +602,14 @@ class WcsHDU(pf.PrimaryHDU):
             if key in hdr:
                 del hdr[key]
         if self.wcsinfo is not None:
-            xy = np.array([[subcentx, subcenty]])
-            radec = self.wcsinfo.wcs_pix2world(xy, 0)[0]
-            hdr['crpix1'] = nx / 2.
-            hdr['crpix2'] = ny / 2.
-            hdr['crval1'] = radec[0]
-            hdr['crval2'] = radec[1]
+            # xy = np.array([[subcentx, subcenty]])
+            # radec = self.wcsinfo.wcs_pix2world(xy, 0)[0]
+            # hdr['crpix1'] = nx / 2.
+            # hdr['crpix2'] = ny / 2.
+            # hdr['crval1'] = radec[0]
+            # hdr['crval2'] = radec[1]
+            hdr['crpix1'] -= x1
+            hdr['crpix2'] -= y1
 
         """ Save the new data and header in a PrimaryHDU format """
         subim = pf.ImageHDU(data, hdr)

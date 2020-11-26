@@ -36,7 +36,8 @@ def read_posfile(posfile, verbose=True):
 
 def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
             zoomim=None, slitsize=None, slitpa=0., slitfile=None,
-            slitcent='default', starpos=None, rstar=1., **kwargs):
+            slitcent='default', starpos=None, rstar=1., crosshair=True,
+            **kwargs):
     """
 
     Makes a finding chart with both a wide-field and zoomed-in image
@@ -87,7 +88,7 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         xoff = np.zeros(len(starra))
         yoff = np.zeros(len(starra))
         for sra, sdec, xo, yo in zip(starra, stardec, xoff, yoff):
-            xo, yo = fcim.plot_circle(sra, sdec, rstar, crosshair=True,
+            xo, yo = fcim.plot_circle(sra, sdec, rstar, crosshair=crosshair,
                                       save_offsets=True)
         print(xo)
         print(yo)

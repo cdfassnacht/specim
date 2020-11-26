@@ -42,6 +42,7 @@ from matplotlib.patches import Circle
 
 from astropy import units as u
 from astropy.io import fits as pf
+from astropy.coordinates import SkyCoord
 
 from cdfutils import datafuncs as df
 from cdfutils import coords
@@ -396,16 +397,17 @@ class Image(dict):
 
         # self.get_wcs(self['plotim'].header)
         data = self['plotim'].data
-        icoords = np.indices(data.shape).astype(np.float32)
-        pltc = np.zeros(icoords.shape)
-        pltc[0] = (icoords[0] - data.shape[0] / 2.) * self['input'].pixscale[1]
-        pltc[1] = (icoords[1] - data.shape[1] / 2.) * self['input'].pixscale[0]
-        pltc[1] *= -1.
-        maxi = np.atleast_1d(data.shape) - 1
-        extx1 = pltc[1][0, 0]
-        exty1 = pltc[0][0, 0]
-        extx2 = pltc[1][maxi[0], maxi[1]] - self['input'].pixscale[1]
-        exty2 = pltc[0][maxi[0], maxi[1]] + self['input'].pixscale[0]
+        xpix = [-0.5, data.shape[1]-0.5]
+        ypix = [-0.5, data.shape[0]-0.5]
+        ra, dec = self['plotim'].wcsinfo.wcs_pix2world(xpix, ypix, 0)
+        skycoord = SkyCoord(ra, dec, unit=(u.degree, u.degree))
+        dalpha, ddelta = skycoord.spherical_offsets_to(skycoord[0])
+        dalpha -= (dalpha[1] / 2.)
+        ddelta -= (ddelta[1] / 2.)
+        extx1 = dalpha[1].to(u.arcsec).value
+        extx2 = dalpha[0].to(u.arcsec).value
+        exty1 = ddelta[1].to(u.arcsec).value
+        exty2 = ddelta[0].to(u.arcsec).value
 
         if zeropos is not None:
             dx = zeropos[0]
