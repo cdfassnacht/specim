@@ -390,6 +390,15 @@ class Spec1d(df.Data1d):
             var = hdu[3].data.copy()
             hasvar = True
             del hdu
+        elif informat.lower() == 'lpipe':
+            colnames = ['wav', 'flux', 'sky', 'rms', 'xpixel', 'ypixel',
+                        'response', 'flag']
+            tab = ascii.read(infile, names=colnames)
+            wav = tab['wav']
+            flux = tab['flux']
+            var = tab['rms']**2
+            sky = tab['sky']
+            hasvar = True
         elif informat.lower() == 'nsx':
             tab = ascii.read(infile)
             wav = tab['angstrom'].copy()
