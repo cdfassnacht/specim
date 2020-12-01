@@ -95,7 +95,7 @@ class Spec1d(df.Data1d):
               HDU2 - binary table with red-side spectral info
               In each table there are columns for wavelength, flux,
                variance, and sky (among many others)
-           deimos_pypeit: A binary table HDU that contains wavelength,
+           pypeit: A binary table HDU that contains wavelength,
               flux, and inverse variance among many others.
            mwa:  A multi-extension fits file with wavelength info in
               the fits header
@@ -198,7 +198,7 @@ class Spec1d(df.Data1d):
                 raise TypeError
 
         elif wav is not None:
-            spec0 = self.read_arrays(wav, flux, var, sky)
+            spec0 = self._read_arrays(wav, flux, var, sky)
 
         else:
             print('')
@@ -266,6 +266,76 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
+    def _read_tab_gen(self, indat, keynames=None, tabext=1):
+        """
+
+        This is a generic table reader that takes advantage of the 
+         Table.read() method's ability to guess the input file structure
+         correctly for at least some inputs.  This generic reader can be
+         used for the following formats:
+           * binary fits file (in which case the tabext parameter is used)
+           * ascii file in which the first line defines the column names
+           * fits HDU, where the fits file has been opened by another function
+           * Table structure
+           * recarray structure (maybe)
+        """
+
+        """ Read in the table """
+        if isinstance(indat, str):
+            if indat[-4:] == 'fits':
+                intab = Table.read(indat, hdu=tabext)
+        else:
+            intab = Table.read(indat)
+
+        """ Rename the columns if requested """
+        if keynames is not None:
+            if len(keynames) == 2:
+                outnames = ['wav', 'flux']
+            elif len(keynames) == 3:
+                outnames = ['wav', 'flux', 'var']
+            elif len(keynames) == 4:
+                outnames = ['wav', 'flux', 'var', 'sky']
+            else:
+                raise IndexError('keynames had %d elements, but must have '
+                                 '2-4 elements')
+        for inkey, outkey in zip(keynames, outnames):
+            if inkey not in intab.colnames:
+                raise KeyError('Expected column %s not found in %s'
+                               % (inkey, indat))
+            intab.rename_column(inkey, outkey)
+
+        """ Return the table """
+        return intab
+
+    # -----------------------------------------------------------------------
+
+    def _read_pypeit(self, infile, tabext=1, verbose=True, debug=False):
+        """
+
+        Reads in a spectrum that has been produced by the pypeit data
+        reduction pipeline.
+
+        The input file contains a binary fits table that can be read
+        by the standard Table.read() code.  The only change from a standard
+        read is that the primary columns need to be renamed:
+         opt_wave --> wav
+         opt_counts --> flux
+         opt_counts_ivar --> var
+         opt_counts_sky --> sky
+
+        """
+
+        """ Identify the appropriate columns """
+        keynames = ['opt_wave', 'opt_counts', 'opt_counts_ivar',
+                    'opt_counts_sky']
+
+        """ Read the data and return the subsequent table """
+        intab = self._read_tab_gen(infile, keynames=keynames, tabext=tabext)
+        return intab
+
+        
+    # -----------------------------------------------------------------------
+
     def read_file(self, infile, informat, tabext=1,
                   colnames=['wav', 'flux', 'var', 'sky'], verbose=True,
                   debug=False):
@@ -277,7 +347,7 @@ class Spec1d(df.Data1d):
           fitstab
           fitsflux
           deimos
-          deimos_pypeit
+          pypeit
           mwa
           iraf
           text
@@ -383,6 +453,13 @@ class Spec1d(df.Data1d):
             var = np.concatenate((bvar, rvar))
             sky = np.concatenate((bsky, rsky))
             hasvar = True
+        elif informat.lower() == 'pypeit':
+            tab = self._read_pypeit(infile, tabext=tabext)
+            hasvar = True
+            wav = tab['wav']
+            flux = tab['flux']
+            var = tab['var']
+            sky = tab['sky']
         elif informat.lower() == 'esi':
             hdu = pf.open(infile)
             wav = 10.**(hdu[1].data)
@@ -537,7 +614,7 @@ class Spec1d(df.Data1d):
 
     # -----------------------------------------------------------------------
 
-    def read_arrays(self, wav, flux, var, sky):
+    def _read_arrays(self, wav, flux, var, sky):
         """
 
         Reads the spectrum from individual arrays
