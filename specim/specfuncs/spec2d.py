@@ -101,17 +101,6 @@ class Spec2d(imf.Image):
                         If set, this can either be a filename or a hdulist if
                         the file has already been opened.
             xtrim     - Change from the default value (None) if the input
-            hext      - The header-data unit (HDU) that contains the
-                        2-dimensional spectroscopic data.  The default value
-                        (hdu=0) should work for most fits files.
-            invar     - If the 2d variance spectrum has already been computed
-                        by previous reduction steps and stored as a separate
-                        external file, then it needs to be read in.
-                        Default value is None, implying no external variance
-                        file.
-                        If set, this can either be a filename or a hdulist if
-                        the file has already been opened.
-            xtrim     - Change from the default value (None) if the input
                         spectrum needs to be trimmed along the x-axis.
                         Example format for trimming:  xtrim=[300,701]
             ytrim     - Change from the default value (None) if the input
@@ -1367,3 +1356,12 @@ class Spec2d(imf.Image):
                 print('')
                 print('Plotting the spectrum')
             if self.has_cdmatx:
+                xlab = 'Wavelength'
+            else:
+                xlab = 'Pixel number along the %s axis' % self.dispaxis
+            self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
+                             **kwargs)
+
+        """ Save the extracted spectrum to a file if requested """
+        if outfile is not None:
+            self.spec1d.save(outfile, outformat=outformat)
