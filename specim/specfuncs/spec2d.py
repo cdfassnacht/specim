@@ -588,6 +588,208 @@ class Spec2d(imf.Image):
 
     # -----------------------------------------------------------------------
 
+    def initial_model(self, profile=None, verbose=True):
+
+        """
+        Creates an initial model to fit with spatial profile from user input
+        of parameter values. Takes a polynomial upto 2nd degree and any number
+        of Gaussian and/or Moffat profile. And iterates unitl the user wants
+        to quit.
+
+        Required input:
+            profile : a spatial profile of the 2d spectra produced using the
+                      function spatial_profile(). If no profile is
+                      provided then profile inherited from spatial_profile()
+                      is used.
+        Output:
+            mod : retuns the final fitted model
+        """
+
+        print("\nTo create an initial model you first need to enter degree " \
+              "of background polynomial(<3) and number of Gaussian and Moffat " \
+              "profile as integers.")
+
+        while True:
+
+            background_order = int(input('Order of background polynomial : '))
+            num_gauss = int(input('Number of Gaussian profile : '))
+            num_moffat = int(input('Number of Moffat profile : '))
+
+            bg_const = []
+            parm_gauss = []
+            parm_moffat = []
+
+            """Collect parameter inputs for background polynomial and build a
+               polynomial from those inputs."""
+
+            if background_order<3:
+                print("\nNow enter constants of the background polynomial upto " \
+                      "degree %d" %background_order)
+
+                for i in range(background_order+1):
+                    bg_const.append(float(input('c%d : '%i)))
+
+                if background_order==0:
+                    b = models.Polynomial1D(degree=0, c0=bg_const[0])
+
+                elif background_order==1:
+                    b = models.Polynomial1D(degree=1, c0=bg_const[0], c1=bg_const[1])
+
+                elif background_order==2:
+                    b = models.Polynomial1D(degree=2, c0=bg_const[0], c1=bg_const[1],
+                                                                      c2=bg_const[2])
+            else:
+                print("\ndegree of background polynomial is expected to be less " \
+                      "than 3...start over")
+                continue
+
+            """ Collect parameters for Gaussian profiles, and build and add Gaussian
+                profiles using those input parameters."""
+
+            if num_gauss>0:
+
+                print("\nEnter parameter values for a Gaussian profile in " \
+                      "following format...\namplitude_value, mu_value, sigma_value")
+
+                for i in range(num_gauss):
+                    amp, mu, sigma = input('\nParameters of Gaussian profile %d : '
+                                                                 %(i+1)).split(',')
+                    try:
+                        p = [float(amp), float(mu), float(sigma)]
+                        parm_gauss.append(p)
+                        print('\namplitude=%f, mu=%f, sigma=%f' %(p[0], p[1], p[2]))
+                    except:
+                        print('Error : parameter values should be integer or float')
+
+                for i, p in enumerate(parm_gauss):
+                    if i==0:
+                        g = models.Gaussian1D(amplitude=p[0], mean=p[1], stddev=p[2])
+                    else:
+                        g1 = models.Gaussian1D(amplitude=p[0], mean=p[1], stddev=p[2])
+
+                        g += g1
+
+            """ Collect parameters for Moffat profiles, and build and add Moffat
+                profiles using those input parameters."""
+
+            if num_moffat>0:
+
+                print("\nEnter parameter values for a Moffat profile in following " \
+                      "format...\namplitude_value, x_0_value, gamma_value, alpha_value")
+
+                for i in range(num_moffat):
+                    amp, x0, gam, alp = input('\nParameters of Moffat profile %d : '
+                                                                    %(i+1)).split(',')
+                    try:
+                        p = [float(amp), float(x0), float(gam), float(alp)]
+                        parm_moffat.append(p)
+                        print('\namplitude=%f, x_0=%f, gamma=%f, alpha=%f'
+                                                           %(p[0], p[1], p[2], p[3]))
+                    except:
+                        print('Error : parameter values should be integer or float')
+
+                for i, p in enumerate(parm_moffat):
+                    if i==0:
+                        m = models.Moffat1D(amplitude=p[0], x_0=p[1], gamma=p[2],
+                                                                        alpha=p[3])
+                    else:
+                        m1 = models.Moffat1D(amplitude=p[0], x_0=p[1], gamma=p[2],
+                                                                        alpha=p[3])
+
+                        m += m1
+
+            """ Create a final model adding background polynomial, Gaussian and 
+                Moffat profiles,"""
+
+            if num_gauss>0 and num_moffat>0:
+                init_mod = b + g + m
+
+            else:
+                if num_gauss>0:
+                    init_mod = b + g
+                else:
+                    init_mod = b + m
+
+            """It is expected that a spatial profile has been already created"""
+
+            if profile is None:
+                profile = self.profile
+
+            """Fit the model to the spatial profile.""" 
+
+            mod, fit_info = profile.fit_mod(init_mod, verbose=False)
+            diff = profile.y - mod(profile.x)
+
+            """Print and plot the fitted model"""
+
+            if verbose:
+                print('\nFitted model')
+                print('-------------')
+                print(mod)
+                print('\n-------------------------------------------\n')
+
+            xlab = 'Spatial direction (0-indexed)'
+            title = 'Fit to Spatial Profile'
+            fig = plt.figure()
+            frame1=fig.add_axes((.1,.3,.8,.6))
+            plt.plot(profile.x, profile.y, color='b', linestyle='solid',
+                                  drawstyle='steps', label='Spatial profile')
+            plt.plot(profile.x, mod(profile.x), color='g', drawstyle='steps',
+                                                           label='model fit')
+            plt.ylabel('Relative flux')
+            plt.legend()
+            plt.title(title)
+
+            frame2=fig.add_axes((.1,.1,.8,.2))
+            plt.plot(profile.x, diff, 'r', drawstyle='steps')
+            plt.hlines(y=0, xmin=0, xmax=max(profile.x))
+            plt.ylabel('Difference')
+            plt.xlabel(xlab)
+            #plt.show()
+
+            plt.figure()
+            plt.plot(profile.x, profile.y, color='b', linestyle='solid',
+                                  drawstyle='steps', label='Spatial profile')
+            label_g = True
+            label_m = True
+            for i, md in enumerate(mod):
+                if isinstance(md, models.Gaussian1D):
+                    if label_g:
+                        plt.plot(profile.x, mod[i](profile.x), color='k',
+                             drawstyle='steps', label='Gaussian prof. in fit')
+                        label_g = False
+                    else:
+                        plt.plot(profile.x, mod[i](profile.x), color='k',
+                                                              drawstyle='steps')
+                elif isinstance(md, models.Moffat1D):
+                    if label_m:
+                        plt.plot(profile.x, mod[i](profile.x), color='r',
+                                 drawstyle='steps', label='Moffat prof. in fit')
+                        label_m = False
+                    else:
+                        plt.plot(profile.x, mod[i](profile.x), color='r',
+                                                              drawstyle='steps')
+            plt.legend()
+            plt.xlabel('Spatial direction (0-indexed)')
+            plt.ylabel('Relative Flux')
+            plt.title('Individual profile component in fitted model')
+            #plt.show()
+
+            """Check whether user want to create a new model or done with building
+               a model."""
+
+            prompt = input('\nDo you want to start over ? : type yes/no\n'
+                                                                   ).strip().lower()
+            if prompt=='no':
+                break
+
+        self.mod0 = mod
+
+        """Retrun the latest model"""
+        return mod
+
+    # -----------------------------------------------------------------------
+
     def locate_trace(self, pixrange=None, init=None, fix=None,
                      doplot=True, ngauss=1, axes=None,
                      title='Spatial Profile', verbose=True,
@@ -1365,3 +1567,5 @@ class Spec2d(imf.Image):
         """ Save the extracted spectrum to a file if requested """
         if outfile is not None:
             self.spec1d.save(outfile, outformat=outformat)
+
+    # -----------------------------------------------------------------------
