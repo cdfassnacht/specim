@@ -8,6 +8,8 @@ and extracting a one-dimensional spectrum from the 2D spectrum.
 Typical methods that are used to do an extraction:
    display_spec
    spatial_profile
+   initial_model
+   refined_model
    find_and_trace
    extract
 
@@ -17,6 +19,7 @@ from math import sqrt, pi
 
 import numpy as np
 from scipy.ndimage import filters
+from scipy.special import gamma
 import matplotlib.pyplot as plt
 
 from astropy.io import fits as pf
@@ -51,7 +54,16 @@ class Spec2d(imf.Image):
     Example of standard processing on a spectrum within this class:
       - myspec = Spec2d('myspec2d.fits')
       - myspec.display_spec()
-      - myspec.find_and_trace()
+      - myspec.spatial_profile()
+    Depending on how the spatial profile looks one may or mayn't want to build
+    an initial model. If one wants to build an initial model then should call
+      - myspec.initial_model()
+    If one further imposes constraints on initial model and wants to see how 
+    it fits to spatial profile should call
+      - myspec.refined_model(constrained_init_model)
+    One can call find_and_trace method with or without a model. If no model
+    is provided then a single gaussian profile is adopted as a model. Next
+      - myspec.find_and_trace(refined_model)
       - myspec.extract(outfile='myspec1d.txt')
     """
 
@@ -1353,5 +1365,3 @@ class Spec2d(imf.Image):
         """ Save the extracted spectrum to a file if requested """
         if outfile is not None:
             self.spec1d.save(outfile, outformat=outformat)
-
-    # -----------------------------------------------------------------------
