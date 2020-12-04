@@ -17,6 +17,7 @@ from math import sqrt, pi
 
 import numpy as np
 from scipy.ndimage import filters
+from scipy.special import gamma
 import matplotlib.pyplot as plt
 
 from astropy.io import fits as pf
