@@ -375,12 +375,17 @@ class Spec2d(imf.Image):
             tmp1d = np.median(self.data, axis=spaceaxis)
             self.sky1d = Spec1d(wav=pix, flux=tmp1d)
 
-        """ Turn the 1-dimension sky spectrum into a 2-dimensional form """
+        """ Turn the 1-dimension sky spectrum into a 2-dimensional form. And
+            if 'y' is the dispersion axis we need to transpose 'sky2d'."""
         # sky2d = np.zeros(self.data.shape)
         # for i in range(self.nspat):
         #     sky2
-        sky2d = np.tile(self.sky1d['flux'].data,
-                        (self.data.shape[spaceaxis], 1))
+        if spaceaxis:
+            sky2d = np.tile(self.sky1d['flux'].data,
+                                        (self.data.shape[spaceaxis], 1)).T
+        else:
+            sky2d = np.tile(self.sky1d['flux'].data,
+                                         (self.data.shape[spaceaxis], 1))
         self['sky2d'] = imf.WcsHDU(sky2d, wcsverb=False)
 
         """ Subtract the sky from the data """
