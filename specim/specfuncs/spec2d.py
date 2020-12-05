@@ -572,6 +572,13 @@ class Spec2d(imf.Image):
         profile = Spec1d(wav=wav, flux=pflux, verbose=debug)
 
         """
+        Added the following line as locate_trace() will not be called from
+        find_and_trace() if a model is provided as input while calling the
+        function find_and_trace().
+        """
+        self.profile = profile
+
+        """
         Plot the compressed spectrum, showing the best-fit Gaussian if
         requested
         """
