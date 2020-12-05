@@ -589,7 +589,6 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def initial_model(self, profile=None, verbose=True):
-
         """
         Creates an initial model to fit with spatial profile from user input
         of parameter values. Takes a polynomial upto 2nd degree and any number
@@ -604,13 +603,11 @@ class Spec2d(imf.Image):
         Output:
             mod : retuns the final fitted model
         """
-
         print("\nTo create an initial model you first need to enter degree " \
               "of background polynomial(<3) and number of Gaussian and Moffat " \
               "profile as integers.")
 
         while True:
-
             background_order = int(input('Order of background polynomial : '))
             num_gauss = int(input('Number of Gaussian profile : '))
             num_moffat = int(input('Number of Moffat profile : '))
@@ -720,7 +717,9 @@ class Spec2d(imf.Image):
             mod, fit_info = profile.fit_mod(init_mod, verbose=False)
             diff = profile.y - mod(profile.x)
 
-            """Print and plot the fitted model"""
+            """Print and plot the fitted model, and plot the difference between model 
+               and data. Also plot the contribution of each individual model component
+               in the compound model to fit."""
 
             if verbose:
                 print('\nFitted model')
@@ -750,6 +749,10 @@ class Spec2d(imf.Image):
             plt.figure()
             plt.plot(profile.x, profile.y, color='b', linestyle='solid',
                                   drawstyle='steps', label='Spatial profile')
+
+            """The following boolean flags are to ensure that Gaussian and Moffat
+               profiles in the plot will be labeled just once."""
+
             label_g = True
             label_m = True
             for i, md in enumerate(mod):
@@ -787,6 +790,97 @@ class Spec2d(imf.Image):
 
         """Retrun the latest model"""
         return mod
+
+    # -----------------------------------------------------------------------
+
+        def refined_model(self, mod, profile=None, verbose=True):
+        """
+        This function takes a model (a constrained initial model is expected) 
+        and fits it to the spatial profile. Then it returns the new fitted
+        model.
+
+        Required input:
+            mod : an astropy type model. It is expected that one first creates
+                  an initial model using the function initial_model() and 
+                  puts constrain on it's parameters. This constrained model
+                  is the input for this function.
+
+            profile : a spatial profile of the 2d spectra produced using the
+                      function spatial_profile(). If no profile is
+                      provided then profile inherited from spatial_profile()
+                      is used.
+        Output:
+            mod_new : retuns the newly fitted model
+        """
+        if profile is None:
+            profile = self.profile
+
+        """Fit the constrained model to spatial profile """
+
+        mod_new, fit_info = profile.fit_mod(mod, verbose=True)
+        diff = profile.y - mod(profile.x)
+
+        """Print and plot the fitted model, and plot the difference between model 
+           and data. Also plot the contribution of each individual model component
+           in the compound model to fit."""
+
+        if verbose:
+            print('\nFitted model')
+            print('-------------')
+            print(mod_new)
+            print('\n-------------------------------------------\n')
+
+        xlab = 'Spatial direction (0-indexed)'
+        title = 'Fit to Spatial Profile'
+        fig = plt.figure()
+        frame1=fig.add_axes((.1,.3,.8,.6))
+        plt.plot(profile.x, profile.y, color='b', linestyle='solid',
+                               drawstyle='steps', label='Spatial profile')
+        plt.plot(profile.x, mod(profile.x), color='g', drawstyle='steps',
+                                                           label='model fit')
+        plt.ylabel('Relative flux')
+        plt.legend()
+        plt.title(title)
+
+        frame2=fig.add_axes((.1,.1,.8,.2))
+        plt.plot(profile.x, diff, 'r', drawstyle='steps')
+        plt.hlines(y=0, xmin=0, xmax=160)
+        plt.ylabel('Difference')
+        plt.xlabel(xlab)
+        plt.show()
+
+        plt.plot(profile.x, profile.y, color='b', linestyle='solid',
+                                  drawstyle='steps', label='Spatial profile')
+
+        """The following boolean flags are to ensure that Gaussian and Moffat 
+           profiles in the plot will be labeled just once."""
+
+        label_g = True
+        label_m = True
+        for i, md in enumerate(mod):
+            if isinstance(md, models.Gaussian1D):
+                if label_g:
+                    plt.plot(profile.x, mod[i](profile.x), color='k',
+                             drawstyle='steps', label='Gaussian prof. in fit')
+                    label_g = False
+                else:
+                    plt.plot(profile.x, mod[i](profile.x), color='k',
+                                                             drawstyle='steps')
+            elif isinstance(md, models.Moffat1D):
+                if label_m:
+                    plt.plot(profile.x, mod[i](profile.x), color='r',
+                                drawstyle='steps', label='Moffat prof. in fit')
+                    label_m = False
+                else:
+                    plt.plot(profile.x, mod[i](profile.x), color='r',
+                                                              drawstyle='steps')
+        plt.legend()
+        plt.xlabel('Spatial direction (0-indexed)')
+        plt.ylabel('Relative Flux')
+        plt.title('Individual profile component in fitted model')
+        plt.show()
+
+        return mod_new
 
     # -----------------------------------------------------------------------
 
