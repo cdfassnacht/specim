@@ -134,6 +134,8 @@ class Spec2d(imf.Image):
         self.sigorder = 3
         self.mod0 = None
         self.logwav = logwav
+        self.flux = None
+        self.spectra = None
 
         """
         Read in the data and call the superclass initialization for useful
