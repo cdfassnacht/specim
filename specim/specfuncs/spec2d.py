@@ -748,7 +748,7 @@ class Spec2d(imf.Image):
 
             frame2=fig.add_axes((.1,.1,.8,.2))
             plt.plot(profile.x, diff, 'r', drawstyle='steps')
-            plt.hlines(y=0, xmin=0, xmax=max(profile.x))
+            plt.hlines(y=0, xmin=min(profile.x), xmax=max(profile.x))
             plt.ylabel('Difference')
             plt.xlabel(xlab)
             #plt.show()
@@ -851,7 +851,7 @@ class Spec2d(imf.Image):
 
         frame2=fig.add_axes((.1,.1,.8,.2))
         plt.plot(profile.x, diff, 'r', drawstyle='steps')
-        plt.hlines(y=0, xmin=0, xmax=160)
+        plt.hlines(y=0, xmin=min(profile.x), xmax=max(profile.x))
         plt.ylabel('Difference')
         plt.xlabel(xlab)
         plt.show()
