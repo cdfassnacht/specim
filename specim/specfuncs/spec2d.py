@@ -1295,6 +1295,13 @@ class Spec2d(imf.Image):
         profmods = []
 
         """
+        We need the following table to store Gaussian and Moffat profile 
+        parameters except amplitudes generated for each pixel. Later we will
+        create models for each pixel to fit with the data using this table.
+        """
+        parm_tab = Table()
+
+        """
         Loop on the number of components (e.g., Gaussian1D) that make
          up the model fit to the profile.  Ignore the Polynomial1D component
          since it is used to fit to the sky level and won't be used in
@@ -1314,6 +1321,9 @@ class Spec2d(imf.Image):
                 mean = np.polyval(polypars['mean_%d' % i], x)
                 stddev = np.polyval(polypars['stddev_%d' % i], x)
 
+                parm_tab['mean_%d' %i] =  mean
+                parm_tab['stddev_%d' %i] = stddev
+
                 """ Create a model set using the profile values """
                 mod = models.Gaussian1D(amplitude=amp, mean=mean,
                                         stddev=stddev, n_models=self.npix)
@@ -1327,6 +1337,36 @@ class Spec2d(imf.Image):
                 profdat += (mod(y2d.T)).T
                 profmods.append(mod)
 
+                """As we may have more than one profile need to reset 'amp0'"""
+                amp0 = -1
+
+             elif isinstance(mod, models.Moffat1D):
+                if amp0 == -1:
+                    amp0 = mod.amplitude.value
+
+                """
+                Use the polynomial parameters to generate the profile
+                values at each wavelength step along the chip
+                """
+                amp = np.ones(self.npix) * mod.amplitude.value / amp0
+                x_0 = np.polyval(polypars['x_0_%d' % i], x)
+                gamma = np.polyval(polypars['gamma_%d' % i], x)
+                alpha = np.polyval(polypars['alpha_%d' % i], x)
+
+                parm_tab['x_0_%d' %i] = x_0
+                parm_tab['gamma_%d' %i] = gamma
+                parm_tab['alpha_%d' %i] = alpha
+
+                """ Create a model set using the profile values """
+                mod = models.Moffat1D(amplitude=amp, x_0=x_0,
+                             gamma=gamma, alpha=alpha, n_models=self.npix)
+
+                profdat += (mod(y2d.T)).T
+                profmods.append(mod)
+
+                """As we may have more than one profile need to reset 'amp0'"""
+                amp0 = -1
+
         """ Normalize the profile in the spatial direction """
         Pnorm = (profdat.sum(axis=self.spaceaxis))
         newdim = (self.npix, self.nspat)
@@ -1338,7 +1378,7 @@ class Spec2d(imf.Image):
         generate it
         """
         del x, x2d, y2d
-        return profdat, profmods
+        return profdat, profmods, parm_tab
     
     # -----------------------------------------------------------------------
 
