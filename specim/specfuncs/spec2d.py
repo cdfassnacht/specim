@@ -1078,12 +1078,27 @@ class Spec2d(imf.Image):
         centroid or shape
         """
         fitinfo = {}
+        parm_name = []
         count = 1
-        for p in coarsepars.colnames:
 
-            """ Select the location and shape parameters only """
-            if p[:4] == 'mean' or p[:6] == 'stddev' or p[:2] == 'x0':
-                    
+        """First make a list of those parameter names which define 
+           centroid or shape"""
+
+        for i, m in enumerate(mod0):
+            if isinstance(m, models.Gaussian1D):
+                  
+                parm_name.append('mean_%d' %i)  
+                parm_name.append('stddev_%d' %i)
+        
+            elif isinstance(m, models.Moffat1D):  
+         
+                parm_name.append('x_0_%d' %i)
+                parm_name.append('gamma_%d' %i)
+                parm_name.append('alpha_%d' %i)
+
+        #for p in coarsepars.colnames:
+        for i, p in enumerate(parm_name):
+       
                 """ Select the column to be fitted """
                 data0 = coarsepars[p]
                 
@@ -1121,71 +1136,20 @@ class Spec2d(imf.Image):
                               ' %s' % (polyorder, p))
                     polypars[p] = np.polyfit(x, data, polyorder)
 
+        """  Plot the fits """
         if doplot:
-            print('Plotting centroid and width of model component 1')
-            if axes is not None:
-                ax1 = axes[1]
-                ax2 = axes[2]
-            else:
-                ax1 = plt.subplot(111)
-                ax2 = plt.subplot(111)
-                
-            """ Get the data for the centroid """
-            pars = []
-            modpars = []
-            if 'mean_1' in fitinfo.keys():
-                pars.append('mean_1')
-                modpars.append('mean')
-            elif 'x0_1' in fitinfo.keys():
-                pars.append('x0_1')
-                modpars.append('x0') 
-            else:
-                pars.append(None)
-                modpars.append(None)
-
-            """ Get the data for the width """
-            if 'stddev_1' in fitinfo.keys():
-                pars.append('stddev_1')
-                modpars.append('stddev_1')
-            else:
-                pars.append(None)
-                modpars.append(None)
-
-            """  Plot the fits """
             xfit = np.arange(self.npix).astype(float)
-            ptstyle = ['bo', 'g^']
-            axislist = [ax1, ax2]
-            for par, modpar, style, ax in zip(pars, modpars, ptstyle,
-                                              axislist):
-                if par is not None:
-                    x1 = fitinfo[par][0]
-                    y1 = fitinfo[par][1]
-                    yfit = np.polyval(polypars[par], xfit)
-                    # y0 = mod0[modpar].value
-                    ax.plot(x1, y1, style)
-                    # ax.axhline(y0, color='k', linestyle='--')
-                    ax.plot(xfit, yfit, 'r')
-            # if widpar is not None:
-            #     x2 = fitinfo[widpar][0]
-            #     y2 = fitinfo[widpar][1]
-            #     yfit = np.polyval(polypars[widpar], xfit)
-            #     ax2.plot(x2, y2, 'g^')
-            #     ax2.plot(xfit, yfit, 'r')
-            # if centpar is not None:
-            #     x1 = fitinfo[centpar][0]
-            #     y1 = fitinfo[centpar][1]
-            #     yfit = np.polyval(polypars[centpar], xfit)
-            #     y0 = mod0[centpar].value
-            #     ax1.plot(x1, y1, 'bo')
-            #     ax1.axhline(y0, color='k', linestyle='--'
-            #     ax1.plot(xfit, yfit, 'r')
-            # if widpar is not None:
-            #     x2 = fitinfo[widpar][0]
-            #     y2 = fitinfo[widpar][1]
-            #     yfit = np.polyval(polypars[widpar], xfit)
-            #     ax2.plot(x2, y2, 'g^')
-            #     ax2.plot(xfit, yfit, 'r')
-            ax2.set_xlabel('%s (pixels)' % self.dispaxis)
+            for parm in fitinfo:
+                x1 = fitinfo[parm][0]
+                y1 = fitinfo[parm][1]
+                yfit = np.polyval(polypars[parm], xfit)
+                plt.figure()
+                plt.plot(x1, y1, 'bo', label='paramater values in slices')
+                plt.plot(xfit, yfit, 'r', label='polynomial fit')
+                plt.legend()
+                plt.title(parm)
+                plt.xlabel('%s (pixels)' % self.dispaxis)
+                plt.ylabel('parameter value')
 
         return polypars, exclude_masks
                 
