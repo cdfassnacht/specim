@@ -972,6 +972,11 @@ class Spec2d(imf.Image):
         spatial profiles, one for each slice.  The model outputs for each
         slice get stored in arrays that are returned by this method.
 
+        Required input:
+            mod0 : a single 'astropy' type model or a list of 'astropy'
+                   models. When called from trace_spectrum() a single
+                   model is sent and when called from _extract_modelfit()
+                   a list of models are sent, one for each pixel.
         """
 
         """
@@ -994,7 +999,7 @@ class Spec2d(imf.Image):
         """
         partab = Table()
         partab['x'] = xstep
-        for param in mod0.param_names:
+        for param in self.mod0.param_names:
             partab[param] = np.zeros(xstep.size)
         partab['flux'] = np.zeros(xstep.size)
         covar = []
@@ -1019,9 +1024,12 @@ class Spec2d(imf.Image):
                 mod0[1].stddev = sig0arr[i]
 
             """ Do the model fitting """
-            mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+            if isinstance(mod0, list):
+                mod, fitinfo = tmpprof.fit_mod(mod0=mod0[i], usevar=usevar,
                                            verbose=debug)
-
+            else:
+                mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+                                           verbose=debug)
             """
             Store the fitted parameters in the parameter table and the
             covariances in the covar list
