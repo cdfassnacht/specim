@@ -484,7 +484,18 @@ class Spec2d(imf.Image):
 
         """ Plot the input spectrum """
         ax1 = plt.subplot(pltnum_main)
-        self.display(mode='xy', axlabel=False)
+
+        """If the dispersion axis is 'y' axis, we still want in the plotted
+           spectra the dispersion axis appears in the image 'x' axis. I think
+           the easiest way to implement that is to create a new iamge object
+           with the transposed data."""
+
+        if self.dispaxis == "y":
+            self['proxy_data'] = imf.WcsHDU(self.data.T, wcsverb=False)
+            self.display(dmode='proxy_data', mode='xy', axlabel=False)
+        else:
+            self.display(mode='xy', axlabel=False)
+        #self.display(mode='xy', axlabel=False)
 
         """ Plot the subtracted sky spectrum if desired """
         if doskysub:
