@@ -388,8 +388,15 @@ class Spec2d(imf.Image):
                                          (self.data.shape[spaceaxis], 1))
         self['sky2d'] = imf.WcsHDU(sky2d, wcsverb=False)
 
-        """ Subtract the sky from the data """
-        skysub = self.data - sky2d
+        """ Subtract the sky from the data. And if 'y' is the dispersion axis
+            we need to transpose 'skysub' so that in the plotted sky subtracted
+            spectra the dispersion axis lies along the image 'x' axis"""
+
+        if spaceaxis:
+            skysub = (self.data - sky2d).T
+        else:
+            skysub = self.data - sky2d
+        #skysub = self.data - sky2d
         self['skysub'] = imf.WcsHDU(skysub, wcsverb=False)
 
         """ Clean up """
