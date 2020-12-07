@@ -1780,11 +1780,28 @@ class Spec2d(imf.Image):
                 xlab = 'Wavelength'
             else:
                 xlab = 'Pixel number along the %s axis' % self.dispaxis
-            self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
+
+            if  method == 'modelfit':
+                """Plot all the extracted spectrum """
+
+                for i, p in enumerate(self.flux.columns):
+                    title = self.spectra[i][0]
+                    self.spectra[i][1].plot(xlabel=xlab, title=title, **kwargs)
+            else:
+                self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
                              **kwargs)
+            #self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
+            #                 **kwargs)
 
         """ Save the extracted spectrum to a file if requested """
         if outfile is not None:
-            self.spec1d.save(outfile, outformat=outformat)
+            if  method == 'modelfit' and len(self.flux.columns)>1:
+                print("There are more than one spectrum and stored as " \
+                      "a list of tuples and each tuple contains a title and "\
+                      "a spec1d object. This list is accessible as an object "\
+                      "attribute such as 'myspec.spectra[i][1].")
+            else:
+                self.spec1d.save(outfile, outformat=outformat)
+            #self.spec1d.save(outfile, outformat=outformat)
 
     # -----------------------------------------------------------------------
