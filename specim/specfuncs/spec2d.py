@@ -1474,9 +1474,44 @@ class Spec2d(imf.Image):
         ncomp = mod0.n_submodels() - 1
         if verbose:
             print('Fitting to %d components, plus a background' % ncomp)
-        for i in range(1, ncomp+1):
-            mod0[i].mean.fixed = True
-            mod0[i].stddev.fixed = True
+        #for i in range(1, ncomp+1):
+        #    mod0[i].mean.fixed = True
+        #    mod0[i].stddev.fixed = True
+
+        """Now we will create a model for each pixel and the following empty
+           list will store all these models."""
+        cmp_mods = []
+        parm_tab = self.parm_tab.copy()
+
+        for i in range(self.npix):
+            mods=[]
+            for j, mod in enumerate(mod0):
+                if isinstance(mod, models.Polynomial1D):
+                    """Here we are not fixing any background polynomial 
+                       parameters which means all of them will be fitted to data."""
+                    mods.append(mod)
+
+                elif isinstance(mod, models.Gaussian1D):
+
+                    g = models.Gaussian1D(amplitude=1, mean=parm_tab['mean_%d' % j][i], 
+                                          stddev=parm_tab['stddev_%d' %j][i], 
+                                          fixed={'mean': True, 'stddev': True})
+                    mods.append(g)
+
+                elif isinstance(mod, models.Moffat1D):
+
+                    m = models.Moffat1D(amplitude=1, x_0=parm_tab['x_0_%d' % j][i],
+                                        gamma=parm_tab['gamma_%d' % j][i], 
+                                        alpha=parm_tab['alpha_%d' % j][i],
+                                        fixed={'x_0': True, 'gamma': True, 'alpha': True})
+                    mods.append(m)
+
+            for k, m0 in enumerate(mods):
+                if k==0:
+                    md = m0
+                else:
+                    md += m0
+            cmp_mods.append(md)
 
         """ Do the extraction by calling fit_slices """
         if verbose:
@@ -1486,8 +1521,46 @@ class Spec2d(imf.Image):
             else:
                 print(' Extraction range (pixels): %d - %d' %
                       extrange[0], extrange[1])
-        fitpars, covar = self.fit_slices(mod0, 1, mu0arr=self.mu,
-                                         sig0arr=self.sig)
+
+        fitpars, covar = self.fit_slices(cmp_mods, 1)
+        #fitpars, covar = self.fit_slices(mod0, 1, mu0arr=self.mu,
+        #                                 sig0arr=self.sig)
+
+        """Calculating integrated flux for each profile """
+        flux = Table()
+
+        for i, mod in enumerate(mod0):
+            if isinstance(mod, models.Gaussian1D):
+                flux['gaussian_%d' %i] = (sqrt(2. * pi) * fitpars['stddev_%d' %i]
+                                                    * fitpars['amplitude_%d' %i])
+            elif isinstance(mod, models.Moffat1D):
+                flux['moffat_%d' %i] = ( sqrt(pi) * fitpars['amplitude_%d' %i] *
+                                      fitpars['gamma_%d' % i] *
+                                      (gamma(fitpars['alpha_%d' % i] - 0.5) /
+                                                gamma(fitpars['alpha_%d' % i])) )
+        """ Get the wavelength/pixel vector """
+        self.get_wavelength()
+        
+        """Need to calculate variance and if possible sky vector"""
+
+        """Initializing an empty container to store extraxted 1d spectra"""
+        spectra = []
+
+        """Each extracted spectrum is stored as a tuple consisting of a title
+           and a spec1d object and accessible as an object attribute such as
+           myspec.spectra[i][1]"""
+
+        for i, p in enumerate(flux.columns):
+
+            title = 'Extracted Spectrum from ' + p
+
+            """Need to add variance on flux and sky data later"""
+
+            spectra.append((title, Spec1d(wav=self.wavelength, flux=flux[p])))
+
+        self.spectra = spectra
+        self.flux = flux
+
         return fitpars, covar
 
     # -----------------------------------------------------------------------
