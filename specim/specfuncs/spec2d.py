@@ -1382,7 +1382,7 @@ class Spec2d(imf.Image):
     
     # -----------------------------------------------------------------------
 
-    def find_and_trace(self, ngauss=1, bgorder=0, stepsize='default',
+    def find_and_trace(self, mod0=None, ngauss=1, bgorder=0, stepsize='default',
                        fitorder={'mean_1': 3, 'stddev_1': 4},
                        fitrange=None, doplot=True, do_subplot=True,
                        axes=None, verbose=True):
@@ -1409,28 +1409,36 @@ class Spec2d(imf.Image):
               * This step is done by a call to the trace_spectrum method
 
         Inputs:
+           mod0 : an 'astropy' type model. If no 'mod0' is provided then a single 
+                  Gaussian profile is adopted as an initial  model by calling the
+                  function locate_trace(). Otherwise the provided 'mod0' will be 
+                  passed to trace_spectrum() method.
+
            stepsize
            muorder
            sigorder
         """
 
-        """ Set up the plotting parameters """
-        if do_subplot and axes is None:
-            ax1 = plt.axes([0.05, 0.05, 0.25, 0.9])
-            ax2 = plt.axes([0.35, 0.55, 0.6, 0.4])
-            ax3 = plt.axes([0.35, 0.05, 0.6, 0.4])
-            axes = [ax1, ax2, ax3]
-            
-        self.profile, self.mod0 = \
-            self.locate_trace(doplot=doplot, ngauss=ngauss, pixrange=fitrange,
-                              axes=axes, verbose=verbose)
+        #""" Set up the plotting parameters """
+        #if do_subplot and axes is None:
+        #    ax1 = plt.axes([0.05, 0.05, 0.25, 0.9])
+        #    ax2 = plt.axes([0.35, 0.55, 0.6, 0.4])
+        #    ax3 = plt.axes([0.35, 0.05, 0.6, 0.4])
+        #    axes = [ax1, ax2, ax3]
+        """Don't need to call 'locate_trace' if a model is provided"""
+        if mod0 is None:    
+            self.profile, self.mod0 = \
+                self.locate_trace(doplot=doplot, ngauss=ngauss, pixrange=fitrange,
+                                              axes=axes, verbose=verbose)
+                mod0 = self.mod0
 
+        """Pass the 'mod0' to trace_spectrum() and make_prof2d()"""
         polypars = \
-            self.trace_spectrum(self.mod0, ngauss=ngauss, stepsize=stepsize,
+            self.trace_spectrum(mod0, ngauss=ngauss, stepsize=stepsize,
                                 fitorder=fitorder, fitrange=fitrange,
                                 doplot=doplot, axes=axes, verbose=verbose)
 
-        self.prof2d, self.profmods = self.make_prof2d(polypars, self.mod0)
+        self.prof2d, self.profmods, self.parm_tab = self.make_prof2d(polypars, mod0)
 
         """
         The following two lines are here temporarily so that the extract
