@@ -391,6 +391,33 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def flip(self, method):
+        """
+
+        Performs a flip of the data, in order to correct for the way
+        that certain detectors read out.
+
+        Inputs:
+         method - method to utilize in order to flip the data.  Possibilities
+                  are:
+                   'x'       - flip the x-axis
+                   'y'       - flip the y-axis
+                   'xy'      - flip both x and y axes
+                   'pfcam'   - flip x and then rotate -90 [NOT YET IMPLEMENTED]
+        """
+
+        data = self.data.copy()
+        if method == 'x':
+            self.data = data[:, ::-1]
+        elif method == 'y':
+            self.data = data[::-1, :]
+        elif method == 'xy':
+            self.data = data[::-1, ::-1]
+        else:
+            raise ValueError
+    
+    # -----------------------------------------------------------------------
+
     def sigma_clip(self, nsig=3., statsec=None, mask=None,
                    verbose=False):
         """
@@ -483,6 +510,73 @@ class WcsHDU(pf.PrimaryHDU):
         
     # -----------------------------------------------------------------------
 
+    def normalize(self, method='sigclip', mask=None):
+        """
+
+        Normalizes the data in the object.  Allowed methods are:
+          'sigclip' - divide by the clipped mean (the default)
+          'median'  - divide by the median
+          'mean'    - divide by the mean
+          'average' - alternate way of indicating divide by mean
+
+        """
+
+        method = method.lower()
+        if mask is not None:
+            data = self.data[mask]
+        else:
+            data = self.data
+        if method == 'median':
+            normfac = np.median(data)
+        elif method == 'mean' or method[:3] == 'ave':
+            normfac = data.mean()
+        elif method == 'sigclip':
+            self.sigma_clip(mask=mask)
+            normfac = self.mean_clip
+        else:
+            raise ValueError('method must be one of "sigclip", "median" '
+                             'or "mean"')
+        self.data /= normfac
+            
+    # -----------------------------------------------------------------------
+
+    def make_objmask(self, nsig=1.5, bpm=None):
+        """
+
+        Makes a mask that is intended to indicate regions of the image
+        that contain flux from objects, as opposed to being blank sky.
+        The mask is set so that pixels containing object emission are
+        indicated by True, while blank sky pixels are indicated by False
+
+        Inputs:
+         nsig  - number of sigma above the noise level a smoothed image
+                  must have to be considered object emission. Default=1.5
+         bpm   - bad pixel mask to apply.  Default=None
+
+        Output:
+         objmask - object mask
+
+        """
+
+        """ Compute the clipped rms in the image """
+        self.sigma_clip(mask=bpm)
+        print(self.mean_clip, self.rms_clip)
+
+        """ Median smooth the image and set initial object mask """
+        med = self.smooth(3, smtype='median')
+        objmask = np.where((med - self.mean_clip)/self.rms_clip > nsig, 1, 0)
+
+        """ Reject isolated cosmic rays via a minimum filter """
+        objmask = ndimage.minimum_filter(objmask, 5)
+
+        """ Grow the mask regions to encompass low SNR regions """
+        objmask = ndimage.maximum_filter(objmask, 11)
+        objmask = ndimage.maximum_filter(objmask, 11)
+
+        return objmask
+    
+    # -----------------------------------------------------------------------
+
     def subim_bounds_xy(self, centpos, imsize):
         """
         Takes a requested image center (xcent, ycent) and requested image size
@@ -568,6 +662,8 @@ class WcsHDU(pf.PrimaryHDU):
             verbose - Print out useful information if True (the default)
         """
 
+        ## NEED TO ADD A CHECK FOR VALUES OF X1, X2, ETC. ##
+        
         """
         Cut out the subimage based on the bounds.
         Note that radio images often have 4 dimensions (x, y, freq, stokes)
@@ -758,7 +854,7 @@ class WcsHDU(pf.PrimaryHDU):
             centpos = (x, y)
             imsize = (inpixxsize, inpixysize)
             x1, y1, x2, y2, = self.subim_bounds_xy(centpos, imsize)
-            print(x1, y1, x2, y2)
+            # print(x1, y1, x2, y2)
             subim = self.cutout_xy(x1, y1, x2, y2, nanval=nanval,
                                    fixnans=fixnans, verbose=verbose)
             return subim
