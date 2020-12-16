@@ -299,7 +299,8 @@ class Spec1d(df.Data1d):
                 raise IndexError('keynames had %d elements, but must have '
                                  '2-4 elements')
         for inkey, outkey in zip(keynames, outnames):
-            if inkey not in intab.colnames:
+            if inkey.lower() not in intab.colnames and \
+               inkey.upper() not in intab.colnames:
                 raise KeyError('Expected column %s not found in %s'
                                % (inkey, indat))
             intab.rename_column(inkey, outkey)
@@ -330,7 +331,14 @@ class Spec1d(df.Data1d):
                     'opt_counts_sky']
 
         """ Read the data and return the subsequent table """
-        intab = self._read_tab_gen(infile, keynames=keynames, tabext=tabext)
+        try:
+            intab = self._read_tab_gen(infile, keynames=keynames,
+                                       tabext=tabext)
+        except KeyError:
+            for i in range(len(keynames)):
+                keynames[i] = keynames[i].upper()
+            intab = self._read_tab_gen(infile, keynames=keynames,
+                                       tabext=tabext)
         return intab
 
         

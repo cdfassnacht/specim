@@ -90,8 +90,11 @@ class Image(dict):
           wcsverb
         """
 
-        """ Set default """
+        """ Set defaults """
+        self['var'] = None
         self.varmode = 'var'
+        self['bpm'] = None
+        self.bpmgood = 1
 
         """ Set up the empty Image container by calling the superclass """
         if pyversion == 2:

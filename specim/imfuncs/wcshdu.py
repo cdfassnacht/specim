@@ -712,10 +712,9 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Print out useful information """
         if verbose:
-            print('')
-            print('Cutout image center (x, y): (%d, %d)' %
+            print('   Cutout image center (x, y): (%d, %d)' %
                   (subcentx, subcenty))
-            print('Cutout image size (x y): %dx%d' % (nx, ny))
+            print('   Cutout image size (x y): %dx%d' % (nx, ny))
 
         """
         Update the header info, including updating the CRPIXn values if they
