@@ -1462,10 +1462,6 @@ class Image(dict):
                        4. A 2-element tuple: (xsize, ysize)
         """
 
-        """ First check to see if any modification needs to be made """
-        if imcent is None and imsize is None:
-            plthdu = self['input']
-
         """
         The definition of the subimage depends on whether the requested
         cutout is based on WCS coordinates (RA and Dec) or pixels (x and y),
@@ -1503,7 +1499,7 @@ class Image(dict):
         """ Set the displayed axes to be in WCS offsets, if requested """
         self.mode = mode
         if self.mode == 'radec':
-            if self.wcsinfo is None:
+            if self['plotim'].wcsinfo is None:
                 print('')
                 print('WARNING: mode="radec" but no WCS info in image '
                       'header')
@@ -1601,14 +1597,14 @@ class Image(dict):
         Select the region of the image to be displayed, which may be the
         full input image
         """
-        try:
-            self['plotim'] = self.set_subim(imcent, imsize, mode=mode,
-                                            dmode=dmode, fixnans=fixnans,
-                                            verbose=verbose)
-        except (TypeError, IOError):
-            print('ERROR: Could not create image cutout')
-            print('')
-            return
+        # try:
+        self['plotim'] = self.set_subim(imcent, imsize, mode=mode,
+                                        dmode=dmode, fixnans=fixnans,
+                                        verbose=verbose)
+        # except (TypeError, IOError):
+        #     print('ERROR: Could not create image cutout')
+        #     print('')
+        #     return
         if debug:
             print(type(self['plotim']))
 

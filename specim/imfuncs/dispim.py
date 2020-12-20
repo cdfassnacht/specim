@@ -7,12 +7,15 @@ an image and interacting with the displayed image
 
 """
 
+import sys
 from math import fabs, log10
 from math import cos as mcos
 import numpy as np
 from matplotlib import pyplot as plt
 from .wcshdu import WcsHDU
 from .dispparam import DispParam
+
+pyversion = sys.version_info.major
 
 # -----------------------------------------------------------------------
 
@@ -38,7 +41,11 @@ class DispIm(WcsHDU):
         """
 
         """ Link to the superclass """
-        super(DispIm, self).__init__(inhdu, wcsverb=False)
+        if pyversion == 2:
+            super(DispIm, self).__init__(inhdu, wcsverb=False)
+        else:
+            super().__init__(inhdu, wcsverb=False)
+
 
         """ Initialize some parameters """
         self.ax1 = None

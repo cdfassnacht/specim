@@ -9,6 +9,7 @@ attributes of the class
 """
 
 import os
+import sys
 from math import fabs
 import numpy as np
 from scipy import ndimage
@@ -17,6 +18,8 @@ from astropy import wcs
 from astropy.io import fits as pf
 from cdfutils import coords, datafuncs as df
 from .imutils import open_fits
+
+pyversion = sys.version_info.major
 
 # ---------------------------------------------------------------------------
 
@@ -65,6 +68,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
         Check the format of the input info and get the data and header info
         """
+        print(type(indat))
         if isinstance(indat, str):
             hdu = self.read_from_file(indat, verbose=verbose)
             data = hdu[hext].data
@@ -74,7 +78,7 @@ class WcsHDU(pf.PrimaryHDU):
             data = hdu[hext].data
             hdr = hdu[hext].header
         elif isinstance(indat, pf.PrimaryHDU) or \
-                isinstance(indat, pf.ImageHDU):
+             isinstance(indat, pf.ImageHDU) or isinstance(indat, WcsHDU):
             data = indat.data.copy()
             hdr = indat.header.copy()
         elif isinstance(indat, np.ndarray):
@@ -101,7 +105,10 @@ class WcsHDU(pf.PrimaryHDU):
         """
         Use the input data and header info to make the call to the super class
         """
-        super(WcsHDU, self).__init__(data, hdr)
+        if pyversion == 2:
+            super(WcsHDU, self).__init__(data, hdr)
+        else:
+            super().__init__(data, hdr)
 
         """
         Now add WCS attributes to the class.
@@ -273,7 +280,8 @@ class WcsHDU(pf.PrimaryHDU):
         hdr = inhdr.copy()
         wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
                    'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
-                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2']
+                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2',
+                   'crota2']
         for key in wcskeys:
             if key.upper() in hdr.keys():
                 del hdr[key]
@@ -537,10 +545,11 @@ class WcsHDU(pf.PrimaryHDU):
             raise ValueError('method must be one of "sigclip", "median" '
                              'or "mean"')
         self.data /= normfac
+        return normfac
             
     # -----------------------------------------------------------------------
 
-    def make_objmask(self, nsig=1.5, bpm=None):
+    def make_objmask(self, nsig=1.3, init_kernel=3, bpm=None):
         """
 
         Makes a mask that is intended to indicate regions of the image
@@ -560,21 +569,50 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Compute the clipped rms in the image """
         self.sigma_clip(mask=bpm)
-        print(self.mean_clip, self.rms_clip)
 
         """ Median smooth the image and set initial object mask """
-        med = self.smooth(3, smtype='median')
-        objmask = np.where((med - self.mean_clip)/self.rms_clip > nsig, 1, 0)
+        med = self.smooth(init_kernel, smtype='median')
+        objmask = \
+            np.where((med - self.mean_clip) / self.rms_clip > nsig, 1, 0)
 
         """ Reject isolated cosmic rays via a minimum filter """
-        objmask = ndimage.minimum_filter(objmask, 5)
+        objmask = ndimage.minimum_filter(objmask, (init_kernel+2))
 
         """ Grow the mask regions to encompass low SNR regions """
-        objmask = ndimage.maximum_filter(objmask, 11)
-        objmask = ndimage.maximum_filter(objmask, 11)
+        growkernel = int(init_kernel * 3 + 2)
+        objmask = ndimage.maximum_filter(objmask, growkernel)
+        objmask = ndimage.maximum_filter(objmask, growkernel)
 
         return objmask
     
+    # -----------------------------------------------------------------------
+
+    def apply_pixmask(self, mask, badval=0, maskval=np.nan):
+        """
+
+        Applies a mask to the data by setting the pixels identified by
+         the mask to the requested value (default value is NaN).
+        If the mask is boolean, then the pixels to be masked are identified
+         by True.
+        If the mask is integer-valued, then the pixels to be masked are
+         identified as those that are set to badval.  For example, many
+         bad pixel masks have goodval=1 and badval=0.
+
+        """
+
+        """ Check the mask type """
+        if mask.dtype == int:
+            pixmask = mask == badval
+        elif mask.dytpe == float:
+            pixmask = (int(mask) == badval)
+        elif mask.dtype == bool:
+            pixmask = mask.copy()
+        else:
+            raise TypeError('Mask elements must be either int or bool')
+
+        """ Apply the mask """
+        self.data[pixmask] = maskval
+            
     # -----------------------------------------------------------------------
 
     def subim_bounds_xy(self, centpos, imsize):
@@ -707,7 +745,7 @@ class WcsHDU(pf.PrimaryHDU):
             hdr['crpix1'] -= x1
             hdr['crpix2'] -= y1
 
-        """ Save the new data and header in a PrimaryHDU format """
+        """ Put the new data and header into a PrimaryHDU format """
         subim = pf.ImageHDU(data, hdr)
 
         """ Print out useful information """
@@ -774,9 +812,12 @@ class WcsHDU(pf.PrimaryHDU):
          parameters of the displayed HDU correctly
         """
         if imsize is None:
-            subim = self.cutout_xy(0, 0, nx, ny, fixnans=fixnans,
-                                   nanval=nanval, verbose=False)
-            return subim
+            if fabs(self.impa) < theta_tol:
+                subim = self.cutout_xy(0, 0, nx, ny, fixnans=fixnans,
+                                       nanval=nanval, verbose=False)
+                return subim
+            else:
+                imsize = [nx * self.pixscale[0], ny * self.pixscale[1]]
 
         """
         If a sub-image is required, set up an astropy WCS structure that will
@@ -792,7 +833,7 @@ class WcsHDU(pf.PrimaryHDU):
         if imcent is None:
             x = nx / 2.
             y = ny / 2.
-
+            imcent = w.all_pix2world([[x, y]], 1)[0]
         else:
             """
             We have to convert the requested (RA, dec) center into the
@@ -866,7 +907,7 @@ class WcsHDU(pf.PrimaryHDU):
         First set the output scale and number of output pixels
         """
         if outscale is None:
-            oscale = [self.pixscale, self.pixscale]
+            oscale = self.pixscale
         elif (np.atleast_1d(outscale).size < 2):
             oscale = [outscale, outscale]
         else:
@@ -908,7 +949,8 @@ class WcsHDU(pf.PrimaryHDU):
                 dmax = data[goodmask].max()
                 nanval = 10. * dmax
             data[np.isnan(data)] = nanval
-        outdata = ndimage.map_coordinates(data, icoords, order=5)
+        outdata = ndimage.map_coordinates(data, icoords, order=5,
+                                          cval=np.nan)
 
         """ Save the output as a ImageHDU object """
         outhdr = self.make_hdr_wcs(hdr, subwcs, debug=False)
