@@ -68,7 +68,6 @@ class WcsHDU(pf.PrimaryHDU):
         """
         Check the format of the input info and get the data and header info
         """
-        print(type(indat))
         if isinstance(indat, str):
             hdu = self.read_from_file(indat, verbose=verbose)
             data = hdu[hext].data
@@ -77,8 +76,7 @@ class WcsHDU(pf.PrimaryHDU):
             hdu = indat
             data = hdu[hext].data
             hdr = hdu[hext].header
-        elif isinstance(indat, pf.PrimaryHDU) or \
-             isinstance(indat, pf.ImageHDU) or isinstance(indat, WcsHDU):
+        elif isinstance(indat, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
             data = indat.data.copy()
             hdr = indat.header.copy()
         elif isinstance(indat, np.ndarray):
@@ -249,6 +247,110 @@ class WcsHDU(pf.PrimaryHDU):
         self.radec = radec
         self.pixscale = pixscale
         self.impa = impa
+
+    # -----------------------------------------------------------------------
+
+    def __add__(self, other):
+        """
+
+        Adds either a constant or another WcsHDU or other flavor of HDU to
+        the data in this WcsHDU object
+
+        """
+
+        """ Get the data and header """
+        data = self.data.copy()
+        hdr = self.header.copy()
+
+        """ Do the addition """
+        if isinstance(other, (float, int)):
+            data += other
+        elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
+            data += other.data
+        else:
+            raise TypeError('\nAdded object must be one of: int, float, '
+                            'WcsHDU, PrimaryHDU, or ImageHDU')
+
+        """ Return a new WcsHDU object """
+        return WcsHDU(data, inhdr=hdr)
+
+    # -----------------------------------------------------------------------
+
+    def __sub__(self, other):
+        """
+
+        Adds either a constant or another WcsHDU or other flavor of HDU to
+        the data in this WcsHDU object
+
+        """
+
+        """ Get the data and header """
+        data = self.data.copy()
+        hdr = self.header.copy()
+
+        """ Do the addition """
+        if isinstance(other, (float, int)):
+            data -= other
+        elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
+            data -= other.data
+        else:
+            raise TypeError('\nAdded object must be one of: int, float, '
+                            'WcsHDU, PrimaryHDU, or ImageHDU')
+
+        """ Return a new WcsHDU object """
+        return WcsHDU(data, inhdr=hdr)
+
+    # -----------------------------------------------------------------------
+
+    def __mul__(self, other):
+        """
+
+        Adds either a constant or another WcsHDU or other flavor of HDU to
+        the data in this WcsHDU object
+
+        """
+
+        """ Get the data and header """
+        data = self.data.copy()
+        hdr = self.header.copy()
+
+        """ Do the addition """
+        if isinstance(other, (float, int)):
+            data *= other
+        elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
+            data *= other.data
+        else:
+            raise TypeError('\nAdded object must be one of: int, float, '
+                            'WcsHDU, PrimaryHDU, or ImageHDU')
+
+        """ Return a new WcsHDU object """
+        return WcsHDU(data, inhdr=hdr)
+
+    # -----------------------------------------------------------------------
+
+    def __truediv__(self, other):
+        """
+
+        Adds either a constant or another WcsHDU or other flavor of HDU to
+        the data in this WcsHDU object
+
+        """
+
+        """ Get the data and header """
+        data = self.data.copy()
+        hdr = self.header.copy()
+
+        """ Do the addition """
+        if isinstance(other, (float, int)):
+            data /= other
+        elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
+            data /= other.data
+        else:
+            raise TypeError('\nAdded object must be one of: int, float, '
+                            'WcsHDU, PrimaryHDU, or ImageHDU')
+
+        """ Return a new WcsHDU object """
+        return WcsHDU(data, inhdr=hdr)
 
     # -----------------------------------------------------------------------
 
@@ -546,6 +648,39 @@ class WcsHDU(pf.PrimaryHDU):
                              'or "mean"')
         self.data /= normfac
         return normfac
+            
+    # -----------------------------------------------------------------------
+
+    def sky_to_zero(self, method='sigclip', mask=None, verbose=False):
+        """
+
+        Subtracts a constant "sky value" from data in the object.
+        The allowed methods for determining the sky value are:
+          'sigclip' - the clipped mean (the default)
+          'median'  - the median
+
+        """
+
+        method = method.lower()
+        if mask is not None:
+            data = self.data[mask]
+        else:
+            data = self.data
+        if method == 'median':
+            skyval = np.median(data)
+        elif method == 'sigclip':
+            self.sigma_clip(mask=mask)
+            skyval = self.mean_clip
+        else:
+            raise ValueError('method must be one of "sigclip" or "median" ')
+        self.data -= skyval
+        if verbose:
+            if self.infile is not None:
+                descript = self.infile
+            else:
+                descript = 'the data'
+            print('Subtracted value of %f from %s' % (skyval, descript))
+        return skyval
             
     # -----------------------------------------------------------------------
 
