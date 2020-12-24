@@ -513,7 +513,7 @@ class WcsHDU(pf.PrimaryHDU):
                    'x'       - flip the x-axis
                    'y'       - flip the y-axis
                    'xy'      - flip both x and y axes
-                   'pfcam'   - flip x and then rotate -90 [NOT YET IMPLEMENTED]
+                   'pfcam'   - flip x and then rotate -90
         """
 
         data = self.data.copy()
@@ -523,6 +523,8 @@ class WcsHDU(pf.PrimaryHDU):
             self.data = data[::-1, :]
         elif method == 'xy':
             self.data = data[::-1, ::-1]
+        elif method == 'pfcam':
+            self.data = data.T[::-1,::-1]
         else:
             raise ValueError
     
@@ -679,12 +681,12 @@ class WcsHDU(pf.PrimaryHDU):
                 descript = self.infile
             else:
                 descript = 'the data'
-            print('Subtracted value of %f from %s' % (skyval, descript))
+            print('   Subtracted value of %f from %s' % (skyval, descript))
         return skyval
             
     # -----------------------------------------------------------------------
 
-    def make_objmask(self, nsig=1.3, init_kernel=3, bpm=None):
+    def make_objmask(self, nsig=1.1, init_kernel=3, bpm=None):
         """
 
         Makes a mask that is intended to indicate regions of the image
@@ -885,6 +887,8 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Print out useful information """
         if verbose:
+            print('   Cutout data in section [xrange,yrange] '
+                  '[%d:%d,%d:%d]' % (x1, x2, y1, y2))
             print('   Cutout image center (x, y): (%d, %d)' %
                   (subcentx, subcenty))
             print('   Cutout image size (x y): %dx%d' % (nx, ny))
@@ -895,7 +899,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
         if self.infile is not None:
             subim.header['ORIG_IM'] = 'Copied from %s' % self.infile
-        subim.header['ORIG_REG'] = \
+        subim.header['trim'] = \
             'Region in original image [xrange, yrange]: [%d:%d,%d:%d]' % \
             (x1, x2, y1, y2)
 
