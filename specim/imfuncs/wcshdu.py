@@ -113,6 +113,7 @@ class WcsHDU(pf.PrimaryHDU):
         NOTE, sometimes these are in a different header, which can be
         indicated by the wcsext parameter
         """
+        self.hext = hext
         if wcsext is not None:
             try:
                 wcshdr = hdu[wcsext].header
@@ -162,7 +163,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
         Set parameters related to image properties and return the hdulist
         """
-        self.infile = infile
+        self.infile = os.path.basename(infile)
         return hdu
 
     # -----------------------------------------------------------------------
@@ -272,7 +273,7 @@ class WcsHDU(pf.PrimaryHDU):
                             'WcsHDU, PrimaryHDU, or ImageHDU')
 
         """ Return a new WcsHDU object """
-        return WcsHDU(data, inhdr=hdr)
+        return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
 
     # -----------------------------------------------------------------------
 
@@ -298,7 +299,7 @@ class WcsHDU(pf.PrimaryHDU):
                             'WcsHDU, PrimaryHDU, or ImageHDU')
 
         """ Return a new WcsHDU object """
-        return WcsHDU(data, inhdr=hdr)
+        return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
 
     # -----------------------------------------------------------------------
 
@@ -324,7 +325,7 @@ class WcsHDU(pf.PrimaryHDU):
                             'WcsHDU, PrimaryHDU, or ImageHDU')
 
         """ Return a new WcsHDU object """
-        return WcsHDU(data, inhdr=hdr)
+        return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
 
     # -----------------------------------------------------------------------
 
@@ -350,7 +351,7 @@ class WcsHDU(pf.PrimaryHDU):
                             'WcsHDU, PrimaryHDU, or ImageHDU')
 
         """ Return a new WcsHDU object """
-        return WcsHDU(data, inhdr=hdr)
+        return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
 
     # -----------------------------------------------------------------------
 
@@ -882,12 +883,12 @@ class WcsHDU(pf.PrimaryHDU):
             hdr['crpix1'] -= x1
             hdr['crpix2'] -= y1
 
-        """ Put the new data and header into a PrimaryHDU format """
-        subim = pf.ImageHDU(data, hdr)
+        """ Put the new data and header into a WcsHDU format """
+        subim = WcsHDU(data, hdr, verbose=False, wcsverb=False)
 
         """ Print out useful information """
         if verbose:
-            print('   Cutout data in section [xrange,yrange] '
+            print('   Cutout data in section [xrange,yrange]:  '
                   '[%d:%d,%d:%d]' % (x1, x2, y1, y2))
             print('   Cutout image center (x, y): (%d, %d)' %
                   (subcentx, subcenty))
@@ -1100,4 +1101,229 @@ class WcsHDU(pf.PrimaryHDU):
         """ Clean up and exit """
         del data, icoords, skycoords, ccdcoords
         return subim
+
+    # -----------------------------------------------------------------------
+
+    def process_data(self, trimsec=None, bias=None, gain=-1, texp=-1,
+                     flat=None, fringe=None, darkskyflat=None, zerosky=None,
+                     flip=None, pixscale=0.0, rakey='ra', deckey='dec',
+                     verbose=True):
+
+        """
+
+        This function applies calibration corrections to the data.
+        All of the calbration steps are by default turned off (keywords set
+         to None).
+        To apply a particular calibration step, set the appropriate keyword.
+        The possible steps, along with their keywords are:
+
+          Keyword      Calibration step
+          ----------  ----------------------------------
+          bias          Bias subtraction
+          gain          Convert from ADU to electrons if set to value > 0
+                          NB: Gain must be in e-/ADU
+          flat          Flat-field correction
+          fringe        Fringe subtraction
+          darksky      Dark-sky flat correction
+          skysub        Subtract mean sky level if keyword set to True
+          texp_key     Divide by exposure time (set keyword to fits header
+                        keyword name, e.g., 'exptime')
+          flip          0 => no flip
+                        1 => PFCam style (flip x then rotate -90), 
+                        2 => P60 CCD13 style (not yet implemented)
+                        3 => flip x-axis
+          pixscale     If >0, apply a rough WCS using this pixel scale (RA and
+                         Dec come from telescope pointing info in fits header)
+          rakey        FITS header keyword for RA of telescope pointing.
+                         Default = 'ra'
+          deckey       FITS header keyword for Dec of telescope pointing.
+                         Default = 'dec'
+        
+         Required inputs:
+          frame
+
+         Optional inputs (additional to those in the keyword list above):
+          trimsec - a four-element list or array: [x1, y1, x2, y2] if something
+                    smaller than the full frame is desired.  The coordinates
+                    define the lower-left (x1, y1) and upper right (x2, y2)
+                    corners of the trim section.
+
+        """
+
+        """ Set up convenience variables """
+        hext = self.hext
+        hdustr = 'HDU%d' % self.hext
+
+        if verbose:
+            startstr = 'Processing data'
+            if self.infile is not None:
+                startstr = '%s: %s' % (startstr, self.infile)
+            if 'OBJECT' in self.header.keys():
+                startstr = '%s  %s' % (startstr, self.header['object'])
+            print(startstr)
+        
+        """ Trim the data if requested """
+        if trimsec is not None:
+            x1, y1, x2, y2 = trimsec
+            tmp = self.cutout_xy(x1, y1, x2, y2, verbose=verbose)
+        else:
+            tmp = WcsHDU(self.data, self.header, verbose=False, wcsverb=False)
+
+        """ Bias-subtract if requested """
+        if bias is not None:
+            tmp -= bias
+            biasmean = bias.data.mean()
+            if (hext == 0):
+                keystr = 'biassub'
+            else:
+                keystr = 'biassub%d' % self.hext
+            tmp.header[keystr] = 'Bias frame for %s is %s with mean %f' % \
+                (hdustr, bias.infile, biasmean)
+            print('   Subtracted bias frame %s' % bias.infile)
+    
+        """ Convert to electrons if requested """
+        if gain > 0:
+            tmp.data *= gain
+            tmp.header['gain'] =  (1.0, 'Units are now electrons')
+            if (hext == 0):
+                keystr = 'ogain'
+            else:
+                keystr = 'ogain%d' % hext
+            tmp.header.set(keystr, gain, 'Original gain for %s in e-/ADU'
+                           % hdustr, after='gain')
+            tmp.header['bunit'] =  ('Electrons',
+                                    'Converted from ADU in raw image')
+            if (self.hext == 0):
+                keystrb1 = 'binfo_1'
+            else:
+                keystrb1 = 'binfo%d_1' % self.hext
+            keystrb1 = keystrb1.upper()
+            tmp.header[keystrb1] = \
+                'Units for %s changed to e- using gain=%6.3f e-/ADU' % \
+                (hdustr, gain)
+            if verbose:
+                print('   Converted units to e- using gain = %f' % gain)
+    
+        """ Divide by the exposure time if requested """
+        if texp > 0.:
+            tmp.data /= texp
+            if (hext == 0):
+                keystr = 'binfo_2'
+            else:
+                keystr = 'binfo'+str(hext)+'_2'
+            keystr = keystr.upper()
+            tmp.header['gain'] = (texp,
+                                  'If units are e-/s then gain=t_exp')
+            tmp.header['bunit'] = ('Electrons/sec','See %s header' % keystr)
+            tmp.header.set(keystr,
+                           'Units for %s changed from e- to e-/s using '
+                           'texp=%7.2f' % (hdustr,texp), after=keystrb1)
+            print('   Converted units from e- to e-/sec using exposure '
+                  'time %7.2f' % texp)
+    
+        """ Apply the flat-field correction if requested """
+        if flat is not None:
+            tmp /= flat
+            
+            """
+            Set up a bad pixel mask based on places where the 
+            flat frame = 0, since dividing by zero gives lots of problems
+            """
+            flatdata = flat.data
+            zeromask = flatdata==0
+            
+            """ Correct for any zero pixels in the flat-field frame """
+            tmp.data[zeromask] = 0
+            flatmean = flatdata.mean()
+            if (hext == 0):
+                keystr = 'flatcor'
+            else:
+                keystr = 'flatcor%d' % hext
+            tmp.header[keystr] = \
+                'Flat field image for %s is %s with mean=%f' % \
+                (hdustr, flat.infile, flatmean)
+            print('   Divided by flat-field image: %s' % flat.infile)
+    
+        """ Apply the fringe correction if requested """
+        if fringe is not None:
+            fringedata = fringe.data
+            tmp.data -= fringedata
+            if (self.hext == 0):
+                keystr = 'fringcor'
+            else:
+                keystr = 'frngcor'+str(hext)
+            fringemean = fringedata.mean()
+            tmp.header[keystr] = \
+                'Fringe image for %s is %s with mean=%f' % \
+                (hdustr, fringe.infile, fringemean)
+            print('   Subtracted fringe image: %s' % fringe.infile)
+    
+        """ Apply the dark sky flat-field correction if requested """
+        if darkskyflat is not None:
+            dsflatdata = darkskyflat.data
+            tmp.data /= dsflatdata
+            dsflatmean = dsflatdata.mean()
+            """
+            Set up a bad pixel mask based on places where the flat frame = 0,
+            since dividing by zero gives lots of problems
+            """
+            dszeromask = dsflatdata==0
+            """ Correct for any zero pixels in the flat-field frame """
+            tmp.data[dszeromask] = 0
+            if (hext == 0):
+                keystr = 'dsflat'
+            else:
+                keystr = 'dflat'+str(hext)
+            tmp.header[keystr] = \
+                'Dark-sky flat image for %s is %s with mean=%f' % \
+                (hdustr, darkskyflat.infile, dsflatmeanmean)
+            print('    Divided by dark-sky flat: %s' %
+                  darkskyflat.infile)
+
+        """ Subtract the sky level if requested """
+        if zerosky is not None:
+            tmp.sky_to_zero(method=zerosky, verbose=verbose)
+            if (hext == 0):
+                keystr = 'zerosky'
+            else:
+                keystr = 'zerosky'+str(hext)
+            tmp.header[keystr] = ('%s: subtracted constant sky level of %f' %
+                                  (hdustr,m))
+    
+        """ Flip if requested """
+        if flip is not None:
+            tmp.flip(flip)
+    
+        """ Add a very rough WCS if requested """
+        if pixscale > 0.0:
+            if hext>0:
+                apply_rough_wcs(tmp, pixscale, rakey, deckey, self[0])
+            else:
+                apply_rough_wcs(tmp, pixscale, rakey, deckey)
+
+        return tmp
+    
+    # -----------------------------------------------------------------------
+
+    def writeto(self, outfile):
+        """
+
+        Saves the (possibly modified) HDU to an output file
+
+        """
+
+        pf.PrimaryHDU(self.data, self.header).writeto(outfile, overwrite=True)
+
+
+    # -----------------------------------------------------------------------
+
+    def save(self, outfile):
+        """
+
+        Saves the (possibly modified) HDU to an output file
+
+        """
+
+        self.writeto(outfile)
+
 

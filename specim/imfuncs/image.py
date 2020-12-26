@@ -919,10 +919,8 @@ class Image(dict):
 
         """ Make the cutout """
         x1, y1, x2, y2 = self[dmode].subim_bounds_xy(centpos, imsize)
-        cutout = self[dmode].cutout_xy(x1, y1, x2, y2, nanval=nanval,
-                                       fixnans=fixnans, verbose=verbose)
-        subim = WcsHDU(cutout.data, cutout.header, verbose=verbose,
-                       wcsverb=False)
+        subim = self[dmode].cutout_xy(x1, y1, x2, y2, nanval=nanval,
+                                      fixnans=fixnans, verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -953,10 +951,8 @@ class Image(dict):
         """
 
         """ Make the cutout """
-        cutout = self[dmode].cutout_xy(x1, y1, x2, y2, fixnans=fixnans,
-                                       verbose=verbose)
-        subim = WcsHDU(cutout.data, cutout.header, verbose=verbose,
-                       wcsverb=False)
+        subim = self[dmode].cutout_xy(x1, y1, x2, y2, fixnans=fixnans,
+                                      verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
@@ -1014,11 +1010,9 @@ class Image(dict):
         """
 
         """ Create the postage stamp data """
-        cutout = self[dmode].cutout_radec(imcent, imsize, outscale=outscale,
-                                          nanval=nanval, fixnans=fixnans,
-                                          verbose=verbose)
-        subim = WcsHDU(cutout.data, cutout.header, verbose=verbose,
-                       wcsverb=False)
+        subim = self[dmode].cutout_radec(imcent, imsize, outscale=outscale,
+                                         nanval=nanval, fixnans=fixnans,
+                                         verbose=verbose)
 
         """ Write to the output file if requested """
         if outfile:
