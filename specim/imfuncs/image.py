@@ -825,7 +825,8 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def set_contours(self, rms=None, dmode='input', verbose=True):
+    def set_contours(self, rms=None, contbase='default', dmode='input',
+                     verbose=True):
         """
         Sets the contouring levels for an image.  If a subimage (i.e., cutout)
         has already been defined, then its properties are used.  Otherwise,
@@ -853,13 +854,17 @@ class Image(dict):
             self['input'].sigma_clip()
             rms = self['input'].rms_clip
 
+        """ Set the base sigma level """
+        if contbase == 'default':
+            contbase = self.contbase
+
         """ Set the contours based on the rms and the contour base """
-        maxcont = int(log((self[dmode].data.max() / rms), self.contbase))
+        maxcont = int(log((self[dmode].data.max() / rms), contbase))
         if maxcont < 3:
-            self.clevs = np.array([-3., 3., self.contbase**3])
+            self.clevs = np.array([-contbase**2, contbase**2, contbase**3])
         else:
-            poslevs = np.logspace(2., maxcont, maxcont-1, base=self.contbase)
-            self.clevs = np.concatenate(([-self.contbase**2], poslevs))
+            poslevs = np.logspace(2., maxcont, maxcont-1, base=contbase)
+            self.clevs = np.concatenate(([-contbase**2], poslevs))
 
         if verbose:
             print('Contour levels: %f *' % rms)
@@ -868,7 +873,7 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def plot_contours(self, color='r', rms=None, dataver='input',
+    def plot_contours(self, color='r', rms=None, contbase='default',
                       overlay=True, dmode='input', verbose=True):
         """
 
@@ -878,7 +883,7 @@ class Image(dict):
 
         """ Set the contour levels if this has not already been done """
         if self.clevs is None:
-            self.set_contours(rms, dmode, verbose)
+            self.set_contours(rms, contbase, dmode, verbose)
 
         """ Plot the contours """
         if overlay:
@@ -1158,7 +1163,7 @@ class Image(dict):
         hdr['smotype'] = smotype
         hdr['smoothw'] = ('%5.1f' % kwidth,
                           'Smoothing kernel width')
-        self['smooth'] = WcsHDU(smdat, hdr)
+        self['smooth'] = WcsHDU(smdat, hdr, wcsverb=False)
 
         """ Save the smoothed cube in an output file if desired """
         if outfile:

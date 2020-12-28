@@ -518,12 +518,21 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         data = self.data.copy()
+        hdr = self.header
         if method == 'x':
             self.data = data[:, ::-1]
+            if 'CRPIX1' in hdr.keys():
+                hdr['crpix1'] = hdr['naxis1'] - hdr['crpix1']
         elif method == 'y':
             self.data = data[::-1, :]
+            if 'CRPIX2' in hdr.keys():
+                hdr['crpix2'] = hdr['naxis2'] - hdr['crpix2']
         elif method == 'xy':
             self.data = data[::-1, ::-1]
+            if 'CRPIX1' in hdr.keys():
+                hdr['crpix1'] = hdr['naxis1'] - hdr['crpix1']
+            if 'CRPIX2' in hdr.keys():
+                hdr['crpix2'] = hdr['naxis2'] - hdr['crpix2']
         elif method == 'pfcam':
             self.data = data.T[::-1,::-1]
         else:
@@ -687,7 +696,7 @@ class WcsHDU(pf.PrimaryHDU):
             
     # -----------------------------------------------------------------------
 
-    def make_objmask(self, nsig=1.1, init_kernel=3, bpm=None):
+    def make_objmask(self, nsig=1., init_kernel=3, bpm=None):
         """
 
         Makes a mask that is intended to indicate regions of the image
@@ -1096,7 +1105,7 @@ class WcsHDU(pf.PrimaryHDU):
         outhdr = self.make_hdr_wcs(hdr, subwcs, debug=False)
         if self.infile is not None:
             outhdr['ORIG_IM'] = 'Copied from %s' % self.infile
-        subim = pf.ImageHDU(outdata, outhdr)
+        subim = WcsHDU(outdata, outhdr, wcsverb=False)
 
         """ Clean up and exit """
         del data, icoords, skycoords, ccdcoords
@@ -1215,9 +1224,13 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.header['gain'] = (texp,
                                   'If units are e-/s then gain=t_exp')
             tmp.header['bunit'] = ('Electrons/sec','See %s header' % keystr)
+            if keystrb1 in tmp.header.keys():
+                afterkey = keystrb1
+            else:
+                afterkey = 'gain'
             tmp.header.set(keystr,
                            'Units for %s changed from e- to e-/s using '
-                           'texp=%7.2f' % (hdustr,texp), after=keystrb1)
+                           'texp=%7.2f' % (hdustr,texp), after=afterkey)
             print('   Converted units from e- to e-/sec using exposure '
                   'time %7.2f' % texp)
     
@@ -1293,7 +1306,8 @@ class WcsHDU(pf.PrimaryHDU):
         """ Flip if requested """
         if flip is not None:
             tmp.flip(flip)
-    
+            print('   Flipped image using method %s' % flip)
+
         """ Add a very rough WCS if requested """
         if pixscale > 0.0:
             if hext>0:
