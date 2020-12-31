@@ -146,6 +146,97 @@ class ImFit(object):
 
     # -----------------------------------------------------------------------
 
+    def gaussians(self, x0, y0, fwhmpix=3., dxymax=5., fitbkgd=True,
+                  usemoments=True, verbose=True, **kwargs):
+        """
+
+        Simultaneously fits N Gaussian profiles to N different locations in
+         the image.
+        The number of components to be fit is set by the number of elements
+         of the x0 (and y0) arrays.
+
+        """
+
+        """ Get the number of components to fit """
+        if isinstance(x0, int):
+            x0 = float(x0)
+        if isinstance(y0, int):
+            y0 = float(y0)
+        xinit = np.atleast_1d(x0)
+        yinit = np.atleast_1d(y0)
+        if xinit.size != yinit.size:
+            raise ValueError('x0 and y0 are not the same size')
+        ngauss = xinit.size
+
+        """ Create the Gaussian profiles with initial guess parameters """
+        x2 = np.zeros(ngauss)
+        y2 = np.zeros(ngauss)
+        for i in range(ngauss):
+            """
+            First refine the position guess by calling the moments method
+            """
+            if usemoments:
+                objstats = self.moments(xinit[i], yinit[i], **kwargs)
+                x2[i] = objstats['mux']
+                y2[i] = objstats['muy']
+            else:
+                x2[i] = xinit[i]
+                y2[i] = yinit[i]
+
+            """
+            Do a crude sky subtraction to estimate the starting amplitude.
+            Note that the mean_clip attribute will have been set through
+            the call to self.moments
+            """
+            if fitbkgd:
+                amp0 = self.data[int(y2[i]), int(x2[i])] - self.mean_clip
+            else:
+                amp0 = self.data[int(y2[i]), int(x2[i])]
+                
+            """
+            Create a 2d Gaussian profile with initial guess values
+            """
+            stddev0 = fwhmpix / 2.355
+            tmpmod = models.Gaussian2D(amplitude=amp0, x_mean=x2[i],
+                                       y_mean=y2[i], x_stddev=stddev0,
+                                       y_stddev=stddev0, theta=0.1)
+
+            """ Set bounds for the parameters """
+            tmpmod.x_mean.bounds = (x2[i] - dxymax, x2[i] + dxymax)
+            tmpmod.y_mean.bounds = (y2[i] - dxymax, y2[i] + dxymax)
+            tmpmod.amplitude.bounds = (0., None)
+
+            """
+            Tie the alpha and gamma parameters together, and add this model
+            to the compound model
+            """
+            if i==0:
+                mod = tmpmod
+            else:
+                mod += tmpmod
+                
+        """ Fit the model to the data """
+        fit = fitting.LevMarLSQFitter()
+        outmod = fit(mod, self.x, self.y, self.data)
+        # outmod = fit(mod, self.x, self.y, self.data, weights=1.0/rms)
+
+        """ Report on fit if requested """
+        if verbose:
+            print('  Initial           Refined         Final')
+            print('-------------   -------------   -------------')
+            for i in range(ngauss):
+                if ngauss > 1:
+                    print('%6.2f %6.2f   %6.2f %6.2f   %6.2f %6.2f' %
+                          (xinit[i], yinit[i], x2[i], y2[i],
+                           outmod[i].x_mean.value, outmod[i].y_mean.value))
+                else:
+                    print('%6.2f %6.2f   %6.2f %6.2f   %6.2f %6.2f' %
+                          (xinit[i], yinit[i], x2[i], y2[i],
+                           outmod.x_mean.value, outmod.y_mean.value))
+        return outmod
+    
+    # -----------------------------------------------------------------------
+
     def moffats(self, x0, y0, fwhmpix=3., dxymax=5., verbose=True, **kwargs):
         """
 
