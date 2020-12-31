@@ -12,6 +12,7 @@ import os
 import sys
 from math import fabs
 import numpy as np
+from numpy.fft import fft2, ifft2, fftshift
 from scipy import ndimage
 from scipy.ndimage import filters
 from astropy import wcs
@@ -64,6 +65,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.raaxis = None
         self.decaxis = None
         self.found_rms = False
+        self.fftconj = None
 
         """
         Check the format of the input info and get the data and header info
@@ -353,6 +355,88 @@ class WcsHDU(pf.PrimaryHDU):
         """ Return a new WcsHDU object """
         return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
 
+    # -----------------------------------------------------------------------
+
+    def cross_correlate(self, other, padfrac=0.6, shift=True, datacent=None,
+                        datasize=None, othercent=None, hext=0,
+                        reset_fft=False):
+        """
+
+        Cross correlates the image data, or a subset of them, with the
+        image data in another object.
+
+        Inputs:
+          other - Other data set with which to correlate.  Can be one of the
+                   following: a numpy array, a PrimaryHDU, an ImageHDU,
+                   or a HDUList
+
+        Output:
+          xcorr  - cross-correlated data, returned as a WcsHDU object
+
+        """
+
+        """ Select the portion of the data to be used """
+        if datacent is not None:
+            if datasize is None:
+                raise ValueError('\nif datacent is set, then datasize must '
+                                 'also be set')
+            x1 = int(datacent[0] - datasize/2.)
+            x2 = x1 + datasize
+            y1 = int(datacent[1] - datasize/2.)
+            y2 = y1 + datasize
+            ## NEED TO ADD CHECKS
+            data = self.data[y1:y2, x1:x2]
+        else:
+            data = self.data.copy()
+
+        """ Set the size of the images to correlate, including padding """
+        ysize, xsize = data.shape
+        pad = int(padfrac * max(xsize, ysize))
+        padsize = int(2 * pad + max(xsize, ysize))
+        
+        """
+        If the conjugate FFT doesn't already exist, take the FFT of the
+        selected data and then take its conjugate
+        """
+        if self.fftconj is None or reset_fft:
+            f1 = np.zeros((padsize, padsize))
+            f1[pad:pad+ysize, pad:pad+xsize] = data
+            F1 = fft2(f1)
+            F1c = np.conjugate(F1)
+            del f1, F1
+        else:
+            F1c = self.fftconj
+
+        """ Get the data the other data set """
+        if isinstance(other, np.ndarray):
+            odata2 = other
+        elif isinstance(other, (pf.PrimaryHDU, pf.ImageHDU, WcsHDU)):
+            odata2 = other.data
+        if othercent is not None:
+            if datasize is None:
+                raise ValueError('\nif othercent is set, then datasize must '
+                                 'also be set')
+            x1 = int(othercent[0] - datasize/2.)
+            x2 = x1 + datasize
+            y1 = int(othercent[1] - datasize/2.)
+            y2 = y1 + datasize
+            ## NEED TO ADD CHECKS
+            data2 = odata2[y1:y2, x1:x2]
+        else:
+            data2 = odata2.copy()
+
+        """ Make the FFT of the other data set """
+        f2 = np.zeros((padsize, padsize))
+        f2[pad:pad+ysize, pad:pad+xsize] = data2
+        F2 = fft2(f2)
+        
+        """ Do the cross correlation and return the results as a WcsHDU """
+        if shift:
+            xc = fftshift(ifft2(F1c * F2)).real
+        else:
+            xc = ifft2(F1c * F2).real
+        return WcsHDU(xc, verbose=False, wcsverb=False)
+            
     # -----------------------------------------------------------------------
 
     def make_hdr_wcs(self, inhdr, wcsinfo, keeplist='all', debug=False):
