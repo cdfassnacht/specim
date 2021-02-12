@@ -339,6 +339,13 @@ class Spec1d(df.Data1d):
                 keynames[i] = keynames[i].upper()
             intab = self._read_tab_gen(infile, keynames=keynames,
                                        tabext=tabext)
+            """
+            The pypeit format has inverse variance rather than variance
+            """
+            mask = intab['var'] > 0
+            intab['var'][mask] = 1. / intab['var'][mask]
+            intab['var'][~mask] = 10. * intab['var'][mask].max()
+            
         return intab
 
         
