@@ -284,7 +284,8 @@ class Ech2d(list):
                 pixscale = None
             spec.spatial_profile(normalize=normspec, title=None, model=mod,
                                  pixrange=pixrange, pixscale=pixscale,
-                                 fontsize=fontsize, verbose=verbose, **kwargs)
+                                 fontsize=fontsize, verbose=verbose,
+                                 ax=axi, fig=fig, **kwargs)
             if xunits == 'pix':
                 plt.xlim(-1, maxx)
             if normspec:
