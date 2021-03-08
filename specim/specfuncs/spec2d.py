@@ -134,6 +134,8 @@ class Spec2d(imf.Image):
         self.sigorder = 3
         self.mod0 = None
         self.logwav = logwav
+        self.flux = None
+        self.spectra = None
 
         """
         Read in the data and call the superclass initialization for useful
@@ -373,16 +375,28 @@ class Spec2d(imf.Image):
             tmp1d = np.median(self.data, axis=spaceaxis)
             self.sky1d = Spec1d(wav=pix, flux=tmp1d)
 
-        """ Turn the 1-dimension sky spectrum into a 2-dimensional form """
+        """ Turn the 1-dimension sky spectrum into a 2-dimensional form. And
+            if 'y' is the dispersion axis we need to transpose 'sky2d'."""
         # sky2d = np.zeros(self.data.shape)
         # for i in range(self.nspat):
         #     sky2
-        sky2d = np.tile(self.sky1d['flux'].data,
-                        (self.data.shape[spaceaxis], 1))
+        if spaceaxis:
+            sky2d = np.tile(self.sky1d['flux'].data,
+                                        (self.data.shape[spaceaxis], 1)).T
+        else:
+            sky2d = np.tile(self.sky1d['flux'].data,
+                                         (self.data.shape[spaceaxis], 1))
         self['sky2d'] = imf.WcsHDU(sky2d, wcsverb=False)
 
-        """ Subtract the sky from the data """
-        skysub = self.data - sky2d
+        """ Subtract the sky from the data. And if 'y' is the dispersion axis
+            we need to transpose 'skysub' so that in the plotted sky subtracted
+            spectra the dispersion axis lies along the image 'x' axis"""
+
+        if spaceaxis:
+            skysub = (self.data - sky2d).T
+        else:
+            skysub = self.data - sky2d
+        #skysub = self.data - sky2d
         self['skysub'] = imf.WcsHDU(skysub, wcsverb=False)
 
         """ Clean up """
@@ -470,7 +484,18 @@ class Spec2d(imf.Image):
 
         """ Plot the input spectrum """
         ax1 = plt.subplot(pltnum_main)
-        self.display(mode='xy', axlabel=False)
+
+        """If the dispersion axis is 'y' axis, we still want in the plotted
+           spectra the dispersion axis appears in the image 'x' axis. I think
+           the easiest way to implement that is to create a new iamge object
+           with the transposed data."""
+
+        if self.dispaxis == "y":
+            self['proxy_data'] = imf.WcsHDU(self.data.T, wcsverb=False)
+            self.display(dmode='proxy_data', mode='xy', axlabel=False)
+        else:
+            self.display(mode='xy', axlabel=False)
+        #self.display(mode='xy', axlabel=False)
 
         """ Plot the subtracted sky spectrum if desired """
         if doskysub:
@@ -572,6 +597,13 @@ class Spec2d(imf.Image):
         profile = Spec1d(wav=wav, flux=pflux, verbose=debug)
 
         """
+        Added the following line as locate_trace() will not be called from
+        find_and_trace() if a model is provided as input while calling the
+        function find_and_trace().
+        """
+        self.profile = profile
+
+        """
         Plot the compressed spectrum, showing the best-fit Gaussian if
         requested
         """
@@ -589,7 +621,6 @@ class Spec2d(imf.Image):
     # -----------------------------------------------------------------------
 
     def initial_model(self, profile=None, verbose=True):
-
         """
         Creates an initial model to fit with spatial profile from user input
         of parameter values. Takes a polynomial upto 2nd degree and any number
@@ -604,13 +635,11 @@ class Spec2d(imf.Image):
         Output:
             mod : retuns the final fitted model
         """
-
         print("\nTo create an initial model you first need to enter degree " \
               "of background polynomial(<3) and number of Gaussian and Moffat " \
               "profile as integers.")
 
         while True:
-
             background_order = int(input('Order of background polynomial : '))
             num_gauss = int(input('Number of Gaussian profile : '))
             num_moffat = int(input('Number of Moffat profile : '))
@@ -720,7 +749,9 @@ class Spec2d(imf.Image):
             mod, fit_info = profile.fit_mod(init_mod, verbose=False)
             diff = profile.y - mod(profile.x)
 
-            """Print and plot the fitted model"""
+            """Print and plot the fitted model, and plot the difference between model 
+               and data. Also plot the contribution of each individual model component
+               in the compound model to fit."""
 
             if verbose:
                 print('\nFitted model')
@@ -742,7 +773,7 @@ class Spec2d(imf.Image):
 
             frame2=fig.add_axes((.1,.1,.8,.2))
             plt.plot(profile.x, diff, 'r', drawstyle='steps')
-            plt.hlines(y=0, xmin=0, xmax=max(profile.x))
+            plt.hlines(y=0, xmin=min(profile.x), xmax=max(profile.x))
             plt.ylabel('Difference')
             plt.xlabel(xlab)
             #plt.show()
@@ -750,6 +781,10 @@ class Spec2d(imf.Image):
             plt.figure()
             plt.plot(profile.x, profile.y, color='b', linestyle='solid',
                                   drawstyle='steps', label='Spatial profile')
+
+            """The following boolean flags are to ensure that Gaussian and Moffat
+               profiles in the plot will be labeled just once."""
+
             label_g = True
             label_m = True
             for i, md in enumerate(mod):
@@ -787,6 +822,97 @@ class Spec2d(imf.Image):
 
         """Retrun the latest model"""
         return mod
+
+    # -----------------------------------------------------------------------
+
+        def refined_model(self, mod, profile=None, verbose=True):
+        """
+        This function takes a model (a constrained initial model is expected) 
+        and fits it to the spatial profile. Then it returns the new fitted
+        model.
+
+        Required input:
+            mod : an astropy type model. It is expected that one first creates
+                  an initial model using the function initial_model() and 
+                  puts constrain on it's parameters. This constrained model
+                  is the input for this function.
+
+            profile : a spatial profile of the 2d spectra produced using the
+                      function spatial_profile(). If no profile is
+                      provided then profile inherited from spatial_profile()
+                      is used.
+        Output:
+            mod_new : retuns the newly fitted model
+        """
+        if profile is None:
+            profile = self.profile
+
+        """Fit the constrained model to spatial profile """
+
+        mod_new, fit_info = profile.fit_mod(mod, verbose=True)
+        diff = profile.y - mod(profile.x)
+
+        """Print and plot the fitted model, and plot the difference between model 
+           and data. Also plot the contribution of each individual model component
+           in the compound model to fit."""
+
+        if verbose:
+            print('\nFitted model')
+            print('-------------')
+            print(mod_new)
+            print('\n-------------------------------------------\n')
+
+        xlab = 'Spatial direction (0-indexed)'
+        title = 'Fit to Spatial Profile'
+        fig = plt.figure()
+        frame1=fig.add_axes((.1,.3,.8,.6))
+        plt.plot(profile.x, profile.y, color='b', linestyle='solid',
+                               drawstyle='steps', label='Spatial profile')
+        plt.plot(profile.x, mod(profile.x), color='g', drawstyle='steps',
+                                                           label='model fit')
+        plt.ylabel('Relative flux')
+        plt.legend()
+        plt.title(title)
+
+        frame2=fig.add_axes((.1,.1,.8,.2))
+        plt.plot(profile.x, diff, 'r', drawstyle='steps')
+        plt.hlines(y=0, xmin=min(profile.x), xmax=max(profile.x))
+        plt.ylabel('Difference')
+        plt.xlabel(xlab)
+        plt.show()
+
+        plt.plot(profile.x, profile.y, color='b', linestyle='solid',
+                                  drawstyle='steps', label='Spatial profile')
+
+        """The following boolean flags are to ensure that Gaussian and Moffat 
+           profiles in the plot will be labeled just once."""
+
+        label_g = True
+        label_m = True
+        for i, md in enumerate(mod):
+            if isinstance(md, models.Gaussian1D):
+                if label_g:
+                    plt.plot(profile.x, mod[i](profile.x), color='k',
+                             drawstyle='steps', label='Gaussian prof. in fit')
+                    label_g = False
+                else:
+                    plt.plot(profile.x, mod[i](profile.x), color='k',
+                                                             drawstyle='steps')
+            elif isinstance(md, models.Moffat1D):
+                if label_m:
+                    plt.plot(profile.x, mod[i](profile.x), color='r',
+                                drawstyle='steps', label='Moffat prof. in fit')
+                    label_m = False
+                else:
+                    plt.plot(profile.x, mod[i](profile.x), color='r',
+                                                              drawstyle='steps')
+        plt.legend()
+        plt.xlabel('Spatial direction (0-indexed)')
+        plt.ylabel('Relative Flux')
+        plt.title('Individual profile component in fitted model')
+        plt.show()
+
+        return mod_new
 
     # -----------------------------------------------------------------------
 
@@ -846,6 +972,11 @@ class Spec2d(imf.Image):
         spatial profiles, one for each slice.  The model outputs for each
         slice get stored in arrays that are returned by this method.
 
+        Required input:
+            mod0 : a single 'astropy' type model or a list of 'astropy'
+                   models. When called from trace_spectrum() a single
+                   model is sent and when called from _extract_modelfit()
+                   a list of models are sent, one for each pixel.
         """
 
         """
@@ -868,7 +999,7 @@ class Spec2d(imf.Image):
         """
         partab = Table()
         partab['x'] = xstep
-        for param in mod0.param_names:
+        for param in self.mod0.param_names:
             partab[param] = np.zeros(xstep.size)
         partab['flux'] = np.zeros(xstep.size)
         covar = []
@@ -893,9 +1024,12 @@ class Spec2d(imf.Image):
                 mod0[1].stddev = sig0arr[i]
 
             """ Do the model fitting """
-            mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+            if isinstance(mod0, list):
+                mod, fitinfo = tmpprof.fit_mod(mod0=mod0[i], usevar=usevar,
                                            verbose=debug)
-
+            else:
+                mod, fitinfo = tmpprof.fit_mod(mod0=mod0, usevar=usevar,
+                                           verbose=debug)
             """
             Store the fitted parameters in the parameter table and the
             covariances in the covar list
@@ -944,12 +1078,27 @@ class Spec2d(imf.Image):
         centroid or shape
         """
         fitinfo = {}
+        parm_name = []
         count = 1
-        for p in coarsepars.colnames:
 
-            """ Select the location and shape parameters only """
-            if p[:4] == 'mean' or p[:6] == 'stddev' or p[:2] == 'x0':
-                    
+        """First make a list of those parameter names which define 
+           centroid or shape"""
+
+        for i, m in enumerate(mod0):
+            if isinstance(m, models.Gaussian1D):
+                  
+                parm_name.append('mean_%d' %i)  
+                parm_name.append('stddev_%d' %i)
+        
+            elif isinstance(m, models.Moffat1D):  
+         
+                parm_name.append('x_0_%d' %i)
+                parm_name.append('gamma_%d' %i)
+                parm_name.append('alpha_%d' %i)
+
+        #for p in coarsepars.colnames:
+        for i, p in enumerate(parm_name):
+       
                 """ Select the column to be fitted """
                 data0 = coarsepars[p]
                 
@@ -987,71 +1136,20 @@ class Spec2d(imf.Image):
                               ' %s' % (polyorder, p))
                     polypars[p] = np.polyfit(x, data, polyorder)
 
+        """  Plot the fits """
         if doplot:
-            print('Plotting centroid and width of model component 1')
-            if axes is not None:
-                ax1 = axes[1]
-                ax2 = axes[2]
-            else:
-                ax1 = plt.subplot(111)
-                ax2 = plt.subplot(111)
-                
-            """ Get the data for the centroid """
-            pars = []
-            modpars = []
-            if 'mean_1' in fitinfo.keys():
-                pars.append('mean_1')
-                modpars.append('mean')
-            elif 'x0_1' in fitinfo.keys():
-                pars.append('x0_1')
-                modpars.append('x0') 
-            else:
-                pars.append(None)
-                modpars.append(None)
-
-            """ Get the data for the width """
-            if 'stddev_1' in fitinfo.keys():
-                pars.append('stddev_1')
-                modpars.append('stddev_1')
-            else:
-                pars.append(None)
-                modpars.append(None)
-
-            """  Plot the fits """
             xfit = np.arange(self.npix).astype(float)
-            ptstyle = ['bo', 'g^']
-            axislist = [ax1, ax2]
-            for par, modpar, style, ax in zip(pars, modpars, ptstyle,
-                                              axislist):
-                if par is not None:
-                    x1 = fitinfo[par][0]
-                    y1 = fitinfo[par][1]
-                    yfit = np.polyval(polypars[par], xfit)
-                    # y0 = mod0[modpar].value
-                    ax.plot(x1, y1, style)
-                    # ax.axhline(y0, color='k', linestyle='--')
-                    ax.plot(xfit, yfit, 'r')
-            # if widpar is not None:
-            #     x2 = fitinfo[widpar][0]
-            #     y2 = fitinfo[widpar][1]
-            #     yfit = np.polyval(polypars[widpar], xfit)
-            #     ax2.plot(x2, y2, 'g^')
-            #     ax2.plot(xfit, yfit, 'r')
-            # if centpar is not None:
-            #     x1 = fitinfo[centpar][0]
-            #     y1 = fitinfo[centpar][1]
-            #     yfit = np.polyval(polypars[centpar], xfit)
-            #     y0 = mod0[centpar].value
-            #     ax1.plot(x1, y1, 'bo')
-            #     ax1.axhline(y0, color='k', linestyle='--'
-            #     ax1.plot(xfit, yfit, 'r')
-            # if widpar is not None:
-            #     x2 = fitinfo[widpar][0]
-            #     y2 = fitinfo[widpar][1]
-            #     yfit = np.polyval(polypars[widpar], xfit)
-            #     ax2.plot(x2, y2, 'g^')
-            #     ax2.plot(xfit, yfit, 'r')
-            ax2.set_xlabel('%s (pixels)' % self.dispaxis)
+            for parm in fitinfo:
+                x1 = fitinfo[parm][0]
+                y1 = fitinfo[parm][1]
+                yfit = np.polyval(polypars[parm], xfit)
+                plt.figure()
+                plt.plot(x1, y1, 'bo', label='paramater values in slices')
+                plt.plot(xfit, yfit, 'r', label='polynomial fit')
+                plt.legend()
+                plt.title(parm)
+                plt.xlabel('%s (pixels)' % self.dispaxis)
+                plt.ylabel('parameter value')
 
         return polypars, exclude_masks
                 
@@ -1197,6 +1295,13 @@ class Spec2d(imf.Image):
         profmods = []
 
         """
+        We need the following table to store Gaussian and Moffat profile 
+        parameters except amplitudes generated for each pixel. Later we will
+        create models for each pixel to fit with the data using this table.
+        """
+        parm_tab = Table()
+
+        """
         Loop on the number of components (e.g., Gaussian1D) that make
          up the model fit to the profile.  Ignore the Polynomial1D component
          since it is used to fit to the sky level and won't be used in
@@ -1216,6 +1321,9 @@ class Spec2d(imf.Image):
                 mean = np.polyval(polypars['mean_%d' % i], x)
                 stddev = np.polyval(polypars['stddev_%d' % i], x)
 
+                parm_tab['mean_%d' %i] =  mean
+                parm_tab['stddev_%d' %i] = stddev
+
                 """ Create a model set using the profile values """
                 mod = models.Gaussian1D(amplitude=amp, mean=mean,
                                         stddev=stddev, n_models=self.npix)
@@ -1229,6 +1337,36 @@ class Spec2d(imf.Image):
                 profdat += (mod(y2d.T)).T
                 profmods.append(mod)
 
+                """As we may have more than one profile need to reset 'amp0'"""
+                amp0 = -1
+
+             elif isinstance(mod, models.Moffat1D):
+                if amp0 == -1:
+                    amp0 = mod.amplitude.value
+
+                """
+                Use the polynomial parameters to generate the profile
+                values at each wavelength step along the chip
+                """
+                amp = np.ones(self.npix) * mod.amplitude.value / amp0
+                x_0 = np.polyval(polypars['x_0_%d' % i], x)
+                gamma = np.polyval(polypars['gamma_%d' % i], x)
+                alpha = np.polyval(polypars['alpha_%d' % i], x)
+
+                parm_tab['x_0_%d' %i] = x_0
+                parm_tab['gamma_%d' %i] = gamma
+                parm_tab['alpha_%d' %i] = alpha
+
+                """ Create a model set using the profile values """
+                mod = models.Moffat1D(amplitude=amp, x_0=x_0,
+                             gamma=gamma, alpha=alpha, n_models=self.npix)
+
+                profdat += (mod(y2d.T)).T
+                profmods.append(mod)
+
+                """As we may have more than one profile need to reset 'amp0'"""
+                amp0 = -1
+
         """ Normalize the profile in the spatial direction """
         Pnorm = (profdat.sum(axis=self.spaceaxis))
         newdim = (self.npix, self.nspat)
@@ -1240,11 +1378,11 @@ class Spec2d(imf.Image):
         generate it
         """
         del x, x2d, y2d
-        return profdat, profmods
+        return profdat, profmods, parm_tab
     
     # -----------------------------------------------------------------------
 
-    def find_and_trace(self, ngauss=1, bgorder=0, stepsize='default',
+    def find_and_trace(self, mod0=None, ngauss=1, bgorder=0, stepsize='default',
                        fitorder={'mean_1': 3, 'stddev_1': 4},
                        fitrange=None, doplot=True, do_subplot=True,
                        axes=None, verbose=True):
@@ -1271,28 +1409,36 @@ class Spec2d(imf.Image):
               * This step is done by a call to the trace_spectrum method
 
         Inputs:
+           mod0 : an 'astropy' type model. If no 'mod0' is provided then a single 
+                  Gaussian profile is adopted as an initial  model by calling the
+                  function locate_trace(). Otherwise the provided 'mod0' will be 
+                  passed to trace_spectrum() method.
+
            stepsize
            muorder
            sigorder
         """
 
-        """ Set up the plotting parameters """
-        if do_subplot and axes is None:
-            ax1 = plt.axes([0.05, 0.05, 0.25, 0.9])
-            ax2 = plt.axes([0.35, 0.55, 0.6, 0.4])
-            ax3 = plt.axes([0.35, 0.05, 0.6, 0.4])
-            axes = [ax1, ax2, ax3]
-            
-        self.profile, self.mod0 = \
-            self.locate_trace(doplot=doplot, ngauss=ngauss, pixrange=fitrange,
-                              axes=axes, verbose=verbose)
+        #""" Set up the plotting parameters """
+        #if do_subplot and axes is None:
+        #    ax1 = plt.axes([0.05, 0.05, 0.25, 0.9])
+        #    ax2 = plt.axes([0.35, 0.55, 0.6, 0.4])
+        #    ax3 = plt.axes([0.35, 0.05, 0.6, 0.4])
+        #    axes = [ax1, ax2, ax3]
+        """Don't need to call 'locate_trace' if a model is provided"""
+        if mod0 is None:    
+            self.profile, self.mod0 = \
+                self.locate_trace(doplot=doplot, ngauss=ngauss, pixrange=fitrange,
+                                              axes=axes, verbose=verbose)
+                mod0 = self.mod0
 
+        """Pass the 'mod0' to trace_spectrum() and make_prof2d()"""
         polypars = \
-            self.trace_spectrum(self.mod0, ngauss=ngauss, stepsize=stepsize,
+            self.trace_spectrum(mod0, ngauss=ngauss, stepsize=stepsize,
                                 fitorder=fitorder, fitrange=fitrange,
                                 doplot=doplot, axes=axes, verbose=verbose)
 
-        self.prof2d, self.profmods = self.make_prof2d(polypars, self.mod0)
+        self.prof2d, self.profmods, self.parm_tab = self.make_prof2d(polypars, mod0)
 
         """
         The following two lines are here temporarily so that the extract
@@ -1328,9 +1474,44 @@ class Spec2d(imf.Image):
         ncomp = mod0.n_submodels() - 1
         if verbose:
             print('Fitting to %d components, plus a background' % ncomp)
-        for i in range(1, ncomp+1):
-            mod0[i].mean.fixed = True
-            mod0[i].stddev.fixed = True
+        #for i in range(1, ncomp+1):
+        #    mod0[i].mean.fixed = True
+        #    mod0[i].stddev.fixed = True
+
+        """Now we will create a model for each pixel and the following empty
+           list will store all these models."""
+        cmp_mods = []
+        parm_tab = self.parm_tab.copy()
+
+        for i in range(self.npix):
+            mods=[]
+            for j, mod in enumerate(mod0):
+                if isinstance(mod, models.Polynomial1D):
+                    """Here we are not fixing any background polynomial 
+                       parameters which means all of them will be fitted to data."""
+                    mods.append(mod)
+
+                elif isinstance(mod, models.Gaussian1D):
+
+                    g = models.Gaussian1D(amplitude=1, mean=parm_tab['mean_%d' % j][i], 
+                                          stddev=parm_tab['stddev_%d' %j][i], 
+                                          fixed={'mean': True, 'stddev': True})
+                    mods.append(g)
+
+                elif isinstance(mod, models.Moffat1D):
+
+                    m = models.Moffat1D(amplitude=1, x_0=parm_tab['x_0_%d' % j][i],
+                                        gamma=parm_tab['gamma_%d' % j][i], 
+                                        alpha=parm_tab['alpha_%d' % j][i],
+                                        fixed={'x_0': True, 'gamma': True, 'alpha': True})
+                    mods.append(m)
+
+            for k, m0 in enumerate(mods):
+                if k==0:
+                    md = m0
+                else:
+                    md += m0
+            cmp_mods.append(md)
 
         """ Do the extraction by calling fit_slices """
         if verbose:
@@ -1340,8 +1521,46 @@ class Spec2d(imf.Image):
             else:
                 print(' Extraction range (pixels): %d - %d' %
                       extrange[0], extrange[1])
-        fitpars, covar = self.fit_slices(mod0, 1, mu0arr=self.mu,
-                                         sig0arr=self.sig)
+
+        fitpars, covar = self.fit_slices(cmp_mods, 1)
+        #fitpars, covar = self.fit_slices(mod0, 1, mu0arr=self.mu,
+        #                                 sig0arr=self.sig)
+
+        """Calculating integrated flux for each profile """
+        flux = Table()
+
+        for i, mod in enumerate(mod0):
+            if isinstance(mod, models.Gaussian1D):
+                flux['gaussian_%d' %i] = (sqrt(2. * pi) * fitpars['stddev_%d' %i]
+                                                    * fitpars['amplitude_%d' %i])
+            elif isinstance(mod, models.Moffat1D):
+                flux['moffat_%d' %i] = ( sqrt(pi) * fitpars['amplitude_%d' %i] *
+                                      fitpars['gamma_%d' % i] *
+                                      (gamma(fitpars['alpha_%d' % i] - 0.5) /
+                                                gamma(fitpars['alpha_%d' % i])) )
+        """ Get the wavelength/pixel vector """
+        self.get_wavelength()
+        
+        """Need to calculate variance and if possible sky vector"""
+
+        """Initializing an empty container to store extraxted 1d spectra"""
+        spectra = []
+
+        """Each extracted spectrum is stored as a tuple consisting of a title
+           and a spec1d object and accessible as an object attribute such as
+           myspec.spectra[i][1]"""
+
+        for i, p in enumerate(flux.columns):
+
+            title = 'Extracted Spectrum from ' + p
+
+            """Need to add variance on flux and sky data later"""
+
+            spectra.append((title, Spec1d(wav=self.wavelength, flux=flux[p])))
+
+        self.spectra = spectra
+        self.flux = flux
+
         return fitpars, covar
 
     # -----------------------------------------------------------------------
@@ -1561,11 +1780,28 @@ class Spec2d(imf.Image):
                 xlab = 'Wavelength'
             else:
                 xlab = 'Pixel number along the %s axis' % self.dispaxis
-            self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
+
+            if  method == 'modelfit':
+                """Plot all the extracted spectrum """
+
+                for i, p in enumerate(self.flux.columns):
+                    title = self.spectra[i][0]
+                    self.spectra[i][1].plot(xlabel=xlab, title=title, **kwargs)
+            else:
+                self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
                              **kwargs)
+            #self.spec1d.plot(xlabel=xlab, title='Extracted spectrum',
+            #                 **kwargs)
 
         """ Save the extracted spectrum to a file if requested """
         if outfile is not None:
-            self.spec1d.save(outfile, outformat=outformat)
+            if  method == 'modelfit' and len(self.flux.columns)>1:
+                print("There are more than one spectrum and stored as " \
+                      "a list of tuples and each tuple contains a title and "\
+                      "a spec1d object. This list is accessible as an object "\
+                      "attribute such as 'myspec.spectra[i][1].")
+            else:
+                self.spec1d.save(outfile, outformat=outformat)
+            #self.spec1d.save(outfile, outformat=outformat)
 
     # -----------------------------------------------------------------------
