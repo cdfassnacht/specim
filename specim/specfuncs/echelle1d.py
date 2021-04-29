@@ -120,8 +120,9 @@ class Ech1d(list):
     # -----------------------------------------------------------------------
 
     def plot_all(self, plotmode='single', mode='input', title=None, z=None,
-                 showz=True, linetype='strongem', smo=None, pltylim=None,
-                 verbose=False, debug=False, **kwargs):
+                 showz=True, linetype='strongem', smo=None, xlim=None,
+                 pltylim=None, fig=None, verbose=False, debug=False,
+                 **kwargs):
         """
 
         Plots all the spectra in the echelle data set in a single plot.
@@ -132,9 +133,16 @@ class Ech1d(list):
         wmin = 1.e12
         wmax = 0.
 
+        """ Set up the figure for plotting """
+        if fig is not None:
+            plotfig = plt.gcf()
+            ax = plt.gca()
+        else:
+            plotfig, ax = plt.subplots(1, 1)
+            
+        """ Plot the spectra """
         if verbose:
             print(len(self))
-        """ Plot the spectra """
         for count, spec in enumerate(self):
 
             """ Set plot labeling """
@@ -158,9 +166,10 @@ class Ech1d(list):
             """ Plot the spectrum """
             if smo is not None:
                 spec.smooth(smo, mode=mode, title=title, verbose=verbose,
-                            **kwargs)
+                            fig=plotfig, ax=ax, **kwargs)
             else:
-                spec.plot(mode=mode, title=title, **kwargs)
+                spec.plot(mode=mode, title=title, fig=plotfig, ax=ax,
+                          **kwargs)
             title = tmptitle
 
             """ Adjust the plot limits """
@@ -171,7 +180,10 @@ class Ech1d(list):
 
         """ Set final plot limits """
         dw = wmax - wmin
-        plt.xlim(wmin-0.05*dw, wmax+0.05*dw)
+        if xlim is not None:
+            plt.xlim(xlim)
+        else:
+            plt.xlim(wmin-0.05*dw, wmax+0.05*dw)
         if pltylim is not None:
             plt.ylim(pltylim)
 

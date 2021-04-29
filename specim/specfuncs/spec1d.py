@@ -247,6 +247,9 @@ class Spec1d(df.Data1d):
         if 'var' in spec0.colnames:
             var = spec0['var']
             names = self.names0
+            """ Variance=0 causes problems, so fix here """
+            mask = var == 0.
+            var[mask] = 10. * var.max()
         else:
             var = None
             names = self.names0[:-1]
@@ -998,7 +1001,7 @@ class Spec1d(df.Data1d):
              label=None, fontsize=12, rmscolor='r', rmsoffset=0, rmsls=None,
              add_atm_trans=False, atmscale=1.05, atmfwhm=15., atmoffset=0.,
              atmls='-', atmmodfile='default', usesmooth=False, verbose=True,
-             fig=None, ax=None):
+             fig=None, ax=None, **kwargs):
         """
         Plots the spectrum
 
@@ -1062,7 +1065,7 @@ class Spec1d(df.Data1d):
         drawstyle = 'steps'
         ls = "%s" % linestyle
         self.ax1.plot(self['wav'], flux, color, linestyle=ls,
-                      drawstyle=drawstyle, label=plabel)
+                      drawstyle=drawstyle, label=plabel, **kwargs)
         self.ax1.tick_params(labelsize=fontsize)
         self.ax1.set_xlabel(xlabel, fontsize=fontsize)
 

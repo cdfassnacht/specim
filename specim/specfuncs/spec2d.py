@@ -979,8 +979,8 @@ class Spec2d(imf.Image):
                         if n0 == p:
                             polypars[p] = np.array([p0])
                     if verbose and np.isfinite(polypars[p]):
-                        print('Setting %d to value from initial fit to '
-                              'the spatial profile')
+                        print('Setting %s to value from initial fit to '
+                              'the spatial profile' % p)
                 else:
                     if verbose:
                         print('Fitting polynomial of degree %d to parameter:'
