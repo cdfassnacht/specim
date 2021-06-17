@@ -126,12 +126,13 @@ class WcsHDU(pf.PrimaryHDU):
                 print('')
                 raise TypeError
         else:
-            wcshdr = hdr
+            wcshdr = self.header
         try:
             self.read_wcsinfo(wcshdr, verbose=wcsverb)
         except KeyError:
             """ Just keep default values for WCS attributes, i.e., None """
-            pass
+            if wcsverb:
+                print('Warning: Could not find WCS information')
 
     # -----------------------------------------------------------------------
 
