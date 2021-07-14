@@ -1414,13 +1414,17 @@ class Image(dict):
         Note that we have to include information about both the CRPIXn values
          and the zeropos offset to get the alignment to be correct, since the
          origin of the axes may not be at the center pixel.
+         
+         THIS NEEDS TO BE UPDATED TO USE THE WCSINFO INSTEAD!!!
         """
         hdr = self['plotim'].header
+        print(hdr['crval1'], hdr['crval2'])
         imcent = coords.radec_to_skycoord(hdr['crval1'], hdr['crval2'])
         fovcent = coords.radec_to_skycoord(ra, dec)
         offset = imcent.spherical_offsets_to(fovcent)
         fovx0 = (offset[0].to(u.arcsec)).value - self.zeropos[0]
         fovy0 = (offset[1].to(u.arcsec)).value - self.zeropos[1]
+        print(fovx0, fovy0)
 
         """ Plot the FOV """
         fovx = fovx0 + dx

@@ -35,7 +35,7 @@ def read_posfile(posfile, verbose=True):
 
 
 def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
-            zoomim=None, slitsize=None, slitpa=0., slitfile=None,
+            fcfmax=15., zoomim=None, slitsize=None, slitpa=0., slitfile=None,
             slitcent='default', starpos=None, rstar=1., crosshair=True,
             **kwargs):
     """
@@ -56,7 +56,8 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
     fig = plt.figure(figsize=(8, 10))
     fig.add_axes([0.1, 0.3, 0.7, 0.7])
     title = '%s Finding Chart' % srcname
-    fcim.display(imcent=cent, imsize=imsize, cmap='grey_inv', title=title)
+    fcim.display(imcent=cent, imsize=imsize, cmap='grey_inv', title=title,
+                 fmax=fcfmax)
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
 
@@ -103,6 +104,7 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
     if slitsize is not None:
+        print(slitsize)
         slitra = []
         slitdec = []
         if slitcent == 'default':
@@ -120,6 +122,8 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         else:
             slitra.append((slitcent[0]))
             slitdec.append((slitcent[1]))
+        print(slitra)
+        print(slitdec)
         for sra, sdec in zip(slitra, slitdec):
             zim.mark_fov(sra, sdec, slitsize, pa=slitpa)
 

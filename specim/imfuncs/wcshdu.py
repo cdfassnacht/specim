@@ -60,7 +60,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.wcsinfo = None
         self.radec = None
         self.pixscale = None
-        self.impa = None
+        self.impa = 0.
         self.radec = None
         self.raaxis = None
         self.decaxis = None
