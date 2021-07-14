@@ -1497,7 +1497,7 @@ class Image(dict):
         """
 
         """ Set up the default display parameters """
-        dpar = DispParam()
+        dpar = DispParam(self['plotim'])
 
         """ Set the displayed axes to be in WCS offsets, if requested """
         self.mode = mode
@@ -1517,7 +1517,7 @@ class Image(dict):
         dpar.extval = self.extval
 
         """ Set the image flux display limits """
-        dpar.set_flux_limits(self['plotim'], fmin, fmax, funits, mask=mask,
+        dpar.set_flux_limits(fmin, fmax, funits, mask=mask,
                              verbose=verbose, debug=debug)
 
         """ Set the color map """
@@ -1528,7 +1528,7 @@ class Image(dict):
         dpar.dpi = dpi
         dpar.facecolor = facecolor
 
-        """ Return the paramter information """
+        """ Return the parameter information """
         return dpar
 
     # -----------------------------------------------------------------------

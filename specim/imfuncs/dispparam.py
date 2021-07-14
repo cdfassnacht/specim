@@ -26,11 +26,14 @@ class DispParam(object):
 
     """
 
-    def __init__(self):
+    def __init__(self, plthdu=None):
         """
 
         Initiates a DispParam object and initializes all of the
         attributes
+
+        Inputs:
+           plthdu - A WcsHDU object that contains the data to be displayed
 
         """
 
@@ -57,6 +60,9 @@ class DispParam(object):
         self.cmap = plt.cm.YlOrBr_r  # This corresponds to the 'gaia' cmap
         self.title = None            # Title on displayed image
         self.dpi = 100.              # Dots per inch in saved image
+
+        """ Link the data to be displayed to this DispParam object """
+        self.plthdu = plthdu
 
     # -----------------------------------------------------------------------
 
@@ -201,7 +207,7 @@ class DispParam(object):
         """
     # -----------------------------------------------------------------------
 
-    def set_flux_limits(self, plthdu, fmin=-1., fmax=10., funits='sigma',
+    def set_flux_limits(self, fmin=-1., fmax=10., funits='sigma',
                         mask=None, verbose=False, debug=False):
         """
 
@@ -232,6 +238,10 @@ class DispParam(object):
                     values.
 
         """
+        if self.plthdu is not None:
+            plthdu = self.plthdu
+        else:
+            raise ValueError('The DispParam object was not initialized with an image dataset')
 
         """
         If funits is 'abs', then just set self.fmin and self.fmax directly from
