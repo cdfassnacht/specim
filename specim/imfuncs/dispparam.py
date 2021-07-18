@@ -26,7 +26,7 @@ class DispParam(object):
 
     """
 
-    def __init__(self, plthdu=None):
+    def __init__(self, plthdu):
         """
 
         Initiates a DispParam object and initializes all of the
@@ -60,6 +60,8 @@ class DispParam(object):
         self.cmap = plt.cm.YlOrBr_r  # This corresponds to the 'gaia' cmap
         self.title = None            # Title on displayed image
         self.dpi = 100.              # Dots per inch in saved image
+        self.facecolor = 'w'         # Color for region surrounding the plot
+        self.zeropos = None          # Used to set non-default origin location
 
         """ Link the data to be displayed to this DispParam object """
         self.plthdu = plthdu
@@ -149,7 +151,7 @@ class DispParam(object):
     def set_wcsextent(self, zeropos=None):
         """
 
-        For making plots with WCS information, the display style is to set
+        For making plots with WCS information, it is necessary to define
         the boundaries in terms of RA and Dec offsets from the center, in
         arcsec.  For this purpose, the imshow and contour methods in
         matplotlib.pyplot have an 'extent' parameter.
@@ -172,7 +174,19 @@ class DispParam(object):
         """
 
         # self.get_wcs(self['plotim'].header)
-        data = self['plotim'].data
+        data = self.plthdu.data
+        xpix = [-0.5, data.shape[1]-0.5]
+        ypix = [-0.5, data.shape[0]-0.5]
+        ra, dec = self.plthdu.wcsinfo.wcs_pix2world(xpix, ypix, 0)
+        skycoord = SkyCoord(ra, dec, unit=(u.degree, u.degree))
+        dalpha, ddelta = skycoord.spherical_offsets_to(skycoord[0])
+        dalpha -= (dalpha[1] / 2.)
+        ddelta -= (ddelta[1] / 2.)
+        extx1 = dalpha[1].to(u.arcsec).value
+        extx2 = dalpha[0].to(u.arcsec).value
+        exty1 = ddelta[1].to(u.arcsec).value
+        exty2 = ddelta[0].to(u.arcsec).value
+        """ Old version of code below here:
         icoords = np.indices(data.shape).astype(np.float32)
         pltc = np.zeros(icoords.shape)
         pltc[0] = (icoords[0] - data.shape[0] / 2.) * self['input'].pixscale[1]
@@ -183,6 +197,7 @@ class DispParam(object):
         exty1 = pltc[0][0, 0]
         extx2 = pltc[1][maxi[0], maxi[1]] - self['input'].pixscale[1]
         exty2 = pltc[0][maxi[0], maxi[1]] + self['input'].pixscale[0]
+        """
 
         if zeropos is not None:
             dx = zeropos[0]
@@ -241,7 +256,8 @@ class DispParam(object):
         if self.plthdu is not None:
             plthdu = self.plthdu
         else:
-            raise ValueError('The DispParam object was not initialized with an image dataset')
+            raise ValueError('The DispParam object was not initialized with'
+                             ' an image dataset')
 
         """
         If funits is 'abs', then just set self.fmin and self.fmax directly from
@@ -320,3 +336,41 @@ class DispParam(object):
                   (s1, fabs(fmin), self.fmin))
             print(' fmax (mean %s %3d sigma):  %f' %
                   (s2, fabs(fmax), self.fmax))
+
+    # -----------------------------------------------------------------------
+
+    def display_setup(self, cmap='gaia', fmin=-1., fmax=10., funits='sigma',
+                      title=None,  mode='xy', zeropos=None, mask=None,
+                      verbose=False, dpi=100., facecolor='w', debug=False):
+        """
+        Sets the parameter values that will be used to actually
+         display the image or the requested part of it.
+        """
+
+        """ Set the displayed axes to be in WCS offsets, if requested """
+        self.mode = mode
+        if self.mode == 'radec':
+            if self.plthdu.wcsinfo is None:
+                print('')
+                print('WARNING: mode="radec" but no WCS info in image '
+                      'header')
+                print('Using pixels instead')
+                print('')
+                self.mode = 'xy'
+                self.extval = None
+            else:
+                self.set_wcsextent(zeropos)
+        else:
+            self.extval = None
+
+        """ Set the image flux display limits """
+        self.set_flux_limits(fmin, fmax, funits, mask=mask,
+                             verbose=verbose, debug=debug)
+
+        """ Set the color map """
+        self.set_cmap(cmap)
+
+        """ Set other display parameters """
+        self.title = title
+        self.dpi = dpi
+        self.facecolor = facecolor

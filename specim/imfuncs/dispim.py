@@ -286,7 +286,7 @@ class DispIm(WcsHDU):
         Actions taken if a key on the keyboard is pressed
         """
 
-        print(event.key)
+        # print(event.key)
         if event.key == 'b':
             """
             Change the display range
@@ -356,5 +356,5 @@ class DispIm(WcsHDU):
                 plt.close(ii)
             return
 
-        self.keypress_info()
+        # self.keypress_info()
         return

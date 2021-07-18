@@ -1483,53 +1483,53 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,
-                       funits='sigma', statsize=2048,
-                       title=None,  mode='xy', zeropos=None, mask=None,
-                       verbose=False, dpi=100., facecolor='w', debug=False):
-        """
-        Sets parameters within the Image class that will be used to actually
-         display the image or the requested part of it.
-        NOTE: This method is usually called from the display method, and is
-         not meant to be used in a stand-alone manner
-        For more information about the parameters, etc., please see the
-         help information for the display method.
-        """
-
-        """ Set up the default display parameters """
-        dpar = DispParam(self['plotim'])
-
-        """ Set the displayed axes to be in WCS offsets, if requested """
-        self.mode = mode
-        if self.mode == 'radec':
-            if self['plotim'].wcsinfo is None:
-                print('')
-                print('WARNING: mode="radec" but no WCS info in image '
-                      'header')
-                print('Using pixels instead')
-                print('')
-                self.mode = 'xy'
-                self.extval = None
-            else:
-                self.set_wcsextent(zeropos)
-        else:
-            self.extval = None
-        dpar.extval = self.extval
-
-        """ Set the image flux display limits """
-        dpar.set_flux_limits(fmin, fmax, funits, mask=mask,
-                             verbose=verbose, debug=debug)
-
-        """ Set the color map """
-        dpar.set_cmap(cmap)
-
-        """ Set other display parameters """
-        dpar.title = title
-        dpar.dpi = dpi
-        dpar.facecolor = facecolor
-
-        """ Return the parameter information """
-        return dpar
+    # def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,
+    #                    funits='sigma', statsize=2048,
+    #                    title=None,  mode='xy', zeropos=None, mask=None,
+    #                    verbose=False, dpi=100., facecolor='w', debug=False):
+    #     """
+    #     Sets parameters within the Image class that will be used to actually
+    #      display the image or the requested part of it.
+    #     NOTE: This method is usually called from the display method, and is
+    #      not meant to be used in a stand-alone manner
+    #     For more information about the parameters, etc., please see the
+    #      help information for the display method.
+    #     """
+    # 
+    #     """ Set up the default display parameters """
+    #     dpar = DispParam(self['plotim'])
+    # 
+    #     """ Set the displayed axes to be in WCS offsets, if requested """
+    #     self.mode = mode
+    #     if self.mode == 'radec':
+    #         if self['plotim'].wcsinfo is None:
+    #             print('')
+    #             print('WARNING: mode="radec" but no WCS info in image '
+    #                   'header')
+    #             print('Using pixels instead')
+    #             print('')
+    #             self.mode = 'xy'
+    #             self.extval = None
+    #         else:
+    #             self.set_wcsextent(zeropos)
+    #     else:
+    #         self.extval = None
+    #     dpar.extval = self.extval
+    # 
+    #     """ Set the image flux display limits """
+    #     dpar.set_flux_limits(fmin, fmax, funits, mask=mask,
+    #                          verbose=verbose, debug=debug)
+    # 
+    #     """ Set the color map """
+    #     dpar.set_cmap(cmap)
+    # 
+    #     """ Set other display parameters """
+    #     dpar.title = title
+    #     dpar.dpi = dpi
+    #     dpar.facecolor = facecolor
+    # 
+    #     """ Return the parameter information """
+    #     return dpar
 
     # -----------------------------------------------------------------------
 
@@ -1616,8 +1616,10 @@ class Image(dict):
         ------
         Set up the parameters that will be needed to display the image
         """
-        dpar = self._display_setup(mode=mode, verbose=verbose, debug=debug,
-                                   **kwargs)
+        # dpar = self._display_setup(mode=mode, verbose=verbose, debug=debug,
+        #                            **kwargs)
+        dpar = DispParam(self['plotim'])
+        dpar.display_setup(mode=mode, verbose=verbose, debug=debug, **kwargs)
 
         """
         Step 3
