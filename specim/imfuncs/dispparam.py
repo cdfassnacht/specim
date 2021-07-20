@@ -10,6 +10,8 @@ image is displayed
 from math import fabs
 import numpy as np
 from matplotlib import pyplot as plt
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 
 # -----------------------------------------------------------------------
 
