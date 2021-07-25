@@ -13,10 +13,12 @@ from cdfutils import datafuncs as df
 
 # -----------------------------------------------------------------------
 
+
 def tie_alpha(model):
     return model.alpha_0
     
 # -----------------------------------------------------------------------
+
 
 def tie_gamma(model):
     return model.gamma_0
@@ -41,9 +43,8 @@ class ImFit(object):
         """ Put the input data into the class """
         self.data = data.copy()
 
-        """ Set some default parameters """
-        self.rms_clip = None
-        self.mean_clip = None
+        """ Get statistics about the data """
+        self.mean_clip, self.rms_clip = df.sigclip(data)
 
         """
         It may be that the astropy model fitters don't work when the input
@@ -52,19 +53,16 @@ class ImFit(object):
         """
         goodmask = np.isfinite(data)
         if goodmask.sum() < data.size:
-            self.mean_clip, self.rms_clip = df.sigclip(data)
             noise = np.random.normal(self.mean_clip, self.rms_clip, data.shape)
             badmask = np.logical_not(goodmask)
             self.data[badmask] = noise[badmask]
             del badmask
 
-        
         """ Define the coordinate arrays """
         self.y, self.x = np.indices(data.shape)
 
         """ Clean up """
         del goodmask
-
 
     # -----------------------------------------------------------------------
 
@@ -117,7 +115,7 @@ class ImFit(object):
         """
         objmask = f > self.mean_clip + detect_thresh * self.rms_clip
         fgood = f[objmask]
-        
+
         """
         Calculate the flux-weighted moments
          NOTE: Do the moment calculations relative to (x1, y1) -- and then add
@@ -143,6 +141,12 @@ class ImFit(object):
         outdict = {'mux': mux, 'muy': muy, 'sigxx': sigxx, 'sigxy': sigxy,
                    'sigyy': sigyy}
         return outdict
+
+    # -----------------------------------------------------------------------
+
+    def mock_noise(self):
+        noise = np.random.normal(self.mean_clip, self.rms_clip, self.data.shape)
+        return noise
 
     # -----------------------------------------------------------------------
 
@@ -210,7 +214,7 @@ class ImFit(object):
             Tie the alpha and gamma parameters together, and add this model
             to the compound model
             """
-            if i==0:
+            if i == 0:
                 mod = tmpmod
             else:
                 mod += tmpmod
@@ -299,7 +303,7 @@ class ImFit(object):
             Tie the alpha and gamma parameters together, and add this model
             to the compound model
             """
-            if i==0:
+            if i == 0:
                 mod = tmpmod
             else:
                 mod += tmpmod
