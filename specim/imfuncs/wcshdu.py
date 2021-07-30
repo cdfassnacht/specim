@@ -466,10 +466,14 @@ class WcsHDU(pf.PrimaryHDU):
          a CDELT + PC matrix from the cutout.
         """
         hdr = inhdr.copy()
-        wcskeys = ['ra', 'dec', 'ctype1', 'ctype2', 'crval1', 'crpix1',
-                   'crval2', 'crpix2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2',
-                   'cdelt1', 'cdelt2', 'pc1_1', 'pc1_2', 'pc2_1', 'pc2_2',
-                   'crota2']
+        wcskeys = ['ra', 'dec']
+        for j in range(1, self.wcsinfo.wcs.naxis + 1):
+            for key in ['ctype', 'crpix', 'crval', 'cunit', 'crota']:
+                wcskeys.append('%s%d' % (key, j))
+            for k in range(1, self.wcsinfo.wcs.naxis + 1):
+                for key in ['pc', 'cd']:
+                    wcskeys.append('%s%d_%d' % (key, j, k))
+
         for key in wcskeys:
             if key.upper() in hdr.keys():
                 del hdr[key]
@@ -1404,19 +1408,30 @@ class WcsHDU(pf.PrimaryHDU):
     
     # -----------------------------------------------------------------------
 
-    def writeto(self, outfile):
+    def writeto(self, outfile=None):
         """
 
         Saves the (possibly modified) HDU to an output file
 
         """
+        """ Put the possibly updated wcs info into the header """
+        outhdr = self.make_hdr_wcs(self.header, self.wcsinfo)
 
-        pf.PrimaryHDU(self.data, self.header).writeto(outfile, overwrite=True)
+        """
+        Create a new PrimaryHDU object and write it out, possibly
+        overwriting the image from which this WcsHDU object was read
+        """
+        if outfile is None:
+            if self.infile is None:
+                raise ValueError('No output file specified and no file'
+                                 ' information in current WcsHDU')
+            outfile = self.infile
 
+        pf.PrimaryHDU(self.data, outhdr).writeto(outfile, overwrite=True)
 
     # -----------------------------------------------------------------------
 
-    def save(self, outfile):
+    def save(self, outfile=None):
         """
 
         Saves the (possibly modified) HDU to an output file
@@ -1424,5 +1439,3 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         self.writeto(outfile)
-
-

@@ -1172,7 +1172,6 @@ class Image(dict):
             self['smooth'].writeto(outfile, overwrite=True)
             print('')
 
-
     # -----------------------------------------------------------------------
 
     def get_rms(self, centpos, size, dmode='input', verbose=True):
@@ -1653,23 +1652,10 @@ class Image(dict):
          create a new file.
 
         """
+        self[dmode].save(outfile=outfile)
 
-        """ Put the possibly updated wcs info into the header """
-        outhdr = self[dmode].make_hdr_wcs(self.header, self.wcsinfo)
-
-        """
-        Create a new PrimaryHDU object and write it out, possibly
-        overwriting the image from which this WcsHDU object was read
-        """
-        if outfile is None:
-            if self[dmode].infile is None:
-                raise ValueError('No output file specified and no file'
-                                 ' information in current WcsHDU')
-            outfile = self[dmode].infile
-        pf.PrimaryHDU(self[dmode].data, outhdr).writeto(outfile,
-                                                        overwrite=True)
         if verbose:
-            print('Wrote possibly updated HDU in %s container to %s'
+            print('Wrote the HDU in the %s container to output file: %s'
                   % (dmode, outfile))
 
 # -----------------------------------------------------------------------
