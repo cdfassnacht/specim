@@ -1861,7 +1861,8 @@ class Spec1d(df.Data1d):
             del outdata
 
         elif outformat == 'fitstab':
-            self.write(outfile, format='fits')
+            tmp = Table(self)
+            tmp.write(outfile, format='fits', overwrite=True)
 
         else:
             print('')
