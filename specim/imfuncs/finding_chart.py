@@ -104,7 +104,6 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
     plt.axvline(0, ls='dotted', color='k')
     plt.axhline(0, ls='dotted', color='k')
     if slitsize is not None:
-        print(slitsize)
         slitra = []
         slitdec = []
         if slitcent == 'default':
@@ -122,8 +121,6 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
         else:
             slitra.append((slitcent[0]))
             slitdec.append((slitcent[1]))
-        print(slitra)
-        print(slitdec)
         for sra, sdec in zip(slitra, slitdec):
             zim.mark_fov(sra, sdec, slitsize, pa=slitpa)
 

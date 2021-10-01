@@ -55,21 +55,10 @@ class WcsHDU(pf.PrimaryHDU):
                       automatically generated.
         """
 
-        """ Set some default values """
-        self.infile = None
-        self.wcsinfo = None
-        self.radec = None
-        self.pixscale = None
-        self.impa = 0.
-        self.radec = None
-        self.raaxis = None
-        self.decaxis = None
-        self.found_rms = False
-        self.fftconj = None
-
         """
         Check the format of the input info and get the data and header info
         """
+        hdu = None
         if isinstance(indat, str):
             hdu = self.read_from_file(indat, verbose=verbose)
             data = hdu[hext].data
@@ -110,13 +99,30 @@ class WcsHDU(pf.PrimaryHDU):
         else:
             super().__init__(data, hdr)
 
+        """ Set some general default values """
+        self.infile = None
+        self.found_rms = False
+        self.fftconj = None
+
+        """ Set some WCS-related default values """
+        self.wcsinfo = None
+        self.raaxis = None
+        self.decaxis = None
+        self.radec = None
+        self.pixscale = None
+        self.impa = 0.
+        self.radec = None
+        self.crpix = None
+        self.crval = None
+        self.cdelt = None
+
         """
         Now add WCS attributes to the class.
         NOTE, sometimes these are in a different header, which can be
         indicated by the wcsext parameter
         """
         self.hext = hext
-        if wcsext is not None:
+        if wcsext is not None and hdu is not None:
             try:
                 wcshdr = hdu[wcsext].header
             except UnboundLocalError:
@@ -133,6 +139,164 @@ class WcsHDU(pf.PrimaryHDU):
             """ Just keep default values for WCS attributes, i.e., None """
             if wcsverb:
                 print('Warning: Could not find WCS information')
+
+    # -----------------------------------------------------------------------
+
+    """
+    Use properties to set many/most of the attributes that are associated
+     with this class.
+    These attributes include: dpi, mode, title, ...
+
+    For an attribute called x, use two declarations as can be seen below:
+     @property
+     @x.setter
+    These two will then allow you to set the value of x via
+      foo.x = [value]
+    but the @property construction also allows you to add some evaluation
+    of what the value is and how to respond.  For example, if x needs to
+    be non-negative, then with the appropriate coding, foo.x = -10 will
+    actually set foo.x = 0, in a way that is transparent to the user.
+    """
+    # -----------------------------------
+
+    """ Pixel scale """
+    @property
+    def pixscale(self):
+        return self.__pixscale
+
+    @pixscale.setter
+    def pixscale(self, pixscale):
+        """
+        Set the pixscale attribute and also update the WCS information
+
+        Input:
+           pixscale - desired pixel scale IN ARCSEC
+
+        """
+
+        """ Parse the input"""
+        if isinstance(pixscale, float):
+            newscale = np.ones(2) * pixscale
+        elif isinstance(pixscale, (tuple, list)):
+            newscale = np.array(pixscale)
+        elif isinstance(pixscale, np.ndarray) or pixscale is None:
+            newscale = pixscale
+        else:
+            raise TypeError('pixscale must be a scalar or one of: '
+                            'list, numpy array, or list')
+
+        """ Set shortcuts """
+        raax = self.raaxis
+        decax = self.decaxis
+
+        """
+        Update the values.  Assume for now that the values are in (RA, Dec)
+        order.
+        Note that what part of the wcsinfo structure gets modified depends on
+         whether the coordinate tranform is stored in a (CDELT, PC matrix)
+         format or in a (CD matrix) format.
+        """
+        self.__pixscale = newscale
+        if newscale is not None:
+            hdr = self.header
+            if self.wcsinfo.wcs.has_cd():
+
+                """ Get PA in degrees """
+                pa = coords.matrix_to_rot(self.wcsinfo.wcs.cd, raax=raax-1,
+                                          decax=decax-1)
+                """
+                Create a new cd matrix based on the pixel scale
+                """
+                cd = coords.rscale_to_cdmatrix(newscale[0], pa,
+                                               pixscale2=newscale[1],
+                                               verbose=False)
+                """ Transfer info to wcsinfo and header """
+                self.wcsinfo.wcs.cd = cd
+                hdr['CD%d_%d' % (raax, raax)] = cd[0, 0]
+                hdr['CD%d_%d' % (raax, decax)] = cd[0, 1]
+                hdr['CD%d_%d' % (decax, raax)] = cd[1, 0]
+                hdr['CD%d_%d' % (decax, decax)] = cd[1, 1]
+
+            elif self.wcsinfo.wcs.has_pc and \
+                    np.isclose(self.wcsinfo.wcs.cdelt[raax-1], 1.) and \
+                    np.isclose(self.wcsinfo.wcs.cdelt[decax-1], 1.):
+                """
+                These conditions arise when you generate a header from a
+                WCS object that came from a file that had a CD matrix.
+                The astropy code creates a strange hybrid where it shifts the
+                CD matrix to a PC matrix, and then just sets the CDELTn
+                keywords to 1.0
+                """
+
+                """ Get PA in degrees """
+                pa = coords.matrix_to_rot(self.wcsinfo.wcs.pc, raax=raax-1,
+                                          decax=decax-1)
+                """
+                Create a new cd matrix based on the pixel scale
+                """
+                cd = coords.rscale_to_cdmatrix(newscale[0], pa,
+                                               pixscale2=newscale[1],
+                                               verbose=False)
+                """ Transfer info to wcsinfo and header """
+                self.wcsinfo.wcs.pc = cd
+                hdr['PC%d_%d' % (raax, raax)] = cd[0, 0]
+                hdr['PC%d_%d' % (raax, decax)] = cd[0, 1]
+                hdr['PC%d_%d' % (decax, raax)] = cd[1, 0]
+                hdr['PC%d_%d' % (decax, decax)] = cd[1, 1]
+
+            else:
+                """ 
+                If there is no CD matrix then we have a CDELT + PC matrix setup
+                and we just need to update the CDELT parameters
+                """
+                for i, ax in enumerate([self.raaxis, self.decaxis]):
+                    if ax == self.raaxis:
+                        sgn = -1.
+                    else:
+                        sgn = 1.
+                    hdr['cdelt%d' % ax] = sgn * newscale[i] / 3600.
+                    self.wcsinfo.wcs.cdelt[(ax-1)] = sgn * newscale[i] / 3600.
+
+    # -----------------------------------
+
+    """ CRPIX values """
+    @property
+    def crpix(self):
+        return self.__crpix
+
+    @crpix.setter
+    def crpix(self, crpix):
+        """
+
+        Updates the crpix attribute and also updates the crpix values in:
+          1. the header
+          2. the wcsinfo object
+
+        """
+
+        """ If crpix is None then don't change anything """
+        if crpix is None:
+            return
+
+        """ Check dimensionality """
+        if len(crpix) != len(self.wcsinfo.wcs.crpix):
+            raise IndexError(' Input crpix array length does not match'
+                             ' length of current crpix array')
+
+        """
+        Update the CRPIX array assuming that the input is in the correct
+        format
+        """
+        if isinstance(crpix, list) or isinstance(crpix, tuple) \
+                or isinstance(crpix, np.ndarray):
+            for i in range(len(crpix)):
+                self.wcsinfo.wcs.crpix[i] = crpix[i]
+                self.header['crpix%d' % (i+1)] = crpix[i]
+        else:
+            raise TypeError('crpixarr must be list, tuple, or ndarray')
+
+        """ Update the attribute"""
+        self.__crpix = np.array(crpix)
 
     # -----------------------------------------------------------------------
 
@@ -179,6 +343,12 @@ class WcsHDU(pf.PrimaryHDU):
 
         """
 
+        """ Set some defaults """
+        raax = 0
+        decax = 1
+        rakey = 'naxis1'
+        deckey = 'naxis2'
+
         """ Get the WCS information out of the header if it's there """
         try:
             wcsinfo = wcs.WCS(wcshdr)
@@ -196,7 +366,6 @@ class WcsHDU(pf.PrimaryHDU):
         Make sure that the WCS information is actually WCS-like and not,
         for example, pixel-based
         """
-
         imwcs = wcsinfo.wcs
         rafound = False
         decfound = False
@@ -204,13 +373,11 @@ class WcsHDU(pf.PrimaryHDU):
             if ct[0:2] == 'RA':
                 rafound = True
                 raax = count
-                raaxis = raax + 1
-                rakey = 'naxis%d' % raaxis
+                rakey = 'naxis%d' % (raax + 1)
             if ct[0:3] == 'DEC':
                 decfound = True
                 decax = count
-                decaxis = decax + 1
-                deckey = 'naxis%d' % decaxis
+                deckey = 'naxis%d' % (decax + 1)
         if rafound is False or decfound is False:
             if verbose:
                 print('No valid WCS information in image header')
@@ -246,8 +413,8 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Add the information to the object """
         self.wcsinfo = wcsinfo
-        self.raaxis = raaxis
-        self.decaxis = decaxis
+        self.raaxis = raax + 1
+        self.decaxis = decax + 1
         self.radec = radec
         self.pixscale = pixscale
         self.impa = impa
@@ -385,7 +552,7 @@ class WcsHDU(pf.PrimaryHDU):
             x2 = x1 + datasize
             y1 = int(datacent[1] - datasize/2.)
             y2 = y1 + datasize
-            ## NEED TO ADD CHECKS
+            # NEED TO ADD CHECKS
             data = self.data[y1:y2, x1:x2]
         else:
             data = self.data.copy()
@@ -421,7 +588,7 @@ class WcsHDU(pf.PrimaryHDU):
             x2 = x1 + datasize
             y1 = int(othercent[1] - datasize/2.)
             y2 = y1 + datasize
-            ## NEED TO ADD CHECKS
+            # NEED TO ADD CHECKS
             data2 = odata2[y1:y2, x1:x2]
         else:
             data2 = odata2.copy()
@@ -508,16 +675,38 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         Updates the CRPIX array in the wcsinfo structure
+        This method is no longer used, but it remains in the code for
+        legacy reasons.
+
+        Instead of using update_crpix, just set the crpix values directly:
+          e.g.,  myim.crpix = [1023.5, 1327.8]
+        This syntax will call the crpix attribute setter
 
         Inputs:
-         crpixarr - a list, tuple, or numpy ndarray containing the new 
+         crpixarr - a list, tuple, or numpy ndarray containing the new
                      CRPIX values.  For most data, this parameter will
                      contain two elements, to replace CRPIX1 and CRPIX2
 
         """
 
+        self.crpix = crpixarr
+
+    # -----------------------------------------------------------------------
+
+    def update_cdelt(self, cdeltarr, verbose=True):
+        """
+
+        Updates the CDELT array in the wcsinfo structure
+
+        Inputs:
+         cdeltarr - a list, tuple, or numpy ndarray containing the new
+                     CDELT values.  For most data, this parameter will
+                     contain two elements, to replace CDELT1 and CDELT2
+
+        """
+
         """ Check dimensionality """
-        if len(crpixarr) != len(self.wcsinfo.wcs.crpix):
+        if len(cdeltarr) != len(self.wcsinfo.wcs.cdelt):
             raise IndexError(' Input crpix array length does not match'
                              ' length of current crpix array')
 
@@ -534,6 +723,7 @@ class WcsHDU(pf.PrimaryHDU):
                     print('  %8.2f  -->  %8.2f' % (self.wcsinfo.wcs.crpix[i],
                                                    crpixarr[i]))
                 self.wcsinfo.wcs.crpix[i] = crpixarr[i]
+                self.header['crpix%d' % (i+1)] = crpixarr[i]
         else:
             raise TypeError('crpixarr must be list, tuple, or ndarray')
 
@@ -608,24 +798,39 @@ class WcsHDU(pf.PrimaryHDU):
 
         data = self.data.copy()
         hdr = self.header
+        if 'CRPIX1' in hdr.keys() and 'CRPIX2' in hdr.keys():
+            do_update = True
+            crpix1 = hdr['crpix1']
+            crpix2 = hdr['crpix2']
+        else:
+            do_update = False
+            crpix1 = None
+            crpix2 = None
+
         if method == 'x':
             self.data = data[:, ::-1]
-            if 'CRPIX1' in hdr.keys():
-                hdr['crpix1'] = hdr['naxis1'] - hdr['crpix1']
+            if do_update:
+                crpix1 = hdr['naxis1'] - hdr['crpix1']
+                crpix2 = hdr['crpix2']
         elif method == 'y':
             self.data = data[::-1, :]
-            if 'CRPIX2' in hdr.keys():
-                hdr['crpix2'] = hdr['naxis2'] - hdr['crpix2']
+            if do_update:
+                crpix1 = hdr['crpix1']
+                crpix2 = hdr['naxis2'] - hdr['crpix2']
         elif method == 'xy':
             self.data = data[::-1, ::-1]
-            if 'CRPIX1' in hdr.keys():
-                hdr['crpix1'] = hdr['naxis1'] - hdr['crpix1']
-            if 'CRPIX2' in hdr.keys():
-                hdr['crpix2'] = hdr['naxis2'] - hdr['crpix2']
+            if do_update:
+                crpix1 = hdr['naxis1'] - hdr['crpix1']
+                crpix2 = hdr['naxis2'] - hdr['crpix2']
         elif method == 'pfcam':
             self.data = data.T[::-1,::-1]
+            # NOTE: Still missing correct setting of crpix values
         else:
-            raise ValueError
+            raise ValueError('Flip method %s is not recognized' % str(method))
+
+        if do_update:
+            self.crpix = [crpix1, crpix2]
+            # self.update_crpix([crpix1, crpix2], verbose=False)
     
     # -----------------------------------------------------------------------
 
@@ -783,6 +988,54 @@ class WcsHDU(pf.PrimaryHDU):
             print('   Subtracted value of %f from %s' % (skyval, descript))
         return skyval
             
+    # -----------------------------------------------------------------------
+
+    def make_bpm(self, type, nsig=10., goodval=1, outfile=None):
+        """
+
+        Makes a bad pixel mask (bpm) based on the data in this WcsHDU object.
+        The treatment is different depending on whether the data is a
+        dark or bias frame (type='dark') or is a science image (type='sci').
+
+        NOTE: For now only the type='dark' option is supported
+
+        Inputs:
+          type    - type of data.  Right now only type='dark' is supported
+          nsig    - number of sigma deviation from the clipped mean to indicate
+                    a bad pixel.  Default=10.
+          goodval - The value (1 or 0) that indicates a good pixel in the
+                    pixel mask.  Bad pixels will be indicated by the opposite
+                    value.  Default=1
+        """
+
+        """ Check type """
+        if type.lower() != 'dark':
+            raise TypeError('Currently only "dark" is supported')
+
+        """ Do a sigma clipping of the data """
+        self.sigma_clip()
+
+        """ Set up the baseline mask, with all pixels set to the good value """
+        if goodval == 1:
+            bpm = np.ones(self.data.shape)
+            badval = 0
+        elif goodval == 0:
+            bpm = np.zeros(self.data.shape)
+            badval = 1
+        else:
+            raise ValueError('goodval must be either 1 or 0')
+
+        """
+        Identify pixels that deviate by more than nsig from the clipped mean
+        """
+        diff = np.fabs(self.data - self.mean_clip)
+        bpm[diff > nsig * self.rms_clip] = badval
+
+        if outfile is not None:
+            pf.PrimaryHDU(bpm).writeto(outfile, overwrite=True)
+        else:
+            return bpm
+
     # -----------------------------------------------------------------------
 
     def make_objmask(self, nsig=1., init_kernel=3, bpm=None):
@@ -1146,7 +1399,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
         if outscale is None:
             oscale = self.pixscale
-        elif (np.atleast_1d(outscale).size < 2):
+        elif np.atleast_1d(outscale).size < 2:
             oscale = [outscale, outscale]
         else:
             oscale = outscale
@@ -1271,7 +1524,7 @@ class WcsHDU(pf.PrimaryHDU):
         if bias is not None:
             tmp -= bias
             biasmean = bias.data.mean()
-            if (hext == 0):
+            if hext == 0:
                 keystr = 'biassub'
             else:
                 keystr = 'biassub%d' % self.hext
@@ -1282,16 +1535,16 @@ class WcsHDU(pf.PrimaryHDU):
         """ Convert to electrons if requested """
         if gain > 0:
             tmp.data *= gain
-            tmp.header['gain'] =  (1.0, 'Units are now electrons')
-            if (hext == 0):
+            tmp.header['gain'] = (1.0, 'Units are now electrons')
+            if hext == 0:
                 keystr = 'ogain'
             else:
                 keystr = 'ogain%d' % hext
             tmp.header.set(keystr, gain, 'Original gain for %s in e-/ADU'
                            % hdustr, after='gain')
-            tmp.header['bunit'] =  ('Electrons',
-                                    'Converted from ADU in raw image')
-            if (self.hext == 0):
+            tmp.header['bunit'] = ('Electrons',
+                                   'Converted from ADU in raw image')
+            if self.hext == 0:
                 keystrb1 = 'binfo_1'
             else:
                 keystrb1 = 'binfo%d_1' % self.hext
@@ -1305,21 +1558,21 @@ class WcsHDU(pf.PrimaryHDU):
         """ Divide by the exposure time if requested """
         if texp > 0.:
             tmp.data /= texp
-            if (hext == 0):
+            if hext == 0:
                 keystr = 'binfo_2'
             else:
                 keystr = 'binfo'+str(hext)+'_2'
             keystr = keystr.upper()
             tmp.header['gain'] = (texp,
                                   'If units are e-/s then gain=t_exp')
-            tmp.header['bunit'] = ('Electrons/sec','See %s header' % keystr)
+            tmp.header['bunit'] = ('Electrons/sec', 'See %s header' % keystr)
             if keystrb1 in tmp.header.keys():
                 afterkey = keystrb1
             else:
                 afterkey = 'gain'
             tmp.header.set(keystr,
                            'Units for %s changed from e- to e-/s using '
-                           'texp=%7.2f' % (hdustr,texp), after=afterkey)
+                           'texp=%7.2f' % (hdustr, texp), after=afterkey)
             print('   Converted units from e- to e-/sec using exposure '
                   'time %7.2f' % texp)
     
@@ -1332,12 +1585,12 @@ class WcsHDU(pf.PrimaryHDU):
             flat frame = 0, since dividing by zero gives lots of problems
             """
             flatdata = flat.data
-            zeromask = flatdata==0
+            zeromask = flatdata == 0
             
             """ Correct for any zero pixels in the flat-field frame """
             tmp.data[zeromask] = 0
             flatmean = flatdata.mean()
-            if (hext == 0):
+            if hext == 0:
                 keystr = 'flatcor'
             else:
                 keystr = 'flatcor%d' % hext
@@ -1350,7 +1603,7 @@ class WcsHDU(pf.PrimaryHDU):
         if fringe is not None:
             fringedata = fringe.data
             tmp.data -= fringedata
-            if (self.hext == 0):
+            if self.hext == 0:
                 keystr = 'fringcor'
             else:
                 keystr = 'frngcor'+str(hext)
@@ -1369,10 +1622,10 @@ class WcsHDU(pf.PrimaryHDU):
             Set up a bad pixel mask based on places where the flat frame = 0,
             since dividing by zero gives lots of problems
             """
-            dszeromask = dsflatdata==0
+            dszeromask = dsflatdata == 0
             """ Correct for any zero pixels in the flat-field frame """
             tmp.data[dszeromask] = 0
-            if (hext == 0):
+            if hext == 0:
                 keystr = 'dsflat'
             else:
                 keystr = 'dflat'+str(hext)
@@ -1385,12 +1638,12 @@ class WcsHDU(pf.PrimaryHDU):
         """ Subtract the sky level if requested """
         if zerosky is not None:
             tmp.sky_to_zero(method=zerosky, verbose=verbose)
-            if (hext == 0):
+            if hext == 0:
                 keystr = 'zerosky'
             else:
                 keystr = 'zerosky'+str(hext)
             tmp.header[keystr] = ('%s: subtracted constant sky level of %f' %
-                                  (hdustr,m))
+                                  (hdustr, m))
     
         """ Flip if requested """
         if flip is not None:
@@ -1399,7 +1652,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Add a very rough WCS if requested """
         if pixscale > 0.0:
-            if hext>0:
+            if hext > 0:
                 apply_rough_wcs(tmp, pixscale, rakey, deckey, self[0])
             else:
                 apply_rough_wcs(tmp, pixscale, rakey, deckey)

@@ -90,12 +90,6 @@ class Image(dict):
           wcsverb
         """
 
-        """ Set defaults """
-        self['var'] = None
-        self.varmode = 'var'
-        self['bpm'] = None
-        self.bpmgood = 1
-
         """ Set up the empty Image container by calling the superclass """
         if pyversion == 2:
             super(Image, self).__init__()
@@ -104,6 +98,12 @@ class Image(dict):
 
         """ Load the image data """
         self['input'] = WcsHDU(indat, hext=hext, **kwargs)
+
+        """ Set defaults """
+        self['var'] = None
+        self.varmode = 'var'
+        self['bpm'] = None
+        self.bpmgood = 1
 
         """ Load the variance / rms / weight data, if requested """
         if vardat is not None:
@@ -118,7 +118,8 @@ class Image(dict):
         self.data = self['input'].data
         self.wcsinfo = self['input'].wcsinfo
 
-        """ The container for the displayed image """
+        """ Containers used for displaying the image """
+        self.dpar = None
         self.dispim = None
 
         """
@@ -1073,8 +1074,8 @@ class Image(dict):
             arr = arr[:-dy, :]
 
         """ Set the output dimensions """
-        x = arr.shape[1]/factor
-        y = arr.shape[0]/factor
+        x = int(arr.shape[1]/factor)
+        y = int(arr.shape[0]/factor)
 
         """ Fill the output array with the block-averaged values """
         out = np.zeros((y, x))
@@ -1094,7 +1095,7 @@ class Image(dict):
         if outfile is not None:
             if self.wcsinfo is not None:
 
-                outhdr = self.make_hdr_wcs(self.header, self.wcsinfo)
+                outhdr = self['input'].make_hdr_wcs(self.header, self.wcsinfo)
                 rak = self['input'].raaxis
                 dek = self['input'].decaxis
 
@@ -1164,6 +1165,7 @@ class Image(dict):
         hdr['smoothw'] = ('%5.1f' % kwidth,
                           'Smoothing kernel width')
         self['smooth'] = WcsHDU(smdat, hdr, wcsverb=False)
+        self['smooth'].copy_wcsinfo(self['input'])
 
         """ Save the smoothed cube in an output file if desired """
         if outfile:
@@ -1373,11 +1375,8 @@ class Image(dict):
         information in it.  Check on this before proceeding
         """
         if self['plotim'].wcsinfo is None:
-            print('')
-            print('ERROR: Requested a FOV plot, but input image'
-                  ' does not have WCS information in it.')
-            print('')
-            raise ValueError
+            raise ValueError('\nERROR: Requested a FOV plot, but input image'
+                             ' does not have WCS information in it.\n')
 
         """ Set the rectangle size """
         imsize = np.atleast_1d(size)  # Converts size to a numpy array
@@ -1416,14 +1415,16 @@ class Image(dict):
          
          THIS NEEDS TO BE UPDATED TO USE THE WCSINFO INSTEAD!!!
         """
-        hdr = self['plotim'].header
-        print(hdr['crval1'], hdr['crval2'])
-        imcent = coords.radec_to_skycoord(hdr['crval1'], hdr['crval2'])
+        centx =  (self['plotim'].data.shape[1] + 1.) / 2.
+        centy =  (self['plotim'].data.shape[0] + 1.) / 2.
+        racent, deccent = self['plotim'].wcsinfo.wcs_pix2world(centx, centy, 1)
+        imcent = SkyCoord(racent, deccent, unit='deg', frame='fk5')
         fovcent = coords.radec_to_skycoord(ra, dec)
         offset = imcent.spherical_offsets_to(fovcent)
-        fovx0 = (offset[0].to(u.arcsec)).value - self.zeropos[0]
-        fovy0 = (offset[1].to(u.arcsec)).value - self.zeropos[1]
-        print(fovx0, fovy0)
+        # fovx0 = (offset[0].to(u.arcsec)).value - self.dpar.zeropos[0]
+        # fovy0 = (offset[1].to(u.arcsec)).value - self.dpar.zeropos[1]
+        fovx0 = offset[0].arcsecond - self.dpar.zeropos[0]
+        fovy0 = offset[1].arcsecond - self.dpar.zeropos[1]
 
         """ Plot the FOV """
         fovx = fovx0 + dx
@@ -1479,56 +1480,6 @@ class Image(dict):
         print('')
 
         return plthdu
-
-    # -----------------------------------------------------------------------
-
-    # def _display_setup(self, cmap='gaia', fmin=-1., fmax=10.,
-    #                    funits='sigma', statsize=2048,
-    #                    title=None,  mode='xy', zeropos=None, mask=None,
-    #                    verbose=False, dpi=100., facecolor='w', debug=False):
-    #     """
-    #     Sets parameters within the Image class that will be used to actually
-    #      display the image or the requested part of it.
-    #     NOTE: This method is usually called from the display method, and is
-    #      not meant to be used in a stand-alone manner
-    #     For more information about the parameters, etc., please see the
-    #      help information for the display method.
-    #     """
-    # 
-    #     """ Set up the default display parameters """
-    #     dpar = DispParam(self['plotim'])
-    # 
-    #     """ Set the displayed axes to be in WCS offsets, if requested """
-    #     self.mode = mode
-    #     if self.mode == 'radec':
-    #         if self['plotim'].wcsinfo is None:
-    #             print('')
-    #             print('WARNING: mode="radec" but no WCS info in image '
-    #                   'header')
-    #             print('Using pixels instead')
-    #             print('')
-    #             self.mode = 'xy'
-    #             self.extval = None
-    #         else:
-    #             self.set_wcsextent(zeropos)
-    #     else:
-    #         self.extval = None
-    #     dpar.extval = self.extval
-    # 
-    #     """ Set the image flux display limits """
-    #     dpar.set_flux_limits(fmin, fmax, funits, mask=mask,
-    #                          verbose=verbose, debug=debug)
-    # 
-    #     """ Set the color map """
-    #     dpar.set_cmap(cmap)
-    # 
-    #     """ Set other display parameters """
-    #     dpar.title = title
-    #     dpar.dpi = dpi
-    #     dpar.facecolor = facecolor
-    # 
-    #     """ Return the parameter information """
-    #     return dpar
 
     # -----------------------------------------------------------------------
 
@@ -1619,6 +1570,7 @@ class Image(dict):
         #                            **kwargs)
         dpar = DispParam(self['plotim'])
         dpar.display_setup(mode=mode, verbose=verbose, debug=debug, **kwargs)
+        self.dpar = dpar
 
         """
         Step 3
@@ -1805,9 +1757,9 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
             pf.PrimaryHDU(cutsci / rmsarr).writeto(outsnr, overwrite=True)
 
     """ Clean up """
-    del(infits)
+    del infits
     if whtsuff is not None:
-        del(whtfits)
+        del whtfits
 
 # ---------------------------------------------------------------------------
 

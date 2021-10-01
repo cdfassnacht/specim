@@ -46,12 +46,25 @@ class DispIm(WcsHDU):
         else:
             super().__init__(inhdu, wcsverb=False)
 
-
         """ Initialize some parameters """
+        self.dpar = None
         self.ax1 = None
         self.fig1 = None
         self.fig2 = None
         self.zoomsize = 31           # Size of postage-stamp zoom
+
+    # -----------------------------------------------------------------------
+
+    def make_dpar(self):
+        """
+
+        Loads parameters that govern how the image will be displayed
+
+        """
+
+        dpar = DispParam(self)
+        dpar.display_setup(mode=mode, verbose=verbose, debug=debug, **kwargs)
+
 
     # -----------------------------------------------------------------------
 
