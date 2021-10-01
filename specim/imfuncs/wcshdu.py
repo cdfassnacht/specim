@@ -183,79 +183,59 @@ class WcsHDU(pf.PrimaryHDU):
             newscale = pixscale
         else:
             raise TypeError('pixscale must be a scalar or one of: '
-                            'list, numpy array, or list')
+                            'list, numpy array, or tuple')
 
         """ Set shortcuts """
         raax = self.raaxis
         decax = self.decaxis
 
         """
-        Update the values.  Assume for now that the values are in (RA, Dec)
-        order.
+        Update the values in the WcsHDU object.  Assume for now that the
+        values are in (RA, Dec) order.
         Note that what part of the wcsinfo structure gets modified depends on
          whether the coordinate tranform is stored in a (CDELT, PC matrix)
          format or in a (CD matrix) format.
         """
         self.__pixscale = newscale
+
+        """
+        Convert to a standard format within the wcsinfo object whatever the
+        input format may have been, if the passed value is not None
+        """
         if newscale is not None:
             hdr = self.header
+
+            """ First get the PA """
+            pa = coords.matrix_to_rot(self.wcsinfo.pixel_scale_matrix,
+                                      raax=raax-1, decax=decax-1)
+
+            """
+            Convert the PA to a PC matrix that just reflects the rotation and
+            put this information into both the wcsinfo object and the header
+            """
+            pc = coords.rot_to_pcmatrix(pa, verbose=False)
+            self.wcsinfo.wcs.pc = pc
+            hdr['PC%d_%d' % (raax, raax)] = pc[0, 0]
+            hdr['PC%d_%d' % (raax, decax)] = pc[0, 1]
+            hdr['PC%d_%d' % (decax, raax)] = pc[1, 0]
+            hdr['PC%d_%d' % (decax, decax)] = pc[1, 1]
+
+            """
+            Get rid of the old CD matrix, if it exists, to avoid conflicts
+            """
             if self.wcsinfo.wcs.has_cd():
+                del self.wcsinfo.wcs.cd
 
-                """ Get PA in degrees """
-                pa = coords.matrix_to_rot(self.wcsinfo.wcs.cd, raax=raax-1,
-                                          decax=decax-1)
-                """
-                Create a new cd matrix based on the pixel scale
-                """
-                cd = coords.rscale_to_cdmatrix(newscale[0], pa,
-                                               pixscale2=newscale[1],
-                                               verbose=False)
-                """ Transfer info to wcsinfo and header """
-                self.wcsinfo.wcs.cd = cd
-                hdr['CD%d_%d' % (raax, raax)] = cd[0, 0]
-                hdr['CD%d_%d' % (raax, decax)] = cd[0, 1]
-                hdr['CD%d_%d' % (decax, raax)] = cd[1, 0]
-                hdr['CD%d_%d' % (decax, decax)] = cd[1, 1]
+            """ Update the CDELT values """
+            for i, ax in enumerate([self.raaxis, self.decaxis]):
+                if ax == self.raaxis:
+                    sgn = -1.
+                else:
+                    sgn = 1.
+                hdr['cdelt%d' % ax] = sgn * newscale[i] / 3600.
+                self.wcsinfo.wcs.cdelt[(ax - 1)] = sgn * newscale[i] / 3600.
 
-            elif self.wcsinfo.wcs.has_pc and \
-                    np.isclose(self.wcsinfo.wcs.cdelt[raax-1], 1.) and \
-                    np.isclose(self.wcsinfo.wcs.cdelt[decax-1], 1.):
-                """
-                These conditions arise when you generate a header from a
-                WCS object that came from a file that had a CD matrix.
-                The astropy code creates a strange hybrid where it shifts the
-                CD matrix to a PC matrix, and then just sets the CDELTn
-                keywords to 1.0
-                """
-
-                """ Get PA in degrees """
-                pa = coords.matrix_to_rot(self.wcsinfo.wcs.pc, raax=raax-1,
-                                          decax=decax-1)
-                """
-                Create a new cd matrix based on the pixel scale
-                """
-                cd = coords.rscale_to_cdmatrix(newscale[0], pa,
-                                               pixscale2=newscale[1],
-                                               verbose=False)
-                """ Transfer info to wcsinfo and header """
-                self.wcsinfo.wcs.pc = cd
-                hdr['PC%d_%d' % (raax, raax)] = cd[0, 0]
-                hdr['PC%d_%d' % (raax, decax)] = cd[0, 1]
-                hdr['PC%d_%d' % (decax, raax)] = cd[1, 0]
-                hdr['PC%d_%d' % (decax, decax)] = cd[1, 1]
-
-            else:
-                """ 
-                If there is no CD matrix then we have a CDELT + PC matrix setup
-                and we just need to update the CDELT parameters
-                """
-                for i, ax in enumerate([self.raaxis, self.decaxis]):
-                    if ax == self.raaxis:
-                        sgn = -1.
-                    else:
-                        sgn = 1.
-                    hdr['cdelt%d' % ax] = sgn * newscale[i] / 3600.
-                    self.wcsinfo.wcs.cdelt[(ax-1)] = sgn * newscale[i] / 3600.
+                self.wcsinfo.wcs.cdelt[(ax-1)] = sgn * newscale[i] / 3600.
 
     # -----------------------------------
 
@@ -396,11 +376,10 @@ class WcsHDU(pf.PrimaryHDU):
                                          imcentradec[0, decax])
 
         """ Get the pixel scale and image rotation """
-        pixscale = wcs.utils.proj_plane_pixel_scales(wcsinfo.celestial) \
-            * 3600.
-
         impa = coords.matrix_to_rot(wcsinfo.pixel_scale_matrix, raax=raax,
                                     decax=decax)
+        pixscale = wcs.utils.proj_plane_pixel_scales(wcsinfo.celestial) \
+            * 3600.
 
         """ Summarize the WCS information """
         if verbose:
@@ -1189,7 +1168,7 @@ class WcsHDU(pf.PrimaryHDU):
             verbose - Print out useful information if True (the default)
         """
 
-        ## NEED TO ADD A CHECK FOR VALUES OF X1, X2, ETC. ##
+        # NEED TO ADD A CHECK FOR VALUES OF X1, X2, ETC. ##
         
         """
         Cut out the subimage based on the bounds.
