@@ -59,10 +59,12 @@ class WcsHDU(pf.PrimaryHDU):
         Check the format of the input info and get the data and header info
         """
         hdu = None
+        infile = None
         if isinstance(indat, str):
             hdu = self.read_from_file(indat, verbose=verbose)
             data = hdu[hext].data
             hdr = hdu[hext].header
+            infile = indat
         elif isinstance(indat, pf.HDUList):
             hdu = indat
             data = hdu[hext].data
@@ -98,9 +100,9 @@ class WcsHDU(pf.PrimaryHDU):
             super(WcsHDU, self).__init__(data, hdr)
         else:
             super().__init__(data, hdr)
+        self.infile = infile
 
         """ Set some general default values """
-        self.infile = None
         self.found_rms = False
         self.fftconj = None
 
@@ -1017,7 +1019,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def make_objmask(self, nsig=1., init_kernel=3, bpm=None):
+    def make_objmask(self, nsig=0.7, init_kernel=3, bpm=None, flat=None):
         """
 
         Makes a mask that is intended to indicate regions of the image
