@@ -506,6 +506,22 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def copy(self):
+        """
+        Returns a copy of the WcsHDU object
+        """
+
+        """ Use the built-in copy methods for the data and header """
+        data = self.data.copy()
+        hdr = self.header.copy()
+
+        """ Return a new WcsHDU object """
+        newhdu = WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
+        newhdu.infile = self.infile
+        return newhdu
+
+    # -----------------------------------------------------------------------
+
     def cross_correlate(self, other, padfrac=0.6, shift=True, datacent=None,
                         datasize=None, othercent=None, hext=0,
                         reset_fft=False):
@@ -615,18 +631,19 @@ class WcsHDU(pf.PrimaryHDU):
         """
         hdr = inhdr.copy()
         wcskeys = ['ra', 'dec']
-        for j in range(1, self.wcsinfo.wcs.naxis + 1):
-            for key in ['ctype', 'crpix', 'crval', 'cunit', 'crota']:
-                wcskeys.append('%s%d' % (key, j))
-            for k in range(1, self.wcsinfo.wcs.naxis + 1):
-                for key in ['pc', 'cd']:
-                    wcskeys.append('%s%d_%d' % (key, j, k))
+        if self.wcsinfo is not None:
+            for j in range(1, self.wcsinfo.wcs.naxis + 1):
+                for key in ['ctype', 'crpix', 'crval', 'cunit', 'crota']:
+                    wcskeys.append('%s%d' % (key, j))
+                for k in range(1, self.wcsinfo.wcs.naxis + 1):
+                    for key in ['pc', 'cd']:
+                        wcskeys.append('%s%d_%d' % (key, j, k))
 
-        for key in wcskeys:
-            if key.upper() in hdr.keys():
-                del hdr[key]
-                if debug:
-                    print('Deleting original %s keyword' % key.upper())
+            for key in wcskeys:
+                if key.upper() in hdr.keys():
+                    del hdr[key]
+                    if debug:
+                        print('Deleting original %s keyword' % key.upper())
 
         """ Create a new output header, according to keeplist """
         if keeplist != 'all':
