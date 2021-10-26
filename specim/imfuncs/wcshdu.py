@@ -771,11 +771,11 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         self.wcsinfo = wcshdu.wcsinfo
+        self.raaxis = wcshdu.raaxis
+        self.decaxis = wcshdu.decaxis
         self.pixscale = wcshdu.pixscale
         self.impa = wcshdu.impa
         self.radec = wcshdu.radec
-        self.raaxis = wcshdu.raaxis
-        self.decaxis = wcshdu.decaxis
 
     # -----------------------------------------------------------------------
 

@@ -1025,7 +1025,7 @@ class Image(dict):
             print('')
             if self.infile is not None:
                 print('Input file:  %s' % self.infile)
-            subim.writeto(outfile, overwrite=True)
+            subim.writeto(outfile)
             print('Wrote postage stamp cutout to %s' % outfile)
         else:
             return subim
@@ -1718,6 +1718,10 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
         whtfile = infile.replace('.fits', '_%s.fits' % whtsuff)
         outwht = outfile.replace('.fits', '_%s.fits' % whtsuff)
         whtfits = Image(whtfile)
+        whtfits['input'].copy_wcsinfo(infits['input'])
+        whdr = whtfits.header
+        wwcsinfo = whtfits['input'].wcsinfo
+        whtfits['input'].header = whtfits['input'].make_hdr_wcs(whdr, wwcsinfo)
         whtfits.poststamp_radec(imcent, imsize, outscale=scale,
                                 outfile=outwht, verbose=verbose)
         if makerms:
