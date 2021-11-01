@@ -164,7 +164,7 @@ class WcsHDU(pf.PrimaryHDU):
     """ Pixel scale """
     @property
     def pixscale(self):
-        return self.__pixscale
+        return self._pixscale
 
     @pixscale.setter
     def pixscale(self, pixscale):
@@ -198,7 +198,7 @@ class WcsHDU(pf.PrimaryHDU):
          whether the coordinate tranform is stored in a (CDELT, PC matrix)
          format or in a (CD matrix) format.
         """
-        self.__pixscale = newscale
+        self._pixscale = newscale
 
         """
         Convert to a standard format within the wcsinfo object whatever the
@@ -244,7 +244,7 @@ class WcsHDU(pf.PrimaryHDU):
     """ CRPIX values """
     @property
     def crpix(self):
-        return self.__crpix
+        return self._crpix
 
     @crpix.setter
     def crpix(self, crpix):
@@ -258,19 +258,19 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ If crpix is None then don't change anything """
         if crpix is None:
+            self._crpix = None
             return
-
-        """ Check dimensionality """
-        if len(crpix) != len(self.wcsinfo.wcs.crpix):
-            raise IndexError(' Input crpix array length does not match'
-                             ' length of current crpix array')
 
         """
         Update the CRPIX array assuming that the input is in the correct
         format
         """
-        if isinstance(crpix, list) or isinstance(crpix, tuple) \
-                or isinstance(crpix, np.ndarray):
+        if isinstance(crpix, (list, tuple, np.ndarray)):
+            """ Check dimensionality """
+            if len(crpix) != len(self.wcsinfo.wcs.crpix):
+                raise IndexError(' Input crpix array length does not match'
+                                 ' length of current crpix array')
+            """ Set the CRPIX values in both the header and wcsinfo"""
             for i in range(len(crpix)):
                 self.wcsinfo.wcs.crpix[i] = crpix[i]
                 self.header['crpix%d' % (i+1)] = crpix[i]
@@ -278,7 +278,48 @@ class WcsHDU(pf.PrimaryHDU):
             raise TypeError('crpixarr must be list, tuple, or ndarray')
 
         """ Update the attribute"""
-        self.__crpix = np.array(crpix)
+        self._crpix = np.array(crpix)
+
+    # -----------------------------------
+
+    """ CRVAL values """
+    @property
+    def crval(self):
+        return self._crval
+
+    @crval.setter
+    def crval(self, crval):
+        """
+
+        Updates the crval attribute and also updates the crval values in:
+          1. the header
+          2. the wcsinfo object
+
+        """
+
+        """ If crval is None then don't change anything """
+        if crval is None:
+            self._crval = None
+            return
+
+        """
+        Update the CRVAL array assuming that the input is in the correct
+        format
+        """
+        if isinstance(crval, (list, tuple, np.ndarray)):
+            """ Check dimensionality """
+            if len(crval) != len(self.wcsinfo.wcs.crval):
+                raise IndexError(' Input crpix array length does not match'
+                                 ' length of current crval array')
+            """ Set the CRVAL values in both the header and wcsinfo """
+            for i in range(len(crval)):
+                self.wcsinfo.wcs.crval[i] = crval[i]
+                self.header['crval%d' % (i+1)] = crval[i]
+        else:
+            raise TypeError('crvalarr must be list, tuple, or ndarray')
+
+        """ Update the attribute"""
+        self._crval = np.array(crval)
 
     # -----------------------------------------------------------------------
 
@@ -399,6 +440,8 @@ class WcsHDU(pf.PrimaryHDU):
         self.radec = radec
         self.pixscale = pixscale
         self.impa = impa
+        self.crpix = wcsinfo.wcs.crpix
+        self.crval = wcsinfo.wcs.crval
 
     # -----------------------------------------------------------------------
 
@@ -727,10 +770,12 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def update_crval(self, crvalarr, verbose=True):
+    def update_crval(self, crvalarr):
         """
 
-        Updates the CRVAL array in the wcsinfo structure
+        Updates the CRVAL array in the wcsinfo structure.
+        *** This has been supplemented by the crval @property code, but
+            is being kept in for legacy reasons ***
 
         Inputs:
          crvalarr - a list, tuple, or numpy ndarray containing the new 
@@ -739,26 +784,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """
 
-        """ Check dimensionality """
-        if len(crvalarr) != len(self.wcsinfo.wcs.crval):
-            raise IndexError(' Input crval array length does not match'
-                             ' length of current crval array')
-
-        """
-        Update the CRVAL array assuming that the input is in the correct
-        format
-        """
-        if isinstance(crvalarr, list) or isinstance(crvalarr, tuple) \
-                or isinstance(crvalarr, np.ndarray):
-            if verbose:
-                print('Updating CRVAL array')
-            for i in range(len(crvalarr)):
-                if verbose:
-                    print('  %f  -->  %f' % (self.wcsinfo.wcs.crval[i],
-                                             crvalarr[i]))
-                self.wcsinfo.wcs.crval[i] = crvalarr[i]
-        else:
-            raise TypeError('crvalarr must be list, tuple, or ndarray')
+        self.crval = crvalarr
 
     # -----------------------------------------------------------------------
 
@@ -1227,10 +1253,7 @@ class WcsHDU(pf.PrimaryHDU):
             # radec = self.wcsinfo.wcs_pix2world(xy, 0)[0]
             # hdr['crpix1'] = nx / 2.
             # hdr['crpix2'] = ny / 2.
-            # hdr['crval1'] = radec[0]
-            # hdr['crval2'] = radec[1]
-            hdr['crpix1'] -= x1
-            hdr['crpix2'] -= y1
+            self.crpix = [hdr['crpix1'] - x1, hdr['crpix2'] - y1]
 
         """ Put the new data and header into a WcsHDU format """
         subim = WcsHDU(data, hdr, verbose=False, wcsverb=False)
