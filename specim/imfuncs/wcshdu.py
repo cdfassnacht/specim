@@ -1575,6 +1575,8 @@ class WcsHDU(pf.PrimaryHDU):
                 (hdustr, gain)
             if verbose:
                 print('   Converted units to e- using gain = %f' % gain)
+        else:
+            keystrb1 = None
     
         """ Divide by the exposure time if requested """
         if texp > 0.:
@@ -1587,8 +1589,11 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.header['gain'] = (texp,
                                   'If units are e-/s then gain=t_exp')
             tmp.header['bunit'] = ('Electrons/sec', 'See %s header' % keystr)
-            if keystrb1 in tmp.header.keys():
-                afterkey = keystrb1
+            if keystrb1 is not None:
+                if keystrb1 in tmp.header.keys():
+                    afterkey = keystrb1
+                else:
+                    afterkey = 'gain'
             else:
                 afterkey = 'gain'
             tmp.header.set(keystr,
