@@ -378,7 +378,7 @@ class WcsHDU(pf.PrimaryHDU):
         except:
             if verbose:
                 if self.infile is not None:
-                    print('No WCS information in image header: %s',
+                    print('No WCS information in image header: %s' %
                           self.infile)
                 else:
                     print('No WCS information in image header')
@@ -1652,19 +1652,19 @@ class WcsHDU(pf.PrimaryHDU):
                 keystr = 'dflat'+str(hext)
             tmp.header[keystr] = \
                 'Dark-sky flat image for %s is %s with mean=%f' % \
-                (hdustr, darkskyflat.infile, dsflatmeanmean)
+                (hdustr, darkskyflat.infile, dsflatmean)
             print('    Divided by dark-sky flat: %s' %
                   darkskyflat.infile)
 
         """ Subtract the sky level if requested """
         if zerosky is not None:
-            tmp.sky_to_zero(method=zerosky, verbose=verbose)
+            skylev = tmp.sky_to_zero(method=zerosky, verbose=verbose)
             if hext == 0:
                 keystr = 'zerosky'
             else:
                 keystr = 'zerosky'+str(hext)
             tmp.header[keystr] = ('%s: subtracted constant sky level of %f' %
-                                  (hdustr, m))
+                                  (hdustr, skylev))
     
         """ Flip if requested """
         if flip is not None:

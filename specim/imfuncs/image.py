@@ -32,7 +32,7 @@ Stand-alone functions
                          positions of the catalog objects.
 """
 
-from math import log, sqrt, pi, fabs
+from math import log, sqrt, pi
 from math import cos as mcos, sin as msin
 
 import numpy as np
@@ -340,7 +340,7 @@ class Image(dict):
 
         """ Create the base variance image """
         data = self[dmode].data.copy()
-        varval = (rms)**2
+        varval = rms**2
         var = np.ones(data.shape) * varval
 
         """
@@ -1415,8 +1415,8 @@ class Image(dict):
          
          THIS NEEDS TO BE UPDATED TO USE THE WCSINFO INSTEAD!!!
         """
-        centx =  (self['plotim'].data.shape[1] + 1.) / 2.
-        centy =  (self['plotim'].data.shape[0] + 1.) / 2.
+        centx = (self['plotim'].data.shape[1] + 1.) / 2.
+        centy = (self['plotim'].data.shape[0] + 1.) / 2.
         racent, deccent = self['plotim'].wcsinfo.wcs_pix2world(centx, centy, 1)
         imcent = SkyCoord(racent, deccent, unit='deg', frame='fk5')
         fovcent = coords.radec_to_skycoord(ra, dec)
@@ -1752,8 +1752,8 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
             var = cutsci * 0. + rms**2
             mask = snr > 1.
             var[mask] += (cutsci / cutwht)[snr > 1.]
-            outrms = outfile.replace('.fits','_rms.fits')
-            outsnr = outfile.replace('.fits','_snr.fits')
+            outrms = outfile.replace('.fits', '_rms.fits')
+            outsnr = outfile.replace('.fits', '_snr.fits')
             rmsarr = np.sqrt(var)
             rmshdu = pf.PrimaryHDU(rmsarr)
             rmshdu.header['data_im'] = infile
