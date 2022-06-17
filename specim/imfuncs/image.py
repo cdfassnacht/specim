@@ -1171,7 +1171,7 @@ class Image(dict):
         if outfile:
             print('')
             print('Wrote smoothed image to %s' % outfile)
-            self['smooth'].writeto(outfile, overwrite=True)
+            self['smooth'].writeto(outfile)
             print('')
 
     # -----------------------------------------------------------------------
