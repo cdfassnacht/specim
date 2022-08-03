@@ -180,7 +180,7 @@ class Spec2d(imf.Image):
          as the data file and thus should be trimmed, transposed, etc. in the
          same way
         """
-        if 'var' in self.keys():
+        if self['var'] is not None:
             vdata = self['var'].data[ymin:ymax, xmin:xmax]
             if transpose:
                 self.vardata = vdata.transpose()

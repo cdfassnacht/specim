@@ -15,8 +15,12 @@ import numpy as np
 from numpy.fft import fft2, ifft2, fftshift
 from scipy import ndimage
 from scipy.ndimage import filters
+
 from astropy import wcs
+from astropy import units as u
 from astropy.io import fits as pf
+from astropy.coordinates import SkyCoord
+
 from cdfutils import coords, datafuncs as df
 from .imutils import open_fits
 
@@ -117,6 +121,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.crpix = None
         self.crval = None
         self.cdelt = None
+        self.pointing = None
 
         """
         Now add WCS attributes to the class.
@@ -147,7 +152,6 @@ class WcsHDU(pf.PrimaryHDU):
     """
     Use properties to set many/most of the attributes that are associated
      with this class.
-    These attributes include: dpi, mode, title, ...
 
     For an attribute called x, use two declarations as can be seen below:
      @property
@@ -445,6 +449,31 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def get_pointing(self, rakey='RA', deckey='DEC'):
+        """
+
+        For many ground-based telescopes, raw data files from the telescope
+        do not include WCS information in the FITS standard format.
+        However, many include the coordinates at which the telescope control
+        thinks the telescope is pointing.  This method extracts this information
+        from the fits header if it exists.
+
+        """
+
+        if rakey in self.header.keys() and deckey in self.header.keys():
+            ra = self.header[rakey]
+            dec = self.header[deckey]
+            if isinstance(ra, str) and isinstance(dec, str):
+                self.pointing = \
+                    SkyCoord('%s %s' % (ra, dec), unit=(u.hourangle, u.deg))
+            elif isinstance(ra, float) and isinstance(dec, float):
+                self.pointing = \
+                    SkyCoord('%f %f' % (ra, dec), unit=(u.deg, u.deg))
+        else:
+            self.pointing = None
+
+    # -----------------------------------------------------------------------
+
     def __add__(self, other):
         """
 
@@ -673,7 +702,7 @@ class WcsHDU(pf.PrimaryHDU):
          a CDELT + PC matrix from the cutout.
         """
         hdr = inhdr.copy()
-        wcskeys = ['ra', 'dec']
+        wcskeys = []
         if self.wcsinfo is not None:
             for j in range(1, self.wcsinfo.wcs.naxis + 1):
                 for key in ['ctype', 'crpix', 'crval', 'cunit', 'crota']:
