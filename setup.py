@@ -1,75 +1,30 @@
-import os, re
-from os import sys
-from distutils.core import setup
-from distutils.command.install import INSTALL_SCHEMES
-from imp import find_module
-#from importlib import find_module
+import setuptools
 
-for scheme in INSTALL_SCHEMES.values():
-    scheme['data'] = scheme['purelib']
+# with open('README.md', 'r', encoding='utf-8') as fh:
+#     long_description = fh.read()
 
-""" Check for required modules """
-try:
-    find_module('numpy')
-except:
-    sys.exit('### Error: python module numpy not found')
-    
-try:
-    find_module('scipy')
-except:
-    sys.exit('### Error: python module scipy not found')
-    
-try:
-    find_module('astropy')
-except ImportError:
-    try:
-        find_module('pyfits')
-    except ImportError:
-        sys.exit('### Error: Neither astropy nor pyfits found.')
-
-try:
-    find_module('matplotlib')
-except ImportError:
-    sys.exit('### Error: python module matplotlib not found')
-
-try:
-    find_module('cdfutils')
-except ImportError:
-    sys.exit('### Error: python module cdfutils not found. '
-             'Download and install from github cdfassnacht/cdfutils')
-
-
-#try: find_module('MySQLdb')
-#except: sys.exit('### Error: python module MySQLdb not found')
-
-
-verstr = "unknown"
-try:
-    parentdir = os.getcwd()+'/'
-    verstrline = open(parentdir+'/specim/_version.py', "rt").read()
-except EnvironmentError:
-    pass # Okay, there is no version file.
-else:
-    VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
-    mo = re.search(VSRE, verstrline, re.M)
-    if mo:
-        verstr = mo.group(1)
-    else:
-        raise RuntimeError("unable to find version in " + parentdir + "+specim/_version.py")
-
-
-setup(
-    name = 'specim',
-    version = verstr,#'0.1.3',
-    author = 'Chris Fassnacht',
-    author_email = 'cdfassnacht@ucdavis.edu',
-    scripts=[],
-    license = 'LICENSE.txt',
-    description = 'Code for visualizing fits images and for'
-    'extracting and plotting spectra',
-    #long_description = open('README.txt').read(),
-    requires = ['numpy','scipy','astropy','matplotlib','cdfutils'],
-    packages = ['specim', 'specim.imfuncs', 'specim.specfuncs'],
-    #package_dir = {'':'src'},
+setuptools.setup(
+    name='specim',
+    version='3.0',
+    author='Chris Fassnacht',
+    author_email='cdfassnacht@ucdavis.edu',
+    description='Code for visualizing fits images and for extracting spectra',
+    # long_description=long_description,
+    long_description_content_type='text/markdown',
+    url='https://github.com/cdfassnacht/specim',
+    packages=setuptools.find_packages(),
+    classifiers=[
+        'Programming Language :: Python :: 3',
+        'License :: OSI Approved :: MIT License',
+        'Operating System :: OS Independent',
+    ],
+    python_requires='>=3.6',
+    install_requires=[
+        'numpy>=1.10',
+        'scipy>=1.1',
+        'astropy>=3.1',
+        'matplotlib>=3.0',
+        'cdfutils'
+    ],
     package_data = {'specim.specfuncs' : ['Data/*']}
 )
