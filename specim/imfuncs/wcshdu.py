@@ -121,6 +121,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.crpix = None
         self.crval = None
         self.cdelt = None
+        self.pc = None
         self.pointing = None
 
         """
@@ -325,6 +326,49 @@ class WcsHDU(pf.PrimaryHDU):
         """ Update the attribute"""
         self._crval = np.array(crval)
 
+    # -----------------------------------
+
+    """ PC matrix values """
+    @property
+    def pc(self):
+        return self._pc
+
+    @pc.setter
+    def pc(self, pc):
+        """
+
+        Updates the pc attribute and also updates the pc matrix values in:
+          1. the header
+          2. the wcsinfo object
+
+        """
+
+        """ If pc is None then don't change anything """
+        if pc is None:
+            self._pc = None
+            return
+
+        """
+        Update the pc array assuming that the input is in the correct
+        format
+        """
+        if isinstance(pc, np.ndarray):
+            """ Check dimensionality """
+            if pc.size != self.wcsinfo.wcs.pc.size:
+                raise IndexError(' Input PC matrix size does not match'
+                                 ' size of current PC matrix')
+            """ Set the PC values in both the header and wcsinfo """
+            self.wcsinfo.wcs.pc = pc
+            hdr2 = self.wcsinfo.to_header()
+            for k in hdr2.keys():
+                if k[:2] == 'PC':
+                    self.header[k] = hdr2[k]
+        else:
+            raise TypeError('pc must be a numpy ndarray')
+
+        """ Update the attribute"""
+        self._pc = pc
+
     # -----------------------------------------------------------------------
 
     def read_from_file(self, infile, verbose=True):
@@ -446,6 +490,8 @@ class WcsHDU(pf.PrimaryHDU):
         self.impa = impa
         self.crpix = wcsinfo.wcs.crpix
         self.crval = wcsinfo.wcs.crval
+        if wcsinfo.wcs.has_pc():
+            self.pc = wcsinfo.wcs.pc
 
     # -----------------------------------------------------------------------
 
@@ -515,13 +561,20 @@ class WcsHDU(pf.PrimaryHDU):
         """ Do the addition """
         if isinstance(other, (float, int)):
             data -= other
+            subitem = other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
             data -= other.data
+            if other.infile is not None:
+                subitem = other.infile
+            else:
+                other.sigma_clip()
+                subitem = 'a file with mean %9.3f' % other.mean_clip
         else:
             raise TypeError('\nAdded object must be one of: int, float, '
                             'WcsHDU, PrimaryHDU, or ImageHDU')
 
         """ Return a new WcsHDU object """
+        hdr['subinfo'] = 'Subtracted %s' % subitem
         return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
 
     # -----------------------------------------------------------------------
