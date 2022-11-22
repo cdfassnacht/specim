@@ -1663,7 +1663,7 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, outfile=None,
 
 def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
                 makerms=False, rmssuff='_rms', statcent=None, 
-                statsize=100, verbose=True):
+                statsize=100, texp=None, verbose=True):
     """
     Makes a cutout from an input image, based on a requested (RA, dec) center
      and an image size in arcsec.
@@ -1751,7 +1751,10 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
             """
             var = cutsci * 0. + rms**2
             mask = snr > 1.
-            var[mask] += (cutsci / cutwht)[snr > 1.]
+            if texp is not None:
+                var[mask] += cutsci[mask] / texp
+            else:
+                var[mask] += (cutsci / cutwht)[mask]
             outrms = outfile.replace('.fits', '_rms.fits')
             outsnr = outfile.replace('.fits', '_snr.fits')
             rmsarr = np.sqrt(var)

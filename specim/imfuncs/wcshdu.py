@@ -1335,10 +1335,14 @@ class WcsHDU(pf.PrimaryHDU):
             # radec = self.wcsinfo.wcs_pix2world(xy, 0)[0]
             # hdr['crpix1'] = nx / 2.
             # hdr['crpix2'] = ny / 2.
-            self.crpix = [hdr['crpix1'] - x1, hdr['crpix2'] - y1]
+            crpix = [hdr['crpix1'] - x1, hdr['crpix2'] - y1]
+        else:
+            crpix = None
 
         """ Put the new data and header into a WcsHDU format """
         subim = WcsHDU(data, hdr, verbose=False, wcsverb=False)
+        if crpix is not None:
+            subim.crpix = crpix
 
         """ Print out useful information """
         if verbose:
