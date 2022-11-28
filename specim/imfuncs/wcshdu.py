@@ -887,6 +887,46 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def make_ones(self):
+        """
+
+        Creates a copy of this WcsHDU object, but with the data replaced by
+        an array of 1.0 values.  Because this new WcsHDU object maintains
+        the WCS information of the original object, it can be used for,
+        e.g., an input to swarp.
+
+        """
+
+        newhdu = self.copy()
+        newhdu.data = np.ones(self.data.shape)
+
+        return newhdu
+
+    # -----------------------------------------------------------------------
+
+    def make_texp(self, texpkey):
+        """
+
+        Creates an exposure time map.
+        Because this new WcsHDU object maintains
+        the WCS information of the original object, it can be used for,
+        e.g., an input to swarp.
+
+        """
+
+        newhdu = self.copy()
+        newhdu.data = np.ones(self.data.shape)
+
+        if texpkey.upper() in self.header.keys():
+            newhdu.data *= self.header[texpkey]
+        else:
+            raise KeyError('Exposure time keyword %s not found in header'
+                           % texpkey)
+
+        return newhdu
+
+    # -----------------------------------------------------------------------
+
     def flip(self, method):
         """
 
@@ -999,6 +1039,19 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def get_rms(self, statcent, statsize, centtype, sizetype=None):
+        """
+
+        A front-end to sigma_clip that is used primarily to find the rms in
+        a certain part of the data.  The main point of this method is just
+        to set the "statsec" region that then gets passed to the
+        sigma_clip method.
+
+        """
+        print('Not yet implemented')
+
+    # -----------------------------------------------------------------------
+
     def smooth(self, size, smtype='median', invar=False):
         """
 
@@ -1096,7 +1149,8 @@ class WcsHDU(pf.PrimaryHDU):
             
     # -----------------------------------------------------------------------
 
-    def make_bpm(self, type, nsig=10., goodval=1, outfile=None):
+    def make_bpm(self, type, nsig=10., goodval=1, smosize=5, smtype='median',
+                 var=None, outfile=None):
         """
 
         Makes a bad pixel mask (bpm) based on the data in this WcsHDU object.
@@ -1106,20 +1160,14 @@ class WcsHDU(pf.PrimaryHDU):
         NOTE: For now only the type='dark' option is supported
 
         Inputs:
-          type    - type of data.  Right now only type='dark' is supported
+          type    - type of data.  Right now only types 'dark' or 'sci'
+                    are supported
           nsig    - number of sigma deviation from the clipped mean to indicate
                     a bad pixel.  Default=10.
           goodval - The value (1 or 0) that indicates a good pixel in the
                     pixel mask.  Bad pixels will be indicated by the opposite
                     value.  Default=1
         """
-
-        """ Check type """
-        if type.lower() != 'dark':
-            raise TypeError('Currently only "dark" is supported')
-
-        """ Do a sigma clipping of the data """
-        self.sigma_clip()
 
         """ Set up the baseline mask, with all pixels set to the good value """
         if goodval == 1:
@@ -1132,10 +1180,53 @@ class WcsHDU(pf.PrimaryHDU):
             raise ValueError('goodval must be either 1 or 0')
 
         """
-        Identify pixels that deviate by more than nsig from the clipped mean
+        Do a sigma clipping of the data.
+        This will definitely be used for type "dark" and may be used for  
         """
-        diff = np.fabs(self.data - self.mean_clip)
-        bpm[diff > nsig * self.rms_clip] = badval
+        self.sigma_clip()
+
+        """ Check type and act accordingly """
+        if type.lower() == 'dark':
+            """
+            Get the difference image and the rms to use for the n-sigma
+            comparison
+            """
+            diff = np.fabs(self.data - self.mean_clip)
+            rms = self.rms_clip
+
+        elif type.lower() == 'sci':
+            """ Smooth the science image """
+            smodat = self.smooth(smosize, smtype=smtype)
+            """ 
+            Calculate the difference between the smoothed and unsmoothed data
+            """
+            diff = self.data - smodat
+            """
+            Calculate the rms using either the variance data
+            (strongly preferred) or the overall sky rms for the image (not
+            preferred)
+            """
+            if var is not None:
+                if isinstance(var, str):
+                    vardata = pf.getdata(var)
+                elif isinstance(var, np.ndarray):
+                    vardata = var.copy()
+                elif isinstance(var, WcsHDU, pf.PrimaryHDU, pf.ImageHDU):
+                    vardata = var.data.copy()
+                else:
+                    raise TypeError('var parameter is not an accepted data '
+                                    'type: (filename, numpy array, PrimaryHDU,'
+                                    ' ImageHDU, or WcsHDU')
+                rms = np.sqrt(vardata)
+            else:
+                rms = self.rms_clip
+
+        else:
+            raise TypeError('Currently only types "dark" or "sci" are'
+                            ' supported')
+
+        """ Flag the pixels that are more than n sigma too high """
+        bpm[np.fabs(diff) > nsig * rms] = badval
 
         if outfile is not None:
             pf.PrimaryHDU(bpm).writeto(outfile, overwrite=True)

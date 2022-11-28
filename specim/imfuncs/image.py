@@ -1724,44 +1724,52 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
         whtfits['input'].header = whtfits['input'].make_hdr_wcs(whdr, wwcsinfo)
         whtfits.poststamp_radec(imcent, imsize, outscale=scale,
                                 outfile=outwht, verbose=verbose)
-        if makerms:
-            if statcent is None:
-                raise ValueError(' *** Need to set statcent parameter '
-                                 'in order to make rms image')
-            rms = infits.get_rms(statcent, statsize)
-            cutsci = pf.getdata(outfile)
+    else:
+        outwht = None
+
+    """ Make an rms image if requested """
+    if makerms:
+        if statcent is None:
+            raise ValueError(' *** Need to set statcent parameter '
+                             'in order to make rms image')
+        rms = infits.get_rms(statcent, statsize)
+        cutsci = pf.getdata(outfile)
+        snr = filters.gaussian_filter(cutsci / rms, 1.)
+        """
+        Add the Poisson noise due to the astrophysical sources,
+        but this algorithm ONLY works if the following conditions are
+        satisfied:
+          1. Input image has units of e-/sec
+          2. Weight file is an (effective) exposure time image 
+        If these conditions hold, then for pixels in the input image
+        that have counts from sources, the counts are given as:
+          cts = N_e / t_exp.
+        Therefore, the variance in these pixels will be
+          var_cts = var_e- / t_exp^2 = N_e / t_exp^2
+                  = cts / t_exp
+        because the variance in electrons is just N_e since it is a Poisson 
+        process.
+        Therefore, with the weight file as an exposure time map, we have:
+          var_cts = img/wht
+        """
+        var = cutsci * 0. + rms**2
+        mask = snr > 1.
+        if texp is not None:
+            var[mask] += cutsci[mask] / texp
+        elif outwht is not None:
             cutwht = pf.getdata(outwht)
-            snr = filters.gaussian_filter(cutsci / rms, 1.)
-            """
-            Add the Poisson noise due to the astrophysical sources,
-            but this algorithm ONLY works if the following conditions are
-            satisfied:
-              1. Input image has units of e-/sec
-              2. Weight file is an (effective) exposure time image 
-            If these conditions hold, then for pixels in the input image
-            that have counts from sources, the counts are given as:
-               cts = N_e / t_exp.
-            Therefore, the variance in these pixels will be
-                var_cts = var_e- / t_exp^2 = N_e / t_exp^2
-                        = cts / t_exp
-            where the variance in electrons is just N_e since it is a Poisson 
-            process.
-            Therefore, with the weight file as an exposure time map, we have:
-               var_cts = img/wht
-            """
-            var = cutsci * 0. + rms**2
-            mask = snr > 1.
-            if texp is not None:
-                var[mask] += cutsci[mask] / texp
-            else:
-                var[mask] += (cutsci / cutwht)[mask]
-            outrms = outfile.replace('.fits', '_rms.fits')
-            outsnr = outfile.replace('.fits', '_snr.fits')
-            rmsarr = np.sqrt(var)
-            rmshdu = pf.PrimaryHDU(rmsarr)
-            rmshdu.header['data_im'] = infile
-            rmshdu.writeto(outrms, overwrite=True)
-            pf.PrimaryHDU(cutsci / rmsarr).writeto(outsnr, overwrite=True)
+            var[mask] += (cutsci / cutwht)[mask]
+        else:
+            raise ValueError('To create a RMS image either the whtsuff'
+                             ' or texp parameter must be set')
+        outrms = outfile.replace('.fits', '_rms.fits')
+        outsnr = outfile.replace('.fits', '_snr.fits')
+        rmsarr = np.sqrt(var)
+        rmshdu = pf.PrimaryHDU(rmsarr)
+        rmshdu.header['data_im'] = infile
+        rmshdu.writeto(outrms, overwrite=True)
+        pf.PrimaryHDU(cutsci / rmsarr).writeto(outsnr, overwrite=True)
+        pf.PrimaryHDU(var).writeto('test_var.fits', overwrite=True)
 
     """ Clean up """
     del infits
