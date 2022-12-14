@@ -73,6 +73,7 @@ class WcsHDU(pf.PrimaryHDU):
             hdu = indat
             data = hdu[hext].data
             hdr = hdu[hext].header
+            infile = indat.filename()
         elif isinstance(indat, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
             data = indat.data.copy()
             hdr = indat.header.copy()
@@ -377,9 +378,7 @@ class WcsHDU(pf.PrimaryHDU):
         directly from an input HDUList
         """
         if verbose:
-            print('')
             print('Loading file %s' % infile)
-            print('-----------------------------------------------')
 
         if os.path.isfile(infile):
             try:
@@ -596,9 +595,16 @@ class WcsHDU(pf.PrimaryHDU):
             data *= other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
             data *= other.data
+        elif isinstance(other, np.ndarray):
+            if other.shape != data.shape:
+                raise ValueError('\nThe WcsHDU.data and numpy ndarray'
+                                 ' have different sizes.\n\n')
+            else:
+                data *= other
         else:
-            raise TypeError('\nAdded object must be one of: int, float, '
-                            'WcsHDU, PrimaryHDU, or ImageHDU')
+            raise TypeError('\nMultiplied object must be one of the following:'
+                            '\n  int\n  float\n  WcsHDU\n  PrimaryHDU\n'
+                            '  ImageHDU\n  numpy ndarray')
 
         """ Return a new WcsHDU object """
         return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
@@ -1039,7 +1045,8 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def get_rms(self, statcent, statsize, centtype, sizetype=None):
+    def get_rms(self, statcent, statsize, centtype, sizetype=None,
+                verbose=True):
         """
 
         A front-end to sigma_clip that is used primarily to find the rms in
@@ -1048,7 +1055,43 @@ class WcsHDU(pf.PrimaryHDU):
         sigma_clip method.
 
         """
-        print('Not yet implemented')
+
+        """ Get the center of the region to be used for the statistics """
+        if centtype == 'radec':
+            if self.wcsinfo is not None:
+                w =self.wcsinfo
+                xy = w.all_world2pix([statcent], 1)[0]
+            else:
+                raise ValueError('\nType "radec" chosen but no wcs info '
+                                 'in this file.\n\n')
+        elif centtype == 'xy':
+            xy = statcent
+        else:
+            raise ValueError('\nstatcent parameter must be "radec" or "xy"\n')
+
+        """ Get the size of the region to be used for the statistics """
+        if sizetype is None:
+            sizetype = centtype
+        if sizetype == 'radec':
+            if self.wcsinfo is not None:
+                xysize = statsize / self.pixscale
+            else:
+                raise ValueError('\nType "radec" chosen but no wcs info '
+                                 'in this file.\n\n')
+        elif sizetype == 'xy':
+            xysize = statcent
+        else:
+            raise ValueError('\nsizecent parameter must be "radec",  "xy"'
+                             ' or None')
+
+        """ Set up the region for calculating the statistics"""
+        statsec = self.subim_bounds_xy(xy, xysize)
+
+        """ Calculate the rms """
+        self.sigma_clip(statsec=statsec)
+        if verbose:
+            print('RMS calculated in region [x1, y1, x2, y2]: ', statsec)
+            print('RMS = %f' % self.rms_clip)
 
     # -----------------------------------------------------------------------
 
@@ -1186,6 +1229,8 @@ class WcsHDU(pf.PrimaryHDU):
         self.sigma_clip()
 
         """ Check type and act accordingly """
+        varmask = None
+        smodat = None
         if type.lower() == 'dark':
             """
             Get the difference image and the rms to use for the n-sigma
@@ -1211,12 +1256,14 @@ class WcsHDU(pf.PrimaryHDU):
                     vardata = pf.getdata(var)
                 elif isinstance(var, np.ndarray):
                     vardata = var.copy()
-                elif isinstance(var, WcsHDU, pf.PrimaryHDU, pf.ImageHDU):
+                elif isinstance(var, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
                     vardata = var.data.copy()
                 else:
                     raise TypeError('var parameter is not an accepted data '
                                     'type: (filename, numpy array, PrimaryHDU,'
                                     ' ImageHDU, or WcsHDU')
+                varmask = vardata <= 0.
+                vardata[varmask] = 1.e-10
                 rms = np.sqrt(vardata)
             else:
                 rms = self.rms_clip
@@ -1227,6 +1274,21 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Flag the pixels that are more than n sigma too high """
         bpm[np.fabs(diff) > nsig * rms] = badval
+        if varmask is not None:
+            bpm[varmask] = badval
+
+        """
+        Make cosmetic fixes on the image if it is a science image.  
+        These updates should not affect the final coadded image, since they
+         will be associated with zero weight, but will make the individual
+         exposures look better.
+        """
+        if type.lower() == 'sci':
+            badmask = bpm == badval
+            if smodat is not None:
+                self.data[badmask] = smodat[badmask]
+                if self.infile is not None:
+                    self.writeto(self.infile)
 
         if outfile is not None:
             pf.PrimaryHDU(bpm).writeto(outfile, overwrite=True)
