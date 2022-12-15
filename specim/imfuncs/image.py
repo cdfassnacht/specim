@@ -1176,39 +1176,39 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def get_rms(self, centpos, size, dmode='input', verbose=True):
+    def get_rms(self, centpos, size, centtype, sizetype=None, dmode='input',
+                verbose=True):
         """
         Calculates the rms (by calling the sigma_clip method) by calculating
         the pixel value statistics in a region of the image defined by its
         center (centpos parameter) and its size (size parameter).
 
-        Inputs:
-          centpos - (x, y) coordinates of the center of the region, in pixels
-                    centpos can take any of the following formats:
-                     1. A 2-element numpy array
-                     2. A 2-element list:  [xsize, ysize]
-                     3. A 2-element tuple: (xsize, ysize)
-                     4. centpos=None.  In this case, the center of the cutout
-                        is just the center of the full image
-          size    - size of cutout (postage stamp) image, in pixels
-                    size can take any of the following formats:
-                     1. A single number (which will produce a square image)
-                     2. A 2-element numpy array
-                     3. A 2-element list:  [xsize, ysize]
-                     4. A 2-element tuple: (xsize, ysize)
-                     5. size=None.  In this case, the full image is used
-        """
+        Required inputs:
+        centpos - coordinates of the center of the region, in either
+            pixels (x, y) or WCS coordinates (ra, dec)
+            centpos can take any of the following formats:
+                1. A 2-element numpy array
+                2. A 2-element list:  [xcent, ycent]
+                3. A 2-element tuple: (xcent, ycent)
+                4. centpos=None.  In this case, the center of the cutout
+                   is just the center of the full image
+        size - size of cutout (postage stamp) image, in either pixels or
+            arcsec
+            size can take any of the following formats:
+                1. A single number (which will produce a square image)
+                2. A 2-element numpy array
+                3. A 2-element list:  [xsize, ysize]
+                4. A 2-element tuple: (xsize, ysize)
+                5. size=None.  In this case, the full image is used
+        centtype - either 'xy' or 'radec'.
+        sizetype - either 'xy', 'radec', or None.  If sizetype is None
+            (the default) then sizetype is the same as centtype
 
         """
-        Convert the center and size paramters into the coordinates of the
-        corners of the region
-        """
-        statsec = self[dmode].subim_bounds_xy(centpos, size)
-        print('')
-        print(statsec)
 
         """ Get the pixel statistics """
-        self[dmode].sigma_clip(statsec=statsec)
+        self[dmode].get_rms(centpos, size, centtype, sizetype=sizetype,
+                            verbose=verbose)
         if verbose:
             print('RMS = %f' % self[dmode].rms_clip)
         return self[dmode].rms_clip

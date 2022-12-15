@@ -1200,8 +1200,6 @@ class WcsHDU(pf.PrimaryHDU):
         The treatment is different depending on whether the data is a
         dark or bias frame (type='dark') or is a science image (type='sci').
 
-        NOTE: For now only the type='dark' option is supported
-
         Inputs:
           type    - type of data.  Right now only types 'dark' or 'sci'
                     are supported
