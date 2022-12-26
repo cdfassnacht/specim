@@ -1111,6 +1111,8 @@ class WcsHDU(pf.PrimaryHDU):
             print('RMS calculated in region [x1, y1, x2, y2]: ', statsec)
             print('RMS = %f' % self.rms_clip)
 
+        return {'rms': self.rms_clip, 'statcent': xy, 'statsec': statsec}
+
     # -----------------------------------------------------------------------
 
     def smooth(self, size, smtype='median', invar=False):
