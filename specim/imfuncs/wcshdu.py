@@ -74,9 +74,17 @@ class WcsHDU(pf.PrimaryHDU):
             data = hdu[hext].data
             hdr = hdu[hext].header
             infile = indat.filename()
-        elif isinstance(indat, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
+        elif isinstance(indat, (pf.PrimaryHDU, pf.ImageHDU)):
             data = indat.data.copy()
             hdr = indat.header.copy()
+            try:
+                infile = indat.fileinfo()['file'].name
+            except TypeError:
+                infile = None
+        elif isinstance(indat, WcsHDU):
+            data = indat.data.copy()
+            hdr = indat.header.copy()
+            infile = indat.infile
         elif isinstance(indat, np.ndarray):
             data = indat.copy()
             if inhdr is not None:
@@ -106,6 +114,16 @@ class WcsHDU(pf.PrimaryHDU):
         else:
             super().__init__(data, hdr)
         self.infile = infile
+        if infile is not None:
+            self.basename = os.path.basename(infile)
+            dirname = os.path.dirname(infile)
+            if dirname == '':
+                self.dirname = None
+            else:
+                self.dirname = dirname
+        else:
+            self.basename = None
+            self.dirname = None
 
         """ Set some general default values """
         self.found_rms = False
@@ -1767,10 +1785,10 @@ class WcsHDU(pf.PrimaryHDU):
             startstr = 'Processing data'
             if self.infile is not None:
                 startstr = '%s: %s' % (startstr, self.infile)
-            if 'OBJECT' in self.header.keys():
-                startstr = '%s  %s' % (startstr, self.header['object'])
             print(startstr)
-        
+            if 'OBJECT' in self.header.keys():
+                print(self.header['object'])
+
         """ Trim the data if requested """
         if trimsec is not None:
             x1, y1, x2, y2 = trimsec
@@ -1860,7 +1878,8 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.header[keystr] = \
                 'Flat field image for %s is %s with mean=%f' % \
                 (hdustr, flat.infile, flatmean)
-            print('   Divided by flat-field image: %s' % flat.infile)
+            if verbose:
+                print('   Divided by flat-field image: %s' % flat.infile)
     
         """ Apply the fringe correction if requested """
         if fringe is not None:
