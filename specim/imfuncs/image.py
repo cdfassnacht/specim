@@ -965,7 +965,7 @@ class Image(dict):
             print('')
             if self.infile is not None:
                 print('Input file:  %s' % self.infile)
-            subim.writeto(outfile, overwrite=True)
+            subim.writeto(outfile)
             print('Wrote cutout to %s' % outfile)
 
         else:
@@ -1270,7 +1270,7 @@ class Image(dict):
             sztmp = statsize
         else:
             sztmp = imsize
-        imrms = self.get_rms(xytmp, sztmp, verbose=verbose)
+        imrms = self.get_rms(xytmp, sztmp, 'xy', verbose=verbose)
 
         """ Now create the SNR image """
         subim = self.poststamp_xy(centpos, imsize, outfile=None,
@@ -1663,7 +1663,7 @@ def get_rms(infile, xcent, ycent, xsize, ysize=None, outfile=None,
 
 def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
                 makerms=False, rmssuff='_rms', statcent=None, 
-                statsize=100, texp=None, verbose=True):
+                statsize=None, stattype=None, texp=None, verbose=True):
     """
     Makes a cutout from an input image, based on a requested (RA, dec) center
      and an image size in arcsec.
@@ -1699,13 +1699,17 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
       statcent - List or tuple, e.g., [xcent, ycent], containing the
                  central location of a region that will be used to determine
                  the image statistics used to make the rms image.
-                 NOTE: This is given in pixels, even though the cutout
-                 center is given in (ra, dec)
-                 Goes along with the statsize parameter.
-      statsize - Size in pixels of the image statistics region that will be
+                 NOTE: This can be given in either pixels (x,y) or WCS
+                 coordinates (ra,dec).  The choice is indicated by the
+                 stattype parameter.
+                 Goes along with the statsize and stattype parameters.
+      statsize - Size in of the image statistics region that will be
                  used to determine the rms level.  This can be either a
                  single number (for a square region) or a 2-element
-                 tuple / list for a non-square region
+                 tuple / list for a non-square region.  The units for the
+                 size are set by the stattype parameter
+      stattype - Sets the units for statcent (either pixels or decimal degrees)
+                 and statsize (either pixels or arcsec)
     """
 
     """ Make the input file cutout """
@@ -1732,7 +1736,17 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
         if statcent is None:
             raise ValueError(' *** Need to set statcent parameter '
                              'in order to make rms image')
-        rms = infits.get_rms(statcent, statsize)
+        if statsize is None:
+            raise ValueError(' *** Need to set statsize parameter '
+                             'in order to make rms image')
+        if stattype is None:
+            raise ValueError(' *** Need to set stattype parameter '
+                             ' to either "radec" or "pix" in order to make'
+                             ' rms image')
+        else:
+            if stattype != 'radec' and stattype[:3] != 'pix':
+                raise ValueError('stattype must be either "radec" or "pix"')
+        rms = infits.get_rms(statcent, statsize, stattype)
         cutsci = pf.getdata(outfile)
         snr = filters.gaussian_filter(cutsci / rms, 1.)
         """

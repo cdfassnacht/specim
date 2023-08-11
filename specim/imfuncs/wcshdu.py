@@ -1082,7 +1082,7 @@ class WcsHDU(pf.PrimaryHDU):
             else:
                 raise ValueError('\nType "radec" chosen but no wcs info '
                                  'in this file.\n\n')
-        elif centtype == 'xy':
+        elif centtype == 'xy' or centtype == 'pix':
             xy = statcent
         else:
             raise ValueError('\nstatcent parameter must be "radec" or "xy"\n')

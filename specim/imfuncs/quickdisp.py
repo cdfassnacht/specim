@@ -20,7 +20,7 @@ from matplotlib import pyplot as plt
 from specim import imfuncs as imf
 
 """ Check command line syntax """
-if len(sys.argv)<2:
+if len(sys.argv) < 2:
     print('')
     print('Usage:')
     print(' python quickdisp.py (flag1 flag1val flag2 flag2val...)'
@@ -122,4 +122,4 @@ im1.display(fmax=fmax, fmin=fmin, mode='xy', title=im1.infile)
 im1.start_interactive()
 plt.show()
 
-del(im1)
+del im1
