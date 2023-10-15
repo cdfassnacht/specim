@@ -52,6 +52,11 @@ class DispIm(WcsHDU):
         self.fig1 = None
         self.fig2 = None
         self.zoomsize = 31           # Size of postage-stamp zoom
+        self.intlabs = ['tltext', 'tctext', 'trtext',
+                        'bltext', 'bctext', 'brtext']
+        self.intlabpos = [(0.05, 0.9), (0.5, 0.9), (0.95, 0.9),
+                          (0.05, 0.1), (0.5, 0.1), (0.95, 0.1)]
+        self.intalign = ['left', 'center', 'right', 'left', 'center', 'right']
 
     # -----------------------------------------------------------------------
 
@@ -64,7 +69,6 @@ class DispIm(WcsHDU):
 
         dpar = DispParam(self)
         dpar.display_setup(mode=mode, verbose=verbose, debug=debug, **kwargs)
-
 
     # -----------------------------------------------------------------------
 
@@ -129,7 +133,7 @@ class DispIm(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def display(self, fscale='linear', ax=None, axlabel=True, fontsize=None,
+    def display(self, ax=None, axlabel=True, fontsize=None,
                 show_xyproj=False, mode='radec', dpar=None, debug=False):
         """
 
@@ -160,11 +164,11 @@ class DispIm(WcsHDU):
             self.fig2 = plt.figure(figsize=(10, 3))
             self.fig2.add_subplot(131)
         elif ax is not None:
-            # self.fig1 = plt.gcf()
-            self.ax1 = ax
+            self.fig1 = plt.gcf()
+            ax1 = ax
         else:
             self.fig1 = plt.gcf()
-            self.ax1 = plt.gca()
+            ax1 = plt.gca()
 
         """
         If no display parameters were passed via dpar, then set up the
@@ -179,19 +183,19 @@ class DispIm(WcsHDU):
 
         """ Set the actual range for the display """
         self.fmin = dpar.fmin
-        self.fmax = dpar.fmax
-        data, vmin, vmax = self.scale_data(fscale)
+        self.fmax = dpar['fmax']
+        data, vmin, vmax = self.scale_data(dpar.fscale)
 
         """ Display the image data """
         self.mode = mode
-        self.ax1.imshow(data, origin='lower', cmap=dpar.cmap, vmin=vmin,
-                        vmax=vmax, interpolation='nearest', extent=dpar.extval,
-                        aspect='equal')
+        ax1.imshow(data, origin='lower', cmap=dpar.cmap, vmin=vmin,
+                   vmax=vmax, interpolation='nearest', extent=dpar.extval,
+                   aspect='equal')
 
         """ Provide exterior labels for the plot, if requested """
         if dpar.axlab == 'off':
-            self.ax1.set_xticks([])
-            self.ax1.set_yticks([])
+            ax1.set_xticks([])
+            ax1.set_yticks([])
         elif axlabel is True:
             if mode == 'radec':
                 xlabel = 'Offset (arcsec)'
@@ -209,6 +213,15 @@ class DispIm(WcsHDU):
             plt.title(dpar.title)
 
         """ Provide interior labels for the plot, if requested """
+        for i, k in enumerate(self.intlabs):
+            if k in dpar.keys():
+                ax.text(self.intlabpos[i][0], self.intlabpos[i][1], dpar[k],
+                        horizontalalignment=self.intalign[i],
+                        color=dpar['intlabcolor'], transform=ax.transAxes,
+                        fontsize=10)
+
+        """ Save the current axis that was used to make the plot """
+        self.ax1 = ax1
 
         """
         Now add the x and y projections if requested (i.e., if show_xyproj

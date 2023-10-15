@@ -1484,7 +1484,7 @@ class Image(dict):
     # -----------------------------------------------------------------------
 
     def display(self, dmode='input', mode='radec', imcent=None, imsize=None,
-                fixnans=False, fscale='linear', axlabel=True, fontsize=None,
+                fixnans=False, axlabel=True, fontsize=None,
                 show_xyproj=False, verbose=False, debug=False, **kwargs):
         """
 
@@ -1534,6 +1534,7 @@ class Image(dict):
           cmap
           fmin
           fmax
+          fscale
           funits
           statsize
           mask
@@ -1578,7 +1579,7 @@ class Image(dict):
         Actually display the data
         """
         self.dispim = DispIm(self['plotim'])
-        self.dispim.display(fscale=fscale, axlabel=axlabel, fontsize=fontsize,
+        self.dispim.display(axlabel=axlabel, fontsize=fontsize,
                             show_xyproj=show_xyproj, mode=mode,
                             dpar=dpar)
 

@@ -7,16 +7,18 @@ image is displayed
 
 """
 
+import sys
 from math import fabs
-import numpy as np
 from matplotlib import pyplot as plt
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
+pyversion = sys.version_info.major
+
 # -----------------------------------------------------------------------
 
 
-class DispParam(object):
+class DispParam(dict):
     """
 
     A DispParam object sets and stores parameters that are used to govern
@@ -39,6 +41,12 @@ class DispParam(object):
 
         """
 
+        """ Call to the super class """
+        if pyversion == 2:
+            super(DispParam, self).__init__()
+        else:
+            super().__init__()
+
         """
         Initialize default display parameters
 
@@ -54,7 +62,7 @@ class DispParam(object):
         self.mean_clip = 0.0         # Value of the clipped mean
         self.rms_clip = 0.0          # Value of the clipped rms
         self.fmin = None             # Lower flux limit used in image display
-        self.fmax = None             # Upper flux limit used in image display
+        self.fscale = 'linear'       # Scale for flux in plot (like ds9 scale)
         self.statsize = 2048         # Stats region size if image is too big
         self.statsec = None          # Region to use for pixel statistics
         self.mode = 'radec'          # Default display units are arcsec offsets
@@ -65,6 +73,7 @@ class DispParam(object):
         self.facecolor = 'w'         # Color for region surrounding the plot
         self.zeropos = None          # Used to set non-default origin location
         self.axlab = 'on'            # Set to "off" to turn off all axis info
+        self['intlabcolor'] = 'w'    # Color for internal labels
 
         """ Link the data to be displayed to this DispParam object """
         self.plthdu = plthdu
@@ -272,20 +281,20 @@ class DispParam(object):
             """ If disprange was set, then just transfer the values """
             if fmin is not None and fmax is not None:
                 self.fmin = fmin
-                self.fmax = fmax
+                self['fmax'] = fmax
 
             else:  # Otherwise, query the user
                 """
                 Set some default values if there aren't already some in the
                  fmin and fmax containers
                 """
-                if self.fmin is None or self.fmax is None:
+                if self.fmin is None or 'fmax' not in self.keys():
                     plthdu.sigma_clip(verbose=verbose, mask=mask)
                     self.fmin = plthdu.mean_clip - 1. * plthdu.rms_clip
-                    self.fmax = plthdu.mean_clip + 10. * plthdu.rms_clip
+                    self['fmax'] = plthdu.mean_clip + 10. * plthdu.rms_clip
                 """ Query the user for new values """
                 tmpmin = self.fmin
-                tmpmax = self.fmax
+                tmpmax = self['fmax']
                 tmp = raw_input('Enter minimum flux value for display [%f]: '
                                 % tmpmin)
                 if len(tmp) > 0:
@@ -293,9 +302,9 @@ class DispParam(object):
                 tmp = raw_input('Enter maximum flux value for display [%f]: '
                                 % tmpmax)
                 if len(tmp) > 0:
-                    self.fmax = float(tmp)
+                    self['fmax'] = float(tmp)
             print('fmin:  %f' % self.fmin)
-            print('fmax:  %f' % self.fmax)
+            print('fmax:  %f' % self['fmax'])
 
         else:
             """
@@ -330,7 +339,7 @@ class DispParam(object):
 
             """ Set fmin and fmax in terms of clipped mean and sigma"""
             self.fmin = plthdu.mean_clip + fmin * plthdu.rms_clip
-            self.fmax = plthdu.mean_clip + fmax * plthdu.rms_clip
+            self['fmax'] = plthdu.mean_clip + fmax * plthdu.rms_clip
             print(' Clipped mean: %f' % plthdu.mean_clip)
             print(' Clipped rms:  %f' % plthdu.rms_clip)
             s1 = '-' if fmin < 0. else '+'
@@ -338,12 +347,14 @@ class DispParam(object):
             print(' fmin (mean %s %3d sigma):  %f' %
                   (s1, fabs(fmin), self.fmin))
             print(' fmax (mean %s %3d sigma):  %f' %
-                  (s2, fabs(fmax), self.fmax))
+                  (s2, fabs(fmax), self['fmax']))
 
     # -----------------------------------------------------------------------
 
     def display_setup(self, cmap='gaia', fmin=-1., fmax=10., funits='sigma',
-                      title=None,  mode='xy', zeropos=None, mask=None,
+                      fscale='linear', title=None,  mode='xy', zeropos=None,
+                      mask=None, tltext=None, tctext=None, trtext=None,
+                      bltext=None, bctext=None, brtext=None, scalebar=False,
                       verbose=False, dpi=100., facecolor='w', debug=False):
         """
         Sets the parameter values that will be used to actually
@@ -367,13 +378,23 @@ class DispParam(object):
             self.extval = None
 
         """ Set the image flux display limits """
+        self.fscale = fscale
         self.set_flux_limits(fmin, fmax, funits, mask=mask,
                              verbose=verbose, debug=debug)
 
         """ Set the color map """
         self.set_cmap(cmap)
 
+        """ Set the internal labels, if requested """
+        self.tltext = tltext
+        self.tctext = tctext
+        self.trtext = trtext
+        self.bltext = bltext
+        self.bctext = bctext
+        self.brtext = brtext
+
         """ Set other display parameters """
         self.title = title
+        self.scalebar = scalebar
         self.dpi = dpi
         self.facecolor = facecolor
