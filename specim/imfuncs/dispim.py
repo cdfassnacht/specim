@@ -129,7 +129,7 @@ class DispIm(WcsHDU):
 
     # -----------------------------------------------------------------------
 
-    def display(self, fscale='linear', axlabel=True, fontsize=None,
+    def display(self, fscale='linear', ax=None, axlabel=True, fontsize=None,
                 show_xyproj=False, mode='radec', dpar=None, debug=False):
         """
 
@@ -159,6 +159,9 @@ class DispIm(WcsHDU):
         if show_xyproj:
             self.fig2 = plt.figure(figsize=(10, 3))
             self.fig2.add_subplot(131)
+        elif ax is not None:
+            # self.fig1 = plt.gcf()
+            self.ax1 = ax
         else:
             self.fig1 = plt.gcf()
             self.ax1 = plt.gca()
@@ -168,7 +171,7 @@ class DispIm(WcsHDU):
         default display values
         """
         if dpar is None:
-            dpar = DispParam()
+            dpar = DispParam(self)
 
         """ Set figure / axes attributes based on the dpar values """
         # self.fig1.set_dpi(dpar.dpi)
@@ -185,8 +188,11 @@ class DispIm(WcsHDU):
                         vmax=vmax, interpolation='nearest', extent=dpar.extval,
                         aspect='equal')
 
-        """ Label the plot, if requested """
-        if axlabel is True:
+        """ Provide exterior labels for the plot, if requested """
+        if dpar.axlab == 'off':
+            self.ax1.set_xticks([])
+            self.ax1.set_yticks([])
+        elif axlabel is True:
             if mode == 'radec':
                 xlabel = 'Offset (arcsec)'
                 ylabel = 'Offset (arcsec)'
@@ -201,6 +207,8 @@ class DispIm(WcsHDU):
                 plt.ylabel(ylabel)
         if dpar.title is not None:
             plt.title(dpar.title)
+
+        """ Provide interior labels for the plot, if requested """
 
         """
         Now add the x and y projections if requested (i.e., if show_xyproj

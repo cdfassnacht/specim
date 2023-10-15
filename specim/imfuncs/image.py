@@ -1578,8 +1578,9 @@ class Image(dict):
         Actually display the data
         """
         self.dispim = DispIm(self['plotim'])
-        self.dispim.display(fscale, axlabel, fontsize, show_xyproj, mode,
-                            dpar)
+        self.dispim.display(fscale=fscale, axlabel=axlabel, fontsize=fontsize,
+                            show_xyproj=show_xyproj, mode=mode,
+                            dpar=dpar)
 
     # -----------------------------------------------------------------------
 

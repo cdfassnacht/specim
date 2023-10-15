@@ -64,6 +64,7 @@ class DispParam(object):
         self.dpi = 100.              # Dots per inch in saved image
         self.facecolor = 'w'         # Color for region surrounding the plot
         self.zeropos = None          # Used to set non-default origin location
+        self.axlab = 'on'            # Set to "off" to turn off all axis info
 
         """ Link the data to be displayed to this DispParam object """
         self.plthdu = plthdu

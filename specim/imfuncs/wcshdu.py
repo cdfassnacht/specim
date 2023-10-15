@@ -228,7 +228,7 @@ class WcsHDU(pf.PrimaryHDU):
         Convert to a standard format within the wcsinfo object whatever the
         input format may have been, if the passed value is not None
         """
-        if newscale is not None:
+        if self.wcsinfo is not None and newscale is not None:
             hdr = self.header
 
             """ First get the PA """
@@ -1213,7 +1213,7 @@ class WcsHDU(pf.PrimaryHDU):
     # -----------------------------------------------------------------------
 
     def make_bpm(self, type, nsig=10., goodval=1, smosize=5, smtype='median',
-                 var=None, outfile=None):
+                 var=None, outfile=None, outobj=None):
         """
 
         Makes a bad pixel mask (bpm) based on the data in this WcsHDU object.
@@ -1309,7 +1309,10 @@ class WcsHDU(pf.PrimaryHDU):
                     self.writeto(self.infile)
 
         if outfile is not None:
-            pf.PrimaryHDU(bpm).writeto(outfile, overwrite=True)
+            phdu = pf.PrimaryHDU(bpm)
+            if outobj is not None:
+                phdu.header['object'] = outobj
+            phdu.writeto(outfile, overwrite=True)
         else:
             return bpm
 
