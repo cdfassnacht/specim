@@ -220,6 +220,18 @@ class DispIm(WcsHDU):
                         color=dpar['intlabcolor'], transform=ax.transAxes,
                         fontsize=10)
 
+        """ Add a scalebar if requested """
+        if 'scalebar' in dpar.keys():
+            if mode == 'radec':
+                xmin, xmax = ax.get_xlim()
+                ymin, ymax = ax.get_ylim()
+                x1 = xmin + 0.1 * (xmax - xmin)
+                y1 = ymin + 0.1 * (ymax - ymin)
+                x2 = x1 - dpar['barlength']  # RA runs in opposite to x
+                ax.plot([x1, x2], [y1, y1], color=dpar['barcolor'], lw=1)
+                ax.set_xlim(xmin, xmax)
+                ax.set_ylim(ymin, ymax)
+
         """ Save the current axis that was used to make the plot """
         self.ax1 = ax1
 

@@ -74,6 +74,8 @@ class DispParam(dict):
         self.zeropos = None          # Used to set non-default origin location
         self.axlab = 'on'            # Set to "off" to turn off all axis info
         self['intlabcolor'] = 'w'    # Color for internal labels
+        self['barlength'] = 1.0      # Scalebar length in arcsec
+        self['barcolor'] = 'w'       # Color for scalebar
 
         """ Link the data to be displayed to this DispParam object """
         self.plthdu = plthdu
@@ -395,6 +397,6 @@ class DispParam(dict):
 
         """ Set other display parameters """
         self.title = title
-        self.scalebar = scalebar
+        self['scalebar'] = scalebar
         self.dpi = dpi
         self.facecolor = facecolor
