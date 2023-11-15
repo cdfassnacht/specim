@@ -215,22 +215,22 @@ class DispIm(WcsHDU):
         """ Provide interior labels for the plot, if requested """
         for i, k in enumerate(self.intlabs):
             if k in dpar.keys():
-                ax.text(self.intlabpos[i][0], self.intlabpos[i][1], dpar[k],
-                        horizontalalignment=self.intalign[i],
-                        color=dpar['intlabcolor'], transform=ax.transAxes,
-                        fontsize=10)
+                ax1.text(self.intlabpos[i][0], self.intlabpos[i][1], dpar[k],
+                         horizontalalignment=self.intalign[i],
+                         color=dpar['intlabcolor'], transform=ax.transAxes,
+                         fontsize=10)
 
         """ Add a scalebar if requested """
         if 'scalebar' in dpar.keys():
             if mode == 'radec':
-                xmin, xmax = ax.get_xlim()
-                ymin, ymax = ax.get_ylim()
+                xmin, xmax = ax1.get_xlim()
+                ymin, ymax = ax1.get_ylim()
                 x1 = xmin + 0.1 * (xmax - xmin)
                 y1 = ymin + 0.1 * (ymax - ymin)
                 x2 = x1 - dpar['barlength']  # RA runs in opposite to x
-                ax.plot([x1, x2], [y1, y1], color=dpar['barcolor'], lw=1)
-                ax.set_xlim(xmin, xmax)
-                ax.set_ylim(ymin, ymax)
+                ax1.plot([x1, x2], [y1, y1], color=dpar['barcolor'], lw=1)
+                ax1.set_xlim(xmin, xmax)
+                ax1.set_ylim(ymin, ymax)
 
         """ Save the current axis that was used to make the plot """
         self.ax1 = ax1
