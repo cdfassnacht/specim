@@ -133,6 +133,50 @@ class DispIm(WcsHDU):
 
     # -----------------------------------------------------------------------
 
+    @staticmethod
+    def add_scalebar(ax, dpar):
+        """
+
+        Adds a scalebar to the figure
+
+        """
+
+        if dpar.mode == 'radec':
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            x1 = xmin + 0.1 * (xmax - xmin)
+            y1 = ymin + 0.1 * (ymax - ymin)
+            x2 = x1 - dpar['barlength']  # RA runs in opposite to x
+            ax.plot([x1, x2], [y1, y1], color=dpar['barcolor'], lw=1)
+            ax.set_xlim(xmin, xmax)
+            ax.set_ylim(ymin, ymax)
+
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def add_crosshair(ax, dpar):
+        """
+
+        Adds a crosshair at the position in dpar['crosshair']
+
+        """
+
+        """ Check the format of dpar['crosshair'] """
+        if isinstance(dpar['crosshair'], (tuple, list)):
+            if len(dpar['crosshair']) != 2:
+                raise ValueError('\nThe "crosshair" parameter must have two'
+                                 ' elements: (x,y) or (RA,Dec)\n')
+        else:
+            raise TypeError('\nThe "crosshair" parameter must be either a'
+                            ' tuple or a list, with 2 elements')
+
+        ax.axvline(dpar['crosshair'][0], color=dpar['xhaircolor'],
+                   lw=dpar['xhairlw'], ls=dpar['xhairls'])
+        ax.axhline(dpar['crosshair'][1], color=dpar['xhaircolor'],
+                   lw=dpar['xhairlw'], ls=dpar['xhairls'])
+
+    # -----------------------------------------------------------------------
+
     def display(self, ax=None, axlabel=True, fontsize=None,
                 show_xyproj=False, mode='radec', dpar=None, debug=False):
         """
@@ -222,15 +266,11 @@ class DispIm(WcsHDU):
 
         """ Add a scalebar if requested """
         if 'scalebar' in dpar.keys():
-            if mode == 'radec':
-                xmin, xmax = ax1.get_xlim()
-                ymin, ymax = ax1.get_ylim()
-                x1 = xmin + 0.1 * (xmax - xmin)
-                y1 = ymin + 0.1 * (ymax - ymin)
-                x2 = x1 - dpar['barlength']  # RA runs in opposite to x
-                ax1.plot([x1, x2], [y1, y1], color=dpar['barcolor'], lw=1)
-                ax1.set_xlim(xmin, xmax)
-                ax1.set_ylim(ymin, ymax)
+            self.add_scalebar(ax1, dpar)
+
+        """ Add a crosshair if requested """
+        if 'crosshair' in dpar.keys():
+            self.add_crosshair(ax1, dpar)
 
         """ Save the current axis that was used to make the plot """
         self.ax1 = ax1

@@ -76,6 +76,9 @@ class DispParam(dict):
         self['intlabcolor'] = 'w'    # Color for internal labels
         self['barlength'] = 1.0      # Scalebar length in arcsec
         self['barcolor'] = 'w'       # Color for scalebar
+        self['xhaircolor'] = 'g'     # Crosshair color
+        self['xhairlw'] = 1          # Crosshair linewidth
+        self['xhairls'] = '-'        # Crosshair linestyle (solid is default)
 
         """ Link the data to be displayed to this DispParam object """
         self.plthdu = plthdu
