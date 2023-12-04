@@ -350,7 +350,7 @@ class DispIm(WcsHDU):
                 pix = np.zeros((1, self.wcsinfo.naxis))
                 pix[0, 0] = self.xclick
                 pix[0, 1] = self.yclick
-                radec = self.wcsinfo.wcs_pix2world(pix, 0)
+                radec = self.wcsinfo.wcs_pix2world(pix, 1)
                 self.raclick = radec[0, 0]
                 self.decclick = radec[0, 1]
             else:
