@@ -27,6 +27,7 @@ def open_fits(infile, mode='readonly'):
     """ Try to get rid of read-in warnings """
     warnings.filterwarnings('ignore')
 
+    hdulist = None
     try:
         hdulist = pf.open(infile, mode=mode)
     except IOError:
