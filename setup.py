@@ -23,7 +23,7 @@ setuptools.setup(
         'numpy',#>=1.10',
         'scipy',#>=1.1',
         'astropy',#>=3.1',
-        'matplotlib'#,>=3.0',
+        'matplotlib',#>=3.0',
         'cdfutils'
     ],
     package_data = {'specim.specfuncs' : ['Data/*']}
