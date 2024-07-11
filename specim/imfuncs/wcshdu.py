@@ -1714,13 +1714,24 @@ class WcsHDU(pf.PrimaryHDU):
         else:
             data = indata.copy()
 
-        """ Transform the coordinates """
+        """
+        Replace any NaNs in the image.  This needs to be done even if
+        fixnans is set to False (the default) since if there are any NaNs
+        in the image, then the interpolation below will set everything to
+        NaN.  Therefore, set the value with which to replace all NaNs
+        """
+
         if fixnans:
             if nanval == 'max':
                 goodmask = np.isfinite(data)
                 dmax = data[goodmask].max()
                 nanval = 10. * dmax
-            data[np.isnan(data)] = nanval
+        else:
+            self.sigma_clip()
+            nanval = self.mean_clip
+        data[np.isnan(data)] = nanval
+
+        """ Transform the coordinates """
         outdata = ndimage.map_coordinates(data, icoords, order=5,
                                           cval=np.nan)
 
