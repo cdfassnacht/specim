@@ -1959,14 +1959,14 @@ class WcsHDU(pf.PrimaryHDU):
     
     # -----------------------------------------------------------------------
 
-    def writeto(self, outfile=None):
+    def writeto(self, outfile=None, keeplist='all'):
         """
 
         Saves the (possibly modified) HDU to an output file
 
         """
         """ Put the possibly updated wcs info into the header """
-        outhdr = self.make_hdr_wcs(self.header, self.wcsinfo)
+        outhdr = self.make_hdr_wcs(self.header, self.wcsinfo, keeplist)
 
         """
         Create a new PrimaryHDU object and write it out, possibly
@@ -1982,11 +1982,11 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def save(self, outfile=None):
+    def save(self, outfile=None, keeplist='all'):
         """
 
         Saves the (possibly modified) HDU to an output file
 
         """
 
-        self.writeto(outfile)
+        self.writeto(outfile=outfile, keeplist=keeplist)
