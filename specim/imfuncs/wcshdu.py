@@ -1747,7 +1747,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def process_data(self, trimsec=None, bias=None, gain=-1, texp=-1,
+    def process_data(self, trimsec=None, bias=None, gain=-1., texp=-1.,
                      flat=None, fringe=None, darkskyflat=None, zerosky=None,
                      flip=None, pixscale=0.0, rakey='ra', deckey='dec',
                      verbose=True):
