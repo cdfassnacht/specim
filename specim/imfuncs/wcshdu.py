@@ -1941,7 +1941,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Add a very rough WCS if requested """
         if pixscale > 0.0:
-            self.pixscale = pixscale
+            tmp.pixscale = pixscale
 
         return tmp
     
