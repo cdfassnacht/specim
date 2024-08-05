@@ -856,23 +856,14 @@ class WcsHDU(pf.PrimaryHDU):
         if len(cdeltarr) != len(self.wcsinfo.wcs.cdelt):
             raise IndexError(' Input crpix array length does not match'
                              ' length of current crpix array')
+        else:
+            print('')
+            print('update_cdelt is not yet properly implemented.')
+            print('')
 
         """
-        Update the CRPIX array assuming that the input is in the correct
-        format
+        Here do something similar to what is done for the update_crpix method
         """
-        if isinstance(crpixarr, list) or isinstance(crpixarr, tuple) \
-                or isinstance(crpixarr, np.ndarray):
-            if verbose:
-                print('Updating CRPIX array')
-            for i in range(len(crpixarr)):
-                if verbose:
-                    print('  %8.2f  -->  %8.2f' % (self.wcsinfo.wcs.crpix[i],
-                                                   crpixarr[i]))
-                self.wcsinfo.wcs.crpix[i] = crpixarr[i]
-                self.header['crpix%d' % (i+1)] = crpixarr[i]
-        else:
-            raise TypeError('crpixarr must be list, tuple, or ndarray')
 
     # -----------------------------------------------------------------------
 
@@ -1950,10 +1941,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Add a very rough WCS if requested """
         if pixscale > 0.0:
-            if hext > 0:
-                apply_rough_wcs(tmp, pixscale, rakey, deckey, self[0])
-            else:
-                apply_rough_wcs(tmp, pixscale, rakey, deckey)
+            self.pixscale = pixscale
 
         return tmp
     
