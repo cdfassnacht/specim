@@ -36,6 +36,8 @@ if len(sys.argv) < 2:
     print('  -fmax [fmax]     - maximum flux value, in sigma above mean,'
           ' for display')
     print('                     Default value: 10')
+    print('  -subtract [file] - subtract the designated file from the input')
+    print('                     fits file before displaying.')
     print('')
     exit()
 
@@ -44,8 +46,8 @@ filestart = 1
 pixscale = None
 fmin = -1.
 fmax = 10.
-flat = None
 flatfile = None
+subfile = None
 start_files = False
 subimsize = 21
 no_error = True
@@ -76,7 +78,7 @@ while start_files is False and no_error:
             msg = 'ERROR: fmax is not a floating point number'
             no_error = False
         except IndexError:
-            msg = 'ERROR: -fmax used but no fmax value is given'
+            msg = 'ERROR: -fmax used but no fmax value was given'
             no_error = False
         filestart += 2
     elif sys.argv[filestart] == '-fmin':
@@ -87,6 +89,13 @@ while start_files is False and no_error:
             no_error = False
         except IndexError:
             msg = 'ERROR: -fmin used but no fmin value is given'
+            no_error = False
+        filestart += 2
+    elif sys.argv[filestart] == '-subtract':
+        try:
+            subfile = sys.argv[filestart + 1]
+        except IndexError:
+            msg = 'ERROR: -subtract used but no filename was given'
             no_error = False
         filestart += 2
     else:
@@ -105,16 +114,27 @@ if no_error is not True:
 #     files = [sys.argv[filestart],]
 infile = sys.argv[filestart]
 
+""" Read in the data to be subtracted """
+if subfile is not None:
+    sub = pf.getdata(subfile)
+    print('')
+    print('Loading data to be subtracted from %s' % subfile)
+    print(sub.size)
+else:
+    sub = 0.
+
 """ Read in the flat-field data """
 if flatfile is not None:
     flat = pf.getdata(flatfile)
     print('')
     print('Using flat-field file: %s' % flatfile)
+else:
+    flat = 1.
 
 """ Open and display the image """
 im1 = imf.Image(infile)
-if flat is not None:
-    im1.data /= flat
+im1.data -= sub
+im1.data /= flat
 im1.zoomsize = subimsize
 im1.display(fmax=fmax, fmin=fmin, mode='xy', title=im1.infile)
 
