@@ -1207,11 +1207,9 @@ class Image(dict):
         """
 
         """ Get the pixel statistics """
-        self[dmode].get_rms(centpos, size, centtype, sizetype=sizetype,
-                            verbose=verbose)
-        if verbose:
-            print('RMS = %f' % self[dmode].rms_clip)
-        return self[dmode].rms_clip
+        statinfo = self[dmode].get_rms(centpos, size, centtype,
+                                       sizetype=sizetype, verbose=verbose)
+        return statinfo
 
     # -----------------------------------------------------------------------
 
@@ -1275,7 +1273,7 @@ class Image(dict):
         """ Now create the SNR image """
         subim = self.poststamp_xy(centpos, imsize, outfile=None,
                                   verbose=verbose)
-        subim.data /= imrms
+        subim.data /= imrms['rms']
         if outfile is not None:
             if verbose:
                 print('Output SNR file: %s' % outfile)
@@ -1688,7 +1686,7 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
       whtsuff  - suffix for input weight file, if a cutout of the weight file
                   is also desired.  If whtsuff is None (the default) then no
                   weight-file cutout is made.
-                  Example: whtsuff='_wht' means that for infile='foo.fits' the
+                  Example: whtsuff='wht' means that for infile='foo.fits' the
                    weight file is called 'foo_wht.fits'
       makerms  - Set to True to make, in addition, an output rms file
                   following the prescription of Matt Auger for the NIRC2 data.
@@ -1733,8 +1731,15 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
     else:
         outwht = None
 
-    """ Make an rms image if requested """
+    """
+    Make an rms image if requested
+    NOTE: This procedure will only work if the input science image is in
+    units of e-/s and the weight map gives the effective exposure time in
+    each pixel.  This time of weight file is produced, for example, from
+    the drizzle code.
+    """
     if makerms:
+        """ Check that all required parameters are set """
         if statcent is None:
             raise ValueError(' *** Need to set statcent parameter '
                              'in order to make rms image')
@@ -1748,44 +1753,84 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
         else:
             if stattype != 'radec' and stattype[:3] != 'pix':
                 raise ValueError('stattype must be either "radec" or "pix"')
-        rms = infits.get_rms(statcent, statsize, stattype)
+        if whtsuff is None and texp is None:
+            raise ValueError('To make rms image, either whtsuff or texp '
+                             'parameter must be set')
+
+        """ Set up the input files """
         cutsci = pf.getdata(outfile)
-        snr = filters.gaussian_filter(cutsci / rms, 1.)
-        """
-        Add the Poisson noise due to the astrophysical sources,
-        but this algorithm ONLY works if the following conditions are
-        satisfied:
-          1. Input image has units of e-/sec
-          2. Weight file is an (effective) exposure time image 
-        If these conditions hold, then for pixels in the input image
-        that have counts from sources, the counts are given as:
-          cts = N_e / t_exp.
-        Therefore, the variance in these pixels will be
-          var_cts = var_e- / t_exp^2 = N_e / t_exp^2
-                  = cts / t_exp
-        because the variance in electrons is just N_e since it is a Poisson 
-        process.
-        Therefore, with the weight file as an exposure time map, we have:
-          var_cts = img/wht
-        """
-        var = cutsci * 0. + rms**2
-        mask = snr > 1.
-        if texp is not None:
-            var[mask] += cutsci[mask] / texp
-        elif outwht is not None:
+        cutshape = cutsci.shape
+        if whtsuff is not None:
             cutwht = pf.getdata(outwht)
-            var[mask] += (cutsci / cutwht)[mask]
+            wmask = cutwht > 0.
         else:
-            raise ValueError('To create a RMS image either the whtsuff'
-                             ' or texp parameter must be set')
+            cutwht = np.ones(cutshape) * texp
+            wmask = np.ones(cutshape, dtype=bool)
+
+        """ Get image statistics from the blank sky area """
+        print('')
+        print('Calculating statistics from blank-sky region')
+        print('--------------------------------------------')
+        statinfo = infits.get_rms(statcent, statsize, stattype)
+        rms_pix = statinfo['rms']
+        skymean = statinfo['mean']
+        print('Mean background level in input image: %f' % skymean)
+
+        """
+        The input data set often will have had the base sky level subtracted
+        from it (possibly imperfectly) and so to get Poisson noise in each
+        pixel, we'll have to estimate what the original sky level was.
+        We can estimate that from the rms in the blank sky region.
+        The code below calculates the expected sky level in units of electrons
+        """
+        rms_expected = np.zeros(cutsci.shape)
+        rms_expected[wmask] = rms_pix * np.sqrt(cutwht.max() / cutwht[wmask])
+        bkgd_expected = (rms_expected * cutwht)**2
+
+        """
+        Calculate the rms in each pixel of the cutout, based on Poisson
+        statistics of the data in units of electrons.  Do this via the
+        following steps.
+          1. Convert a zero-mean version of the science image into electrons
+          2. Add to that the expected sky level in electrons, to get an
+             estimate of the full data set in electrons
+          3. Get the rms in each pixel based on Poisson statistics
+          4. Convert to rms in each pixel in units of e-/s
+        """
+        sci_Ne = (cutsci -skymean) * cutwht
+        rms_e = np.sqrt(sci_Ne + bkgd_expected)
+        rmsarr = np.zeros(cutshape)
+        rmsarr[wmask] = rms_e[wmask] / cutwht[wmask]
         outrms = outfile.replace('.fits', '_rms.fits')
-        outsnr = outfile.replace('.fits', '_snr.fits')
-        rmsarr = np.sqrt(var)
         rmshdu = pf.PrimaryHDU(rmsarr)
         rmshdu.header['data_im'] = infile
         rmshdu.writeto(outrms, overwrite=True)
-        pf.PrimaryHDU(cutsci / rmsarr).writeto(outsnr, overwrite=True)
-        pf.PrimaryHDU(var).writeto('test_var.fits', overwrite=True)
+
+        """
+        Calculate the distribution of pixel values in terms of number of
+        sigma from the mean, and use that to make a SNR map
+        """
+        normdiff = np.zeros(cutshape)
+        normdiff[wmask] = (cutsci[wmask] - skymean) / rmsarr[wmask]
+        # snr = filters.gaussian_filter(normdiff, 1.)
+        outsnr = outfile.replace('.fits', '_snr.fits')
+        pf.PrimaryHDU(normdiff).writeto(outsnr, overwrite=True)
+
+        """
+        Make a plot of the normalized difference, just to check that
+        the calculated rms map is reasonable
+        """
+        print('')
+        print('Making mask to check rms vs. sky value distribution')
+        print('---------------------------------------------------')
+        sigmask = (normdiff < 3.) & (normdiff > -3.)
+        checkdist = normdiff[sigmask].flatten()
+        xx = np.arange(-3., 3., 0.01)
+        yy = np.exp(-xx * xx / 2.) / sqrt(2. * pi)
+        plt.hist(checkdist, bins=100, range=(-3., 3.), density=True)
+        plt.plot(xx, yy, color='r')
+        checkfig = outfile.replace('.fits', '_check.png')
+        plt.savefig(checkfig)
 
     """ Clean up """
     del infits
