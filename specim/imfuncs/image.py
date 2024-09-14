@@ -36,6 +36,7 @@ from math import log, sqrt, pi
 from math import cos as mcos, sin as msin
 
 import numpy as np
+from scipy import optimize
 from scipy.ndimage import filters
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
@@ -368,8 +369,8 @@ class Image(dict):
         """
 
         print('')
-        pixscale = float(raw_input('Enter the pixel scale for the image '
-                                   'in arcsec/pix: '))
+        pixscale = float(input('Enter the pixel scale for the image '
+                               'in arcsec/pix: '))
         self['input'].pixscale = [pixscale, pixscale]
 
     # -----------------------------------------------------------------------
@@ -560,8 +561,6 @@ class Image(dict):
         In other words, this is a one-sided fit, where the expected mu=0, so
         all that is being fit for is the amplitude and sigma.
         """
-
-        from scipy import optimize
 
         """ Set up the defaults """
         amp0 = max(flux)
@@ -1713,6 +1712,10 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
     """
 
     """ Make the input file cutout """
+    if verbose:
+        print('')
+        print('Making cutout of science image')
+        print('------------------------------')
     infits = Image(infile)
     infits.poststamp_radec(imcent, imsize, outfile=outfile, outscale=scale,
                            verbose=verbose)
@@ -1721,6 +1724,10 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
     if whtsuff is not None:
         whtfile = infile.replace('.fits', '_%s.fits' % whtsuff)
         outwht = outfile.replace('.fits', '_%s.fits' % whtsuff)
+        if verbose:
+            print('')
+            print('Making cutout of weightmap image')
+            print('--------------------------------')
         whtfits = Image(whtfile)
         whtfits['input'].copy_wcsinfo(infits['input'])
         whdr = whtfits.header
@@ -1758,79 +1765,42 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
                              'parameter must be set')
 
         """ Set up the input files """
-        cutsci = pf.getdata(outfile)
-        cutshape = cutsci.shape
+        cutsci = WcsHDU(outfile)
+        cutshape = cutsci.data.shape
         if whtsuff is not None:
             cutwht = pf.getdata(outwht)
-            wmask = cutwht > 0.
         else:
             cutwht = np.ones(cutshape) * texp
-            wmask = np.ones(cutshape, dtype=bool)
 
         """ Get image statistics from the blank sky area """
         print('')
         print('Calculating statistics from blank-sky region')
         print('--------------------------------------------')
         statinfo = infits.get_rms(statcent, statsize, stattype)
-        rms_pix = statinfo['rms']
+        skyrms = statinfo['rms']
         skymean = statinfo['mean']
         print('Mean background level in input image: %f' % skymean)
 
-        """
-        The input data set often will have had the base sky level subtracted
-        from it (possibly imperfectly) and so to get Poisson noise in each
-        pixel, we'll have to estimate what the original sky level was.
-        We can estimate that from the rms in the blank sky region.
-        The code below calculates the expected sky level in units of electrons
-        """
-        rms_expected = np.zeros(cutsci.shape)
-        rms_expected[wmask] = rms_pix * np.sqrt(cutwht.max() / cutwht[wmask])
-        bkgd_expected = (rms_expected * cutwht)**2
-
-        """
-        Calculate the rms in each pixel of the cutout, based on Poisson
-        statistics of the data in units of electrons.  Do this via the
-        following steps.
-          1. Convert a zero-mean version of the science image into electrons
-          2. Add to that the expected sky level in electrons, to get an
-             estimate of the full data set in electrons
-          3. Get the rms in each pixel based on Poisson statistics
-          4. Convert to rms in each pixel in units of e-/s
-        """
-        sci_Ne = (cutsci -skymean) * cutwht
-        rms_e = np.sqrt(sci_Ne + bkgd_expected)
-        rmsarr = np.zeros(cutshape)
-        rmsarr[wmask] = rms_e[wmask] / cutwht[wmask]
-        outrms = outfile.replace('.fits', '_rms.fits')
-        rmshdu = pf.PrimaryHDU(rmsarr)
-        rmshdu.header['data_im'] = infile
-        rmshdu.writeto(outrms, overwrite=True)
-
-        """
-        Calculate the distribution of pixel values in terms of number of
-        sigma from the mean, and use that to make a SNR map
-        """
-        normdiff = np.zeros(cutshape)
-        normdiff[wmask] = (cutsci[wmask] - skymean) / rmsarr[wmask]
-        # snr = filters.gaussian_filter(normdiff, 1.)
-        outsnr = outfile.replace('.fits', '_snr.fits')
-        pf.PrimaryHDU(normdiff).writeto(outsnr, overwrite=True)
+        """ Make the 2d rms and SNR arrays """
+        rmsinfo = cutsci.rmsmap_from_whtmap(cutwht, skyrms, skymean)
 
         """
         Make a plot of the normalized difference, just to check that
         the calculated rms map is reasonable
         """
         print('')
-        print('Making mask to check rms vs. sky value distribution')
-        print('---------------------------------------------------')
-        sigmask = (normdiff < 3.) & (normdiff > -3.)
-        checkdist = normdiff[sigmask].flatten()
-        xx = np.arange(-3., 3., 0.01)
-        yy = np.exp(-xx * xx / 2.) / sqrt(2. * pi)
-        plt.hist(checkdist, bins=100, range=(-3., 3.), density=True)
-        plt.plot(xx, yy, color='r')
+        plt.hist(rmsinfo['checkdist'], bins=100, range=(-3., 3.), density=True)
+        plt.plot(rmsinfo['xgauss'], rmsinfo['ygauss'], color='r')
         checkfig = outfile.replace('.fits', '_check.png')
         plt.savefig(checkfig)
+
+        """ Save the output rms and snr files """
+        outrms = outfile.replace('.fits', '_rms.fits')
+        rmshdu = pf.PrimaryHDU(rmsinfo['rms'])
+        rmshdu.header['data_im'] = infile
+        rmshdu.writeto(outrms, overwrite=True)
+        outsnr = outfile.replace('.fits', '_snr.fits')
+        pf.PrimaryHDU(rmsinfo['snr']).writeto(outsnr, overwrite=True)
 
     """ Clean up """
     del infits

@@ -10,7 +10,7 @@ attributes of the class
 
 import os
 import sys
-from math import fabs
+from math import fabs, pi, sqrt
 import numpy as np
 from numpy.fft import fft2, ifft2, fftshift
 from scipy import ndimage
@@ -1104,6 +1104,108 @@ class WcsHDU(pf.PrimaryHDU):
 
         return {'rms': self.rms_clip, 'statcent': xy, 'statsec': statsec,
                 'mean': self.mean_clip}
+
+    # -----------------------------------------------------------------------
+
+    def rmsmap_from_whtmap(self, whtmap, skyrms, skymean):
+        """
+
+        Creates a 2d rms map, in which the rms in each pixel is reflective
+         of the probable Poisson noise in that pixel.
+        Several conditions have to be met for this function to work:
+          1. The units of the current image should be in electrons/sec
+          2. The provided weight map should give the effective exposure time
+             in each pixel.  The drizzle algorithm, for example, produces this
+             type of weight map.
+          3. The skyrms should have been calculated from a region of blank
+             sky in the current image or the image from which the current
+             image has been cut out.
+          4. The skymean should be the clipped mean from the same region of
+             blank sky that was used to calculate the skyrms value.
+
+        Inputs:
+          whtmap  - name of the fits file containing the weight map.  The
+                    weight map must be the same size as the current image and
+                    give the effective exposure time in each pixel.
+          skyrms  - precalculated pixel-to-pixel rms noise in a blank-sky
+                    region of either the current image or the image from which
+                    the current image was cut out
+          skymean - precalculated sky background level from the same region that
+                    was used to calculate the sky rms.
+
+        Output:
+         rmsinfo - a dictionary containing the following information:
+             'rms'      - rms map of the same size as the current image
+             'snr'      - a signal-to-noise ratio map
+             'skycheck' - a flattened version of the snr mask around 0
+             'xgauss'   - x-axis array to plot a N(0,1) plot over a hist of the
+                          skycheck array
+             'ygauss'   - y-axis array to plot a N(0,1) plot over a hist of the
+                          skycheck array
+
+        """
+
+        """ Get the weight map data"""
+        wht = (WcsHDU(whtmap, wcsverb=False)).data
+        wmask = wht > 0.
+
+        """
+        The input data set often will have had the base sky level subtracted
+        from it (possibly imperfectly) and so to get Poisson noise in each
+        pixel, we'll have to estimate what the original sky level was.
+        We can estimate that from the rms in the blank sky region.
+        The code below calculates the expected sky level in units of electrons
+        """
+        arrshape = self.data.shape
+        rms_expected = np.zeros(arrshape)
+        rms_expected[wmask] = skyrms * np.sqrt(wht.max() / wht[wmask])
+        bkgd_expected = (rms_expected * wht)**2
+
+        """
+        Calculate the rms in each pixel of the cutout, based on Poisson
+        statistics of the data in units of electrons.  Do this via the
+        following steps.
+          1. Convert a zero-mean version of the science image into electrons
+             by multiplying it by the effective exposure time map
+          2. Add to that the expected sky level in electrons, to get an
+             estimate of the full data set in electrons
+          3. Get the rms in each pixel based on Poisson statistics
+          4. Convert to rms in each pixel in units of e-/s by dividing by
+             the effective exposure time
+        """
+        sci_Ne = (self.data -skymean) * wht
+        rms_e = np.sqrt(sci_Ne + bkgd_expected)
+        rmsarr = np.zeros(arrshape)
+        rmsarr[wmask] = rms_e[wmask] / wht[wmask]
+
+        """
+        Calculate the distribution of pixel values in terms of number of
+        sigma from the mean, and use that to make a SNR map
+        """
+        normdiff = np.zeros(arrshape)
+        normdiff[wmask] = (self.data[wmask] - skymean) / rmsarr[wmask]
+
+        """
+        Calculate values that can be used to check that
+        the calculated rms map is reasonable
+        """
+        print('')
+        print('Getting data to check rms vs. sky value distribution')
+        print('---------------------------------------------------')
+        sigmask = (normdiff < 3.) & (normdiff > -3.)
+        checkdist = normdiff[sigmask].flatten()
+        xgauss = np.arange(-3., 3., 0.01)
+        ygauss = np.exp(-xgauss * xgauss / 2.) / sqrt(2. * pi)
+
+        """ Return the relevant information """
+        rmsinfo = {
+            'rms': rmsarr,
+            'snr': normdiff,
+            'checkdist': checkdist,
+            'xgauss': xgauss,
+            'ygauss': ygauss
+        }
+        return rmsinfo
 
     # -----------------------------------------------------------------------
 
