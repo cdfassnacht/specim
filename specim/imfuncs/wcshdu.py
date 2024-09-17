@@ -1107,7 +1107,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def rmsmap_from_whtmap(self, whtmap, skyrms, skymean):
+    def rmsmap_from_whtmap(self, whtmap, skyrms, skymean=0.):
         """
 
         Creates a 2d rms map, in which the rms in each pixel is reflective
@@ -1131,7 +1131,9 @@ class WcsHDU(pf.PrimaryHDU):
                     region of either the current image or the image from which
                     the current image was cut out
           skymean - precalculated sky background level from the same region that
-                    was used to calculate the sky rms.
+                    was used to calculate the sky rms.  Set this value to zero
+                    (the default) if the sky level in the input image has been
+                    properly subtracted
 
         Output:
          rmsinfo - a dictionary containing the following information:
@@ -1173,7 +1175,7 @@ class WcsHDU(pf.PrimaryHDU):
           4. Convert to rms in each pixel in units of e-/s by dividing by
              the effective exposure time
         """
-        sci_Ne = (self.data -skymean) * wht
+        sci_Ne = (self.data - skymean) * wht
         rms_e = np.sqrt(sci_Ne + bkgd_expected)
         rmsarr = np.zeros(arrshape)
         rmsarr[wmask] = rms_e[wmask] / wht[wmask]
