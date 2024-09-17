@@ -127,6 +127,8 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Set some general default values """
         self.found_rms = False
+        self.mean_clip = None
+        self.rms_clip = None
         self.fftconj = None
 
         """ Set some WCS-related default values """
