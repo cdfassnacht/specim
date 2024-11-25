@@ -1728,7 +1728,7 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
             print('')
             print('Making cutout of weightmap image')
             print('--------------------------------')
-        whtfits = Image(whtfile)
+        whtfits = Image(whtfile, wcsverb=False)
         whtfits['input'].copy_wcsinfo(infits['input'])
         whdr = whtfits.header
         wwcsinfo = whtfits['input'].wcsinfo

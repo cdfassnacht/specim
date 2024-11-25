@@ -113,8 +113,8 @@ class WcsHDU(pf.PrimaryHDU):
             super(WcsHDU, self).__init__(data, hdr)
         else:
             super().__init__(data, hdr)
-        self.data = data
-        self.header = hdr
+        # self.data = data
+        # self.header = hdr
         self.infile = infile
         if infile is not None:
             self.basename = os.path.basename(infile)
