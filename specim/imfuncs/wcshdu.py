@@ -64,6 +64,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
         hdu = None
         infile = None
+        self.wcsverb = wcsverb
         if isinstance(indat, str):
             hdu = self.read_from_file(indat, verbose=verbose)
             data = hdu[hext].data
@@ -237,7 +238,8 @@ class WcsHDU(pf.PrimaryHDU):
 
             """ First get the PA """
             pa = coords.matrix_to_rot(self.wcsinfo.pixel_scale_matrix,
-                                      raax=raax-1, decax=decax-1)
+                                      raax=raax-1, decax=decax-1,
+                                      verbose=self.wcsverb)
 
             """
             Convert the PA to a PC matrix that just reflects the rotation and
