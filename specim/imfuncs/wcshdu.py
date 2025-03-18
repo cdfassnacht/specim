@@ -557,9 +557,9 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Do the addition """
         if isinstance(other, (float, int)):
-            data += other
+            data = data + other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
-            data += other.data
+            data = data + other.data
         else:
             raise TypeError('\nAdded object must be one of: int, float, '
                             'WcsHDU, PrimaryHDU, or ImageHDU')
@@ -583,10 +583,10 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Do the addition """
         if isinstance(other, (float, int)):
-            data -= other
+            data = data - other
             subitem = other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
-            data -= other.data
+            data = data - other.data
             if other.infile is not None:
                 subitem = other.infile
             else:
@@ -616,15 +616,15 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Do the addition """
         if isinstance(other, (float, int)):
-            data *= other
+            data = data * other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
-            data *= other.data
+            data = data * other.data
         elif isinstance(other, np.ndarray):
             if other.shape != data.shape:
                 raise ValueError('\nThe WcsHDU.data and numpy ndarray'
                                  ' have different sizes.\n\n')
             else:
-                data *= other
+                data = data * other
         else:
             raise TypeError('\nMultiplied object must be one of the following:'
                             '\n  int\n  float\n  WcsHDU\n  PrimaryHDU\n'
@@ -649,9 +649,9 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Do the addition """
         if isinstance(other, (float, int)):
-            data /= other
+            data = data / other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
-            data /= other.data
+            data = data / other.data
         else:
             raise TypeError('\nAdded object must be one of: int, float, '
                             'WcsHDU, PrimaryHDU, or ImageHDU')
@@ -1276,7 +1276,7 @@ class WcsHDU(pf.PrimaryHDU):
         else:
             raise ValueError('method must be one of "sigclip", "median" '
                              'or "mean"')
-        self.data /= normfac
+        self.data = self.data / normfac
         return normfac
             
     # -----------------------------------------------------------------------
@@ -1928,7 +1928,7 @@ class WcsHDU(pf.PrimaryHDU):
     
         """ Convert to electrons if requested """
         if gain > 0:
-            tmp.data *= gain
+            tmp *= gain
             tmp.header['gain'] = (1.0, 'Units are now electrons')
             if hext == 0:
                 keystr = 'ogain'
@@ -1953,7 +1953,7 @@ class WcsHDU(pf.PrimaryHDU):
     
         """ Divide by the exposure time if requested """
         if texp > 0.:
-            tmp.data /= texp
+            tmp /= texp
             if hext == 0:
                 keystr = 'binfo_2'
             else:

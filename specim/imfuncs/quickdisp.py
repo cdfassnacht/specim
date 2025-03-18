@@ -13,11 +13,10 @@ Input parameters:
 """
 
 import sys
-import numpy as np
-from astropy import wcs
 from astropy.io import fits as pf
 from matplotlib import pyplot as plt
 from specim import imfuncs as imf
+from specim.imfuncs.wcshdu import WcsHDU
 
 """ Check command line syntax """
 if len(sys.argv) < 2:
@@ -51,6 +50,7 @@ subfile = None
 start_files = False
 subimsize = 21
 no_error = True
+msg = ''
 
 """ Parse the command line """
 while start_files is False and no_error:
@@ -91,7 +91,7 @@ while start_files is False and no_error:
             msg = 'ERROR: -fmin used but no fmin value is given'
             no_error = False
         filestart += 2
-    elif sys.argv[filestart] == '-subtract':
+    elif sys.argv[filestart][:4] == '-sub':
         try:
             subfile = sys.argv[filestart + 1]
         except IndexError:
@@ -116,25 +116,25 @@ infile = sys.argv[filestart]
 
 """ Read in the data to be subtracted """
 if subfile is not None:
-    sub = pf.getdata(subfile)
     print('')
     print('Loading data to be subtracted from %s' % subfile)
-    print(sub.size)
+    sub = WcsHDU(subfile, wcsverb=False)
+    print(sub.data.size)
 else:
     sub = 0.
 
 """ Read in the flat-field data """
 if flatfile is not None:
-    flat = pf.getdata(flatfile)
     print('')
     print('Using flat-field file: %s' % flatfile)
+    flat = WcsHDU(flatfile)
 else:
     flat = 1.
 
 """ Open and display the image """
 im1 = imf.Image(infile)
-im1.data -= sub
-im1.data /= flat
+im1['input'] -= sub
+im1['input'] /= flat
 im1.zoomsize = subimsize
 im1.display(fmax=fmax, fmin=fmin, mode='xy', title=im1.infile)
 
