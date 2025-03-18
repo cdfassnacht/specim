@@ -1953,7 +1953,7 @@ class WcsHDU(pf.PrimaryHDU):
     
         """ Divide by the exposure time if requested """
         if texp > 0.:
-            tmp /= texp
+            tmp = tmp / texp
             if hext == 0:
                 keystr = 'binfo_2'
             else:
@@ -1977,7 +1977,7 @@ class WcsHDU(pf.PrimaryHDU):
     
         """ Apply the flat-field correction if requested """
         if flat is not None:
-            tmp /= flat
+            tmp = tmp / flat
             
             """
             Set up a bad pixel mask based on places where the 
@@ -2002,7 +2002,7 @@ class WcsHDU(pf.PrimaryHDU):
         """ Apply the fringe correction if requested """
         if fringe is not None:
             fringedata = fringe.data
-            tmp.data -= fringedata
+            tmp.data = tmp.data - fringedata
             if self.hext == 0:
                 keystr = 'fringcor'
             else:
@@ -2016,7 +2016,7 @@ class WcsHDU(pf.PrimaryHDU):
         """ Apply the dark sky flat-field correction if requested """
         if darkskyflat is not None:
             dsflatdata = darkskyflat.data
-            tmp.data /= dsflatdata
+            tmp.data = tmp.data / dsflatdata
             dsflatmean = dsflatdata.mean()
             """
             Set up a bad pixel mask based on places where the flat frame = 0,
