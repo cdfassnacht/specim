@@ -661,6 +661,35 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def __div__(self, other):
+        """
+
+        Adds either a constant or another WcsHDU or other flavor of HDU to
+        the data in this WcsHDU object.
+
+        NOTE: The __div__ will only be accessed by python 2.7, while
+        __trudiv__ (above) will be accessed by python 3
+
+        """
+
+        """ Get the data and header """
+        data = self.data.copy()
+        hdr = self.header.copy()
+
+        """ Do the addition """
+        if isinstance(other, (float, int)):
+            data = data / other
+        elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
+            data = data / other.data
+        else:
+            raise TypeError('\nAdded object must be one of: int, float, '
+                            'WcsHDU, PrimaryHDU, or ImageHDU')
+
+        """ Return a new WcsHDU object """
+        return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
+
+    # -----------------------------------------------------------------------
+
     def copy(self):
         """
         Returns a copy of the WcsHDU object
