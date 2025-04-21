@@ -26,5 +26,5 @@ setuptools.setup(
         'matplotlib',#>=3.0',
         'cdfutils'
     ],
-    package_data = {'specim.specfuncs' : ['Data/*']}
+    package_data={'specim.specfuncs': ['Data/*']}
 )
