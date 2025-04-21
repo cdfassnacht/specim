@@ -47,8 +47,8 @@ fmin = -1.
 fmax = 10.
 flatfile = None
 subfile = None
-start_files = False
 subimsize = 21
+start_files = False
 no_error = True
 msg = ''
 
