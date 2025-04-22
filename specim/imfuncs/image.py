@@ -1031,8 +1031,8 @@ class Image(dict):
 
     # -----------------------------------------------------------------------
 
-    def blkavg(self, factor, mode='sum', outfile=None, dmode='input',
-               verbose=True):
+    def blkavg(self, factor, mode='sum', intype='sci', outfile=None,
+               dmode='input', verbose=True):
         """
 
         Code to block average the image data, taken from Matt Auger's
@@ -1047,19 +1047,24 @@ class Image(dict):
         and therefore no introduction of correlated noise between the
         pixels.
 
-        NOTE: This code has taken the resamp function directly from Matt
-        Auger's indexTricks library.  Right now there is NO ERROR CHECKING
-        in that part of the code.  User beware!
-
         Inputs:
-          factor - block averaging / summing factor
-          mode   - either 'sum' (default) or 'average'
+          factor  - binning factor
+          mode    - either 'sum' (default) or 'ave'
+          intype  - either 'sci' or 'rms' or 'var'
+          outfile - name of output file
         """
 
         """
         Make a copy of the input data, just to be on the safe side
         """
         arr = self[dmode].data.copy()
+
+        """
+        If the input image is an rms image, square the data to make arr
+        a variance image
+        """
+        if intype == 'rms':
+            arr = arr * arr
 
         """
         Cut off rows and columns to get an integer multiple of the factor
@@ -1083,8 +1088,34 @@ class Image(dict):
                 out += arr[i::factor, j::factor]
 
         """ Average if requested, otherwise leave as sum """
-        if mode == 'average':
-            out /= factor**2
+        if mode[:2] == 'av':
+            """
+            Set the proper factor to average by.
+            If the input type is 'sci', which is appropriate for most
+              input images, then divide the sum by the number of pixels,
+              which is just factor**2 (e.g., factor=2 means 2x2 binning,
+              which means 4 pixels)
+            If the input type is 'rms' or 'var', then divide by the number
+              of pixels squared.  Remember that an input rms image has
+              already been converted to a variance image above, so both
+              'rms' and 'var' imply a variance image.  Furthermore, if
+              the science image is divided by Npix for the average, then
+              propagation of errors says that the variance image should
+              be divided by Npix**2
+            """
+            if intype == 'rms' or intype =='var':
+                divfac = factor**4
+            else:
+                divfac = factor**2
+            out /= divfac
+
+            if verbose:
+                print('Averaging values over the %d x %d binning' %
+                      (factor, factor))
+        else:
+            if verbose:
+                print('Summing values over the %d x %d binning' %
+                      (factor, factor))
 
         """
         If an output file is requested, then any WCS information has to
