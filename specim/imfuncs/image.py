@@ -1117,6 +1117,9 @@ class Image(dict):
                 print('Summing values over the %d x %d binning' %
                       (factor, factor))
 
+        if intype == 'rms':
+            out = np.sqrt(out)
+
         """
         If an output file is requested, then any WCS information has to
         be modified to take into account the block factor that has been

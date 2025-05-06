@@ -19,7 +19,7 @@ Usage: python blkavg.py [input_fits] [output_fits] [blkavg_factor]
 
 import sys
 from specim import imfuncs as imf
-
+from specim.imfuncs import wcshdu
 
 # -----------------------------------------------------------------------
 
@@ -120,8 +120,9 @@ print('Original file: %s' % infits)
 print('Binned output file: %s' % outfits)
 if rmsfile is not None:
     print('Original RMS file: %s' % rmsfile)
-    rmsoutfile = rmsfile.replace('.fits', '%d_%d.fits' % (blkfact, blkfact))
+    rmsoutfile = rmsfile.replace('.fits', '_bin%d.fits' % blkfact)
     print('Binned output RMS file: %s' % rmsoutfile)
+print('')
 
 """ 
 Do the binning for the input file
@@ -129,10 +130,14 @@ NOTE: For now assume data are in HDU 0
 """
 indat = imf.Image(infits)
 indat.blkavg(blkfact, mode=mode, intype='sci', outfile=outfits)
-del indat
 
 """ If requested, do the binning for the rms file as well """
 if rmsfile is not None:
-    inrms = imf.Image(rmsfile)
+    inrms = imf.Image(rmsfile, wcsverb=False)
     inrms.blkavg(blkfact, mode=mode, intype='rms', outfile=rmsoutfile)
+    sci = wcshdu.WcsHDU(outfits)
+    rms = wcshdu.WcsHDU(rmsoutfile, wcsverb=False)
+    snr = sci / rms
+    scifile = rmsoutfile.replace('rms', 'snr')
+    snr.writeto(scifile)
     del inrms
