@@ -648,13 +648,14 @@ class WcsHDU(pf.PrimaryHDU):
         hdr = self.header.copy()
 
         """ Do the addition """
+        print(type(other))
         if isinstance(other, (float, int)):
             data = data / other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
             data = data / other.data
         else:
-            raise TypeError('\nAdded object must be one of: int, float, '
-                            'WcsHDU, PrimaryHDU, or ImageHDU')
+            raise TypeError('\nObject in denominator must be one of: int, '
+                            'float, WcsHDU, PrimaryHDU, or ImageHDU')
 
         """ Return a new WcsHDU object """
         return WcsHDU(data, inhdr=hdr, verbose=False, wcsverb=False)
@@ -684,7 +685,7 @@ class WcsHDU(pf.PrimaryHDU):
         the data in this WcsHDU object.
 
         NOTE: The __div__ method will only be accessed by python 2.7, while
-        __trudiv__ (above) will be accessed by python 3
+        __truediv__ (above) will be accessed by python 3
 
         """
 
@@ -1449,13 +1450,14 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def make_objmask(self, nsig=0.7, init_kernel=3, bpm=None, flat=None):
+    def make_objmask(self, nsig=1, init_kernel=3, bpm=None, flat=None):
         """
 
         Makes a mask that is intended to indicate regions of the image
         that contain flux from objects, as opposed to being blank sky.
         The mask is set so that pixels containing object emission are
-        indicated by True, while blank sky pixels are indicated by False
+        indicated by a value of 1, while blank sky pixels
+        are indicated by a value of zero.
 
         Inputs:
          nsig  - number of sigma above the noise level a smoothed image
@@ -1471,9 +1473,11 @@ class WcsHDU(pf.PrimaryHDU):
         self.sigma_clip(mask=bpm)
 
         """ Median smooth the image and set initial object mask """
+        # mu = self.mean_clip
+        # sig = self.rms_clip
         med = self.smooth(init_kernel, smtype='median')
-        objmask = \
-            np.where((med - self.mean_clip) / self.rms_clip > nsig, 1, 0)
+        mu, sig = df.sigclip(med, nsig=3., mask=bpm, verbose=False)
+        objmask = np.where((med - mu) / sig > nsig, 1, 0)
 
         """ Reject isolated cosmic rays via a minimum filter """
         objmask = ndimage.minimum_filter(objmask, (init_kernel+2))
