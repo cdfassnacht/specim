@@ -11,6 +11,7 @@ attributes of the class
 import os
 import sys
 from math import fabs, pi, sqrt
+
 import numpy as np
 from numpy.fft import fft2, ifft2, fftshift
 from scipy import ndimage
@@ -42,6 +43,10 @@ class WcsHDU(pf.PrimaryHDU):
 
     """
 
+    # @property
+    # def data(self):
+    #     return self._data
+
     def __init__(self, indat, inhdr=None, hext=0, wcsext=None, verbose=True,
                  wcsverb=True):
         """
@@ -58,6 +63,10 @@ class WcsHDU(pf.PrimaryHDU):
                       If inhdr is None, then a minimal header will be
                       automatically generated.
         """
+
+        """ Set up default starting values for basic HDU """
+        # self.header = None
+        # self.data = None
 
         """
         Check the format of the input info and get the data and header info
@@ -83,7 +92,10 @@ class WcsHDU(pf.PrimaryHDU):
             except TypeError:
                 infile = None
         elif isinstance(indat, WcsHDU):
-            data = indat.data.copy()
+            if indat.data is not None:
+                data = indat.data.copy()
+            else:
+                data = None
             hdr = indat.header.copy()
             infile = indat.infile
         elif isinstance(indat, np.ndarray):
@@ -648,7 +660,7 @@ class WcsHDU(pf.PrimaryHDU):
         hdr = self.header.copy()
 
         """ Do the addition """
-        print(type(other))
+        # print(type(other))
         if isinstance(other, (float, int)):
             data = data / other
         elif isinstance(other, (WcsHDU, pf.PrimaryHDU, pf.ImageHDU)):
@@ -831,7 +843,10 @@ class WcsHDU(pf.PrimaryHDU):
                         print('Deleting original %s keyword' % key.upper())
 
         """ Create a new output header, according to keeplist """
-        if keeplist != 'all':
+        if keeplist is None:
+            tmphdu = pf.PrimaryHDU()
+            outhdr = tmphdu.header.copy()
+        elif keeplist != 'all':
             tmphdu = pf.PrimaryHDU()
             outhdr = tmphdu.header.copy()
             for key in keeplist:
@@ -1247,7 +1262,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def smooth(self, size, smtype='median', invar=False):
+    def smooth(self, size, smtype='median', mode='reflect', invar=False):
         """
 
         Smooths the data, using one of the following schemes:
@@ -1265,17 +1280,20 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         """ Smooth the data using the requested smoothing type """
+        tmpdata = self.data.copy()
         if smtype.lower() == 'gauss' or smtype.lower() == 'gaussian':
-            smdata = filters.gaussian_filter(self.data, sigma=size)
+            smdata = filters.gaussian_filter(tmpdata, sigma=size, mode=mode)
         elif smtype.lower() == 'median' or smtype.lower() == 'medfilt':
-            smdata = filters.median_filter(self.data, size=size)
+            smdata = filters.median_filter(tmpdata, size=size, mode=mode)
         else:
             print('')
             print('Smoothing type %s has not been implemented' % smtype)
             print('')
+            del tmpdata
             raise NameError
 
         """ Return the smoothed data set """
+        del tmpdata
         return smdata
         
     # -----------------------------------------------------------------------
@@ -1345,7 +1363,7 @@ class WcsHDU(pf.PrimaryHDU):
     # -----------------------------------------------------------------------
 
     def make_bpm(self, type, nsig=10., goodval=1, smosize=5, smtype='median',
-                 var=None, outfile=None, outobj=None):
+                 var=None, flat=None, outfile=None, outobj=None):
         """
 
         Makes a bad pixel mask (bpm) based on the data in this WcsHDU object.
@@ -1411,7 +1429,7 @@ class WcsHDU(pf.PrimaryHDU):
                 else:
                     raise TypeError('var parameter is not an accepted data '
                                     'type: (filename, numpy array, PrimaryHDU,'
-                                    ' ImageHDU, or WcsHDU')
+                                    ' ImageHDU, or WcsHDU)')
                 varmask = vardata <= 0.
                 vardata[varmask] = 1.e-10
                 rms = np.sqrt(vardata)
@@ -1426,6 +1444,11 @@ class WcsHDU(pf.PrimaryHDU):
         bpm[np.fabs(diff) > nsig * rms] = badval
         if varmask is not None:
             bpm[varmask] = badval
+
+        """
+        If a flat-field is provided, additionally flag data points for which
+        the value is less than 
+        """
 
         """
         Make cosmetic fixes on the image if it is a science image.  
@@ -1882,10 +1905,86 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def fixpix(self, bpm, badval=0, initsmooth=11, finalsmooth=5,
+               verbose=False):
+        """
+
+        Replaces known bad pixels, as given in a bad pixel mask, with a local
+        median value.  These pixels should still get a weight of zero when
+        coadding with other images, but applying this fixpix method will make
+        the fixed image look cosmetically better, and may help when computing
+        image statistics.
+
+        Inputs:
+           bpm         - the bad pixel mask.  This can be in one of the
+                         following formats: numpy ndarray, PrimaryHDU,
+                         ImageHDU, WcsHDU, string (filename)
+           badval      - The value in the bad pixel mask that indicates a
+                         bad pixel.  Typically this is either 0 or 1, with
+                         good pixels indicated with the opposite value
+           initsmooth  - Initial coarse smoothing kernel size
+           finalsmooth - Final smoothing kernel size.  It is this smoothing
+                         that sets the updated values for the bad pixels
+
+        """
+
+        if verbose:
+            print('Fixing bad pixels')
+
+        """ Get the bad pixel mask into a standard format """
+        bpmhdu = None
+        if bpm is not None:
+            try:
+                bpmhdu = WcsHDU(bpm, wcsverb=False)
+            except TypeError:
+                print('Could not read bad pixel mask')
+                print('')
+        else:
+            print('')
+            print('A bad pixel mask must be provided')
+            raise TypeError
+        bpmarr = bpmhdu.data
+        mask = bpmarr == badval
+        del bpmarr
+
+        """
+        First set the bad pixels to the clipped mean value of the data.
+        If this mean has already been calculated, we do not need to calculate
+         it again
+        """
+        if self.mean_clip is None:
+            self.sigma_clip()
+        self.data[mask] = self.mean_clip
+        if verbose:
+            print('   Step 0: Replace bad pixel with global clipped mean:'
+                  ' %.2f' % self.mean_clip)
+
+        """
+        Then replace bad pixels with values from coarsely smoothed image,
+        to make the later median smoothing more meaningful
+        """
+        smdata1 = self.smooth(initsmooth, smtype='median')
+        self.data[mask] = smdata1[mask]
+        if verbose:
+            print('   Step 1: Replace bad pixel with coarsely smoothed values')
+
+        """
+        Now smooth the corrected image on a finer scale and fix the bad pixels
+        """
+        smdata2 = self.smooth(finalsmooth, smtype='median')
+        self.data[mask] = smdata2[mask]
+        if verbose:
+            print('   Step 2: Replace bad pixel with finely smoothed values')
+
+        del smdata1, smdata2
+
+    # -----------------------------------------------------------------------
+
     def process_data(self, trimsec=None, bias=None, gain=-1., texp=-1.,
-                     flat=None, fringe=None, darkskyflat=None, zerosky=None,
+                     flat=None, bpm=None, fringe=None,
+                     darkskyflat=None, zerosky=None,
                      flip=None, pixscale=0.0, rakey='ra', deckey='dec',
-                     verbose=True):
+                     verbose=True, **kwargs):
 
         """
 
@@ -2031,6 +2130,12 @@ class WcsHDU(pf.PrimaryHDU):
                 (hdustr, flat.infile, flatmean)
             if verbose:
                 print('   Divided by flat-field image: %s' % flat.infile)
+
+        """ Fix the bad pixels if requested """
+        if bpm is not None:
+            tmp.fixpix(bpm, **kwargs)
+            if verbose:
+                print('   Fixed bad pixels')
     
         """ Apply the fringe correction if requested """
         if fringe is not None:
