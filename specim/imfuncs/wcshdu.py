@@ -1929,7 +1929,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         if verbose:
-            print('Fixing bad pixels')
+            print('   Fixing bad pixels')
 
         """ Get the bad pixel mask into a standard format """
         bpmhdu = None
@@ -1956,7 +1956,7 @@ class WcsHDU(pf.PrimaryHDU):
             self.sigma_clip()
         self.data[mask] = self.mean_clip
         if verbose:
-            print('   Step 0: Replace bad pixel with global clipped mean:'
+            print('    Step 0: Replace bad pixels with global clipped mean:'
                   ' %.2f' % self.mean_clip)
 
         """
@@ -1966,7 +1966,7 @@ class WcsHDU(pf.PrimaryHDU):
         smdata1 = self.smooth(initsmooth, smtype='median')
         self.data[mask] = smdata1[mask]
         if verbose:
-            print('   Step 1: Replace bad pixel with coarsely smoothed values')
+            print('    Step 1: Replace bad pixels with coarsely smoothed values')
 
         """
         Now smooth the corrected image on a finer scale and fix the bad pixels
@@ -1974,7 +1974,7 @@ class WcsHDU(pf.PrimaryHDU):
         smdata2 = self.smooth(finalsmooth, smtype='median')
         self.data[mask] = smdata2[mask]
         if verbose:
-            print('   Step 2: Replace bad pixel with finely smoothed values')
+            print('    Step 2: Replace bad pixels with finely smoothed values')
 
         del smdata1, smdata2
 
@@ -2133,7 +2133,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Fix the bad pixels if requested """
         if bpm is not None:
-            tmp.fixpix(bpm, **kwargs)
+            tmp.fixpix(bpm, verbose=verbose, **kwargs)
             if verbose:
                 print('   Fixed bad pixels')
     
@@ -2178,11 +2178,14 @@ class WcsHDU(pf.PrimaryHDU):
             skylev = tmp.sky_to_zero(method=zerosky, verbose=verbose)
             if hext == 0:
                 keystr = 'zerosky'
+                levstr = 'skylev'
             else:
-                keystr = 'zerosky'+str(hext)
+                keystr = 'zerosky' + str(hext)
+                levstr = 'skylev' + str(hext)
             tmp.header[keystr] = ('%s: subtracted constant sky level of %f' %
                                   (hdustr, skylev))
-    
+            tmp.header[levstr] = skylev
+
         """ Flip if requested """
         if flip is not None:
             tmp.flip(flip)
