@@ -2170,7 +2170,7 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.header[keystr] = \
                 'Dark-sky flat image for %s is %s with mean=%f' % \
                 (hdustr, darkskyflat.infile, dsflatmean)
-            print('    Divided by dark-sky flat: %s' %
+            print('   Divided by dark-sky flat: %s' %
                   darkskyflat.infile)
 
         """ Subtract the sky level if requested """
