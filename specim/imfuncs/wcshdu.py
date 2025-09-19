@@ -584,8 +584,8 @@ class WcsHDU(pf.PrimaryHDU):
     def __sub__(self, other):
         """
 
-        Adds either a constant or another WcsHDU or other flavor of HDU to
-        the data in this WcsHDU object
+        Subtracts either a constant or another WcsHDU or other flavor of HDU
+        from the data in this WcsHDU object
 
         """
 
@@ -593,7 +593,7 @@ class WcsHDU(pf.PrimaryHDU):
         data = self.data.copy()
         hdr = self.header.copy()
 
-        """ Do the addition """
+        """ Do the subtraction """
         if isinstance(other, (float, int)):
             data = data - other
             subitem = other
@@ -1035,11 +1035,12 @@ class WcsHDU(pf.PrimaryHDU):
                 crpix1 = hdr['naxis1'] - hdr['crpix1']
                 crpix2 = hdr['naxis2'] - hdr['crpix2']
         elif method == 'pfcam':
-            self.data = data.T[::-1,::-1]
+            self.data = data.T[::-1, ::-1]
             # NOTE: Still missing correct setting of crpix values
         else:
             raise ValueError('Flip method %s is not recognized' % str(method))
 
+        hdr['flip'] = ('%s' % method, 'Data flipped using indicated method')
         if do_update:
             self.crpix = [crpix1, crpix2]
             # self.update_crpix([crpix1, crpix2], verbose=False)
@@ -1119,7 +1120,7 @@ class WcsHDU(pf.PrimaryHDU):
         """ Get the center of the region to be used for the statistics """
         if centtype == 'radec':
             if self.wcsinfo is not None:
-                w =self.wcsinfo
+                w = self.wcsinfo
                 xy = w.all_world2pix([statcent], 1)[0]
             else:
                 raise ValueError('\nType "radec" chosen but no wcs info '
@@ -1362,8 +1363,9 @@ class WcsHDU(pf.PrimaryHDU):
             
     # -----------------------------------------------------------------------
 
-    def make_bpm(self, type, nsig=10., goodval=1, smosize=5, smtype='median',
-                 var=None, flat=None, outfile=None, outobj=None):
+    def make_bpm(self, intype, nsig=10., goodval=1, smosize=5, smtype='median',
+                 var=None, flat=None, flatnsig=15., flatmin=0.5,
+                 outfile=None, outobj=None):
         """
 
         Makes a bad pixel mask (bpm) based on the data in this WcsHDU object.
@@ -1399,7 +1401,7 @@ class WcsHDU(pf.PrimaryHDU):
         """ Check type and act accordingly """
         varmask = None
         smodat = None
-        if type.lower() == 'dark':
+        if intype.lower() == 'dark':
             """
             Get the difference image and the rms to use for the n-sigma
             comparison
@@ -1407,7 +1409,7 @@ class WcsHDU(pf.PrimaryHDU):
             diff = np.fabs(self.data - self.mean_clip)
             rms = self.rms_clip
 
-        elif type.lower() == 'sci':
+        elif intype.lower() == 'sci':
             """ Smooth the science image """
             smodat = self.smooth(smosize, smtype=smtype)
             """ 
@@ -1446,9 +1448,19 @@ class WcsHDU(pf.PrimaryHDU):
             bpm[varmask] = badval
 
         """
-        If a flat-field is provided, additionally flag data points for which
-        the value is less than 
+        If a flat-field is provided, additionally flag dead pixels (below
+        the cutoff set by flatmin) and also pixels that are super high.
+        The dead-pixel value assumes that the flat is normalized, so that most
+         of its pixels should have values around 1.0
         """
+        if flat is not None:
+            flt = WcsHDU(flat, wcsverb=False)
+            fdata = flt.data
+            flt.sigma_clip()
+            deadmask = fdata < flatmin
+            hotmask = np.fabs(fdata - flt.mean_clip) > flatnsig * flt.rms_clip
+            fltmask = np.logical_or(deadmask, hotmask)
+            bpm[fltmask] = badval
 
         """
         Make cosmetic fixes on the image if it is a science image.  
@@ -1456,7 +1468,7 @@ class WcsHDU(pf.PrimaryHDU):
          will be associated with zero weight, but will make the individual
          exposures look better.
         """
-        if type.lower() == 'sci':
+        if intype.lower() == 'sci':
             badmask = bpm == badval
             if smodat is not None:
                 self.data[badmask] = smodat[badmask]
@@ -1966,7 +1978,8 @@ class WcsHDU(pf.PrimaryHDU):
         smdata1 = self.smooth(initsmooth, smtype='median')
         self.data[mask] = smdata1[mask]
         if verbose:
-            print('    Step 1: Replace bad pixels with coarsely smoothed values')
+            print('    Step 1: Replace bad pixels with coarsely smoothed'
+                  ' values')
 
         """
         Now smooth the corrected image on a finer scale and fix the bad pixels
@@ -1996,7 +2009,7 @@ class WcsHDU(pf.PrimaryHDU):
 
           Keyword      Calibration step
           ----------  ----------------------------------
-          bias          Bias subtraction
+          bias          Bias/dark subtraction
           gain          Convert from ADU to electrons if set to value > 0
                           NB: Gain must be in e-/ADU
           flat          Flat-field correction
@@ -2034,10 +2047,10 @@ class WcsHDU(pf.PrimaryHDU):
         if verbose:
             startstr = 'Processing data'
             if self.infile is not None:
-                startstr = '%s: %s' % (startstr, self.infile)
-            print(startstr)
+                startstr = '%s for %s' % (startstr, self.infile)
             if 'OBJECT' in self.header.keys():
-                print(self.header['object'])
+                startstr = '%s: %s' % (startstr, self.header['object'])
+            print(startstr)
 
         """ Trim the data if requested """
         if trimsec is not None:
@@ -2056,7 +2069,7 @@ class WcsHDU(pf.PrimaryHDU):
                 keystr = 'biassub%d' % self.hext
             tmp.header[keystr] = 'Bias frame for %s is %s with mean %f' % \
                 (hdustr, bias.infile, biasmean)
-            print('   Subtracted bias frame %s' % bias.infile)
+            print('   Subtracted bias/dark frame %s' % bias.infile)
     
         """ Convert to electrons if requested """
         if gain > 0:
