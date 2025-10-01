@@ -145,6 +145,13 @@ class WcsHDU(pf.PrimaryHDU):
         self.mean_clip = None
         self.rms_clip = None
         self.fftconj = None
+        self.imex_x = None
+        self.imex_y = None
+        self.imex_muy = None
+        self.imex_mux = None
+        self.imex_sigxx = None
+        self.imex_sigxy = None
+        self.imex_sigyy = None
 
         """ Set some WCS-related default values """
         self.wcsinfo = None
@@ -2210,6 +2217,80 @@ class WcsHDU(pf.PrimaryHDU):
 
         return tmp
     
+    # -----------------------------------------------------------------------
+
+    def im_moments(self, x0, y0, rmax=10., detect_thresh=3., skytype='global',
+                   verbose=False):
+        """
+        Given an initial guess of a centroid position, calculates the
+        flux-weighted first and second moments within a square centered
+        on the initial guess point and with side length of 2*rmax + 1.
+        The moments will be estimates of the centroid and sigma of the
+        light distribution within the square.
+
+        Inputs:
+          x0      - initial guess for x centroid
+          y0      - initial guess for y centroid
+          rmax    - used to set size of image region probed, which will be a
+                     square with side = 2*rmax + 1. Default=10
+          skytype - set how the sky/background level is set.  Three options:
+                     'global' - Use the clipped mean as determined by the
+                                sigma_clip method.  This is the default.
+                     'local'  - Use a region that surrounds the source
+                                NOT YET IMPLEMENTED
+                     None     - Don't do any sky/background subtraction
+        """
+
+        """ Define the data and the coordinate arrays """
+        data = self.data.copy()
+        y, x = np.indices(data.shape)
+
+        """ Get the clipped mean and sigma of the data """
+        if self.found_rms is False:
+            self.sigma_clip(verbose=verbose)
+        muclip = self.mean_clip
+        rmsclip = self.rms_clip
+        if verbose:
+            print(self.mean_clip, self.rms_clip)
+
+        """
+        Select the data within the square of interest
+        """
+        x1, x2 = x0-rmax-1, x0+rmax+1
+        y1, y2 = y0-rmax-1, y0+rmax+1
+        pixmask = (x > x1) & (x < x2) & (y > y1) & (y < y2)
+        if skytype is None:
+            f = data[pixmask]
+        else:
+            f = data[pixmask] - muclip
+        self.imex_x = x[pixmask]
+        self.imex_y = y[pixmask]
+
+        """
+        Calculate the flux-weighted moments
+         NOTE: Do the moment calculations relative to (x1, y1) -- and then add
+          x1 and y1 back at the end -- in order to avoid rounding errors (see
+          SExtractor user manual)
+        """
+        objmask = f > muclip + detect_thresh * rmsclip
+        fgood = f[objmask]
+        """
+        """
+        xgood = self.imex_x[objmask] - x1
+        ygood = self.imex_y[objmask] - y1
+        fsum = fgood.sum()
+        mux = (fgood * xgood).sum() / fsum
+        muy = (fgood * ygood).sum() / fsum
+        self.imex_mux = mux + x1
+        self.imex_muy = muy + y1
+        self.imex_sigxx = (fgood * xgood**2).sum() / fsum - mux**2
+        self.imex_sigyy = (fgood * ygood**2).sum() / fsum - muy**2
+        self.imex_sigxy = (fgood * xgood*ygood).sum() / fsum - mux*muy
+        if verbose:
+            print(self.imex_mux, self.imex_muy)
+            print(sqrt(self.imex_sigxx), sqrt(self.imex_sigyy),
+                  self.imex_sigxy)
+
     # -----------------------------------------------------------------------
 
     def writeto(self, outfile=None, keeplist='all'):
