@@ -932,7 +932,7 @@ class Image(dict):
             print('')
             if self.infile is not None:
                 print('Input file:  %s' % self.infile)
-            subim.writeto(outfile, overwrite=True)
+            subim.save(outfile)
             print('Wrote postage stamp cutout to %s' % outfile)
 
         else:

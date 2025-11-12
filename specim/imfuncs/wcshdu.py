@@ -175,7 +175,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.hext = hext
         if wcsext is not None and hdu is not None:
             try:
-                wcshdr = hdu[wcsext].header
+                self.wcshdr = hdu[wcsext].header
             except UnboundLocalError:
                 print('')
                 print('ERROR: You cannot set wcsext parameter if the input'
@@ -183,9 +183,9 @@ class WcsHDU(pf.PrimaryHDU):
                 print('')
                 raise TypeError
         else:
-            wcshdr = self.header
+            self.wcshdr = self.header
         try:
-            self.read_wcsinfo(wcshdr, verbose=wcsverb)
+            self.read_wcsinfo(verbose=wcsverb)
         except KeyError:
             """ Just keep default values for WCS attributes, i.e., None """
             if wcsverb:
@@ -249,41 +249,15 @@ class WcsHDU(pf.PrimaryHDU):
         self._pixscale = newscale
 
         """
-        Convert to a standard format within the wcsinfo object whatever the
-        input format may have been, if the passed value is not None
+        Update the CDELT values
         """
         if self.wcsinfo is not None and newscale is not None:
-            hdr = self.header
-
-            """ First get the PA """
-            pa = coords.matrix_to_rot(self.wcsinfo.pixel_scale_matrix,
-                                      raax=raax-1, decax=decax-1,
-                                      verbose=self.wcsverb)
-
-            """
-            Convert the PA to a PC matrix that just reflects the rotation and
-            put this information into both the wcsinfo object and the header
-            """
-            pc = coords.rot_to_pcmatrix(pa, verbose=False)
-            self.wcsinfo.wcs.pc = pc
-            hdr['PC%d_%d' % (raax, raax)] = pc[0, 0]
-            hdr['PC%d_%d' % (raax, decax)] = pc[0, 1]
-            hdr['PC%d_%d' % (decax, raax)] = pc[1, 0]
-            hdr['PC%d_%d' % (decax, decax)] = pc[1, 1]
-
-            """
-            Get rid of the old CD matrix, if it exists, to avoid conflicts
-            """
-            if self.wcsinfo.wcs.has_cd():
-                del self.wcsinfo.wcs.cd
-
-            """ Update the CDELT values """
             for i, ax in enumerate([self.raaxis, self.decaxis]):
                 if ax == self.raaxis:
                     sgn = -1.
                 else:
                     sgn = 1.
-                hdr['cdelt%d' % ax] = sgn * newscale[i] / 3600.
+                self.wcshdr['cdelt%d' % ax] = sgn * newscale[i] / 3600.
                 self.wcsinfo.wcs.cdelt[(ax - 1)] = sgn * newscale[i] / 3600.
 
                 self.wcsinfo.wcs.cdelt[(ax-1)] = sgn * newscale[i] / 3600.
@@ -322,7 +296,7 @@ class WcsHDU(pf.PrimaryHDU):
             """ Set the CRPIX values in both the header and wcsinfo"""
             for i in range(len(crpix)):
                 self.wcsinfo.wcs.crpix[i] = crpix[i]
-                self.header['crpix%d' % (i+1)] = crpix[i]
+                self.wcshdr['crpix%d' % (i+1)] = crpix[i]
         else:
             raise TypeError('crpixarr must be list, tuple, or ndarray')
 
@@ -363,7 +337,7 @@ class WcsHDU(pf.PrimaryHDU):
             """ Set the CRVAL values in both the header and wcsinfo """
             for i in range(len(crval)):
                 self.wcsinfo.wcs.crval[i] = crval[i]
-                self.header['crval%d' % (i+1)] = crval[i]
+                self.wcshdr['crval%d' % (i+1)] = crval[i]
         else:
             raise TypeError('crvalarr must be list, tuple, or ndarray')
 
@@ -406,12 +380,43 @@ class WcsHDU(pf.PrimaryHDU):
             hdr2 = self.wcsinfo.to_header()
             for k in hdr2.keys():
                 if k[:2] == 'PC':
-                    self.header[k] = hdr2[k]
+                    self.wcshdr[k] = hdr2[k]
         else:
             raise TypeError('pc must be a numpy ndarray')
 
-        """ Update the attribute"""
+        """ Update the attribute and the associated impa attribute """
         self._pc = pc
+        self.impa = coords.matrix_to_rot(pc, raax=self.raaxis-1,
+                                         decax=self.decaxis-1)
+
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def cd_to_pc(cdmatx, raax=0, decax=1):
+        """
+
+        Converts a CD matrix, which is how HST fits file typically indicate
+         both the pixel scale and the rotation into a PC matrix and a pixel
+         scale.
+        Note that the CD matrix is left-handed (determinant < 0) since the
+         RA pixel scale is formally negative, meaning that the two eletments
+         in the first row of a 2D CD matrix will have the opposite signs
+         than a standard rotation matrix.  The PC matrix is just a standard
+         rotation matrix.
+
+        Inputs:
+         cdmatx - the CD matrix to be converted
+
+        Output:
+         pc - the PC matrix corresponding to the input CD matrix
+        """
+
+        """ Get the image rotation from the CD matrix """
+        impa = coords.matrix_to_rot(cdmatx, raax=raax, decax=decax)
+
+        """ Convert this rotation angle to a PC matrix and return the result"""
+        pc = coords.rot_to_pcmatrix(impa, verbose=False)
+        return pc
 
     # -----------------------------------------------------------------------
 
@@ -448,7 +453,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def read_wcsinfo(self, wcshdr, verbose=True):
+    def read_wcsinfo(self, verbose=True):
         """
 
         Reads in WCS information from the header and saves it, if it's
@@ -464,7 +469,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Get the WCS information out of the header if it's there """
         try:
-            wcsinfo = wcs.WCS(wcshdr)
+            wcsinfo = wcs.WCS(self.wcshdr)
         except:
             if verbose:
                 if self.infile is not None:
@@ -499,29 +504,32 @@ class WcsHDU(pf.PrimaryHDU):
             raise KeyError
 
         """ Get the RA and Dec of the center of the image """
-        xcent = wcshdr[rakey] / 2.
-        ycent = wcshdr[deckey] / 2.
-        imcent = np.ones((1, wcshdr['naxis']))
-        imcent[0, raax] = xcent
-        imcent[0, decax] = ycent
-        imcentradec = wcsinfo.wcs_pix2world(imcent, 1)
-        radec = coords.radec_to_skycoord(imcentradec[0, raax],
-                                         imcentradec[0, decax])
+        xcent = self.wcshdr[rakey] / 2.
+        ycent = self.wcshdr[deckey] / 2.
+        radec = wcs.utils.pixel_to_skycoord(xcent, ycent, wcsinfo)
 
-        """ Get the pixel scale and image rotation """
-        impa = coords.matrix_to_rot(wcsinfo.pixel_scale_matrix, raax=raax,
-                                    decax=decax)
+        """ Get the pixel scale """
         pixscale = wcs.utils.proj_plane_pixel_scales(wcsinfo.celestial) \
             * 3600.
 
-        """ Summarize the WCS information """
-        if verbose:
-            print('Pixel scale (x, y): (%7.3f, %7.3f) arcsec/pix' %
-                  (pixscale[0], pixscale[1]))
-            print('Instrument FOV (arcsec): %7.1f x %7.1f' %
-                  (pixscale[0] * wcshdr[rakey],
-                   pixscale[1] * wcshdr[deckey]))
-            print('Image position angle (E of N): %+7.2f' % impa)
+        """
+        Put the WCS info into a standard form, i.e., one that uses the 
+        PC matrix and CDELTn keywords rather than the HST-like CD matrix  
+        """
+        if wcsinfo.wcs.has_cd():
+            """ Convert the CD matrix into a PC matrix """
+            wcsinfo.wcs.pc = self.cd_to_pc(wcsinfo.wcs.cd, raax, decax)
+
+            """ Get rid of all of the CD matrix information """
+            del wcsinfo.wcs.cd
+            ax00 = '%d_%d' % (raax, raax)
+            ax01 = '%d_%d' % (raax, decax)
+            ax10 = '%d_%d' % (decax, raax)
+            ax11 = '%d_%d' % (decax, decax)
+            for axstr in [ax00, ax01, ax10, ax11]:
+                cdstr = 'CD%s' % axstr
+                if cdstr in self.wcshdr.keys():
+                    del self.wcshdr[cdstr]
 
         """ Add the information to the object """
         self.wcsinfo = wcsinfo
@@ -529,11 +537,18 @@ class WcsHDU(pf.PrimaryHDU):
         self.decaxis = decax + 1
         self.radec = radec
         self.pixscale = pixscale
-        self.impa = impa
         self.crpix = wcsinfo.wcs.crpix
         self.crval = wcsinfo.wcs.crval
-        if wcsinfo.wcs.has_pc():
-            self.pc = wcsinfo.wcs.pc
+        self.pc = wcsinfo.wcs.pc
+
+        """ Summarize the WCS information """
+        if verbose:
+            print('Pixel scale (x, y): (%7.3f, %7.3f) arcsec/pix' %
+                  (pixscale[0], pixscale[1]))
+            print('Instrument FOV (arcsec): %7.1f x %7.1f' %
+                  (pixscale[0] * self.wcshdr[rakey],
+                   pixscale[1] * self.wcshdr[deckey]))
+            print('Image position angle (E of N): %+7.2f' % self.impa)
 
     # -----------------------------------------------------------------------
 
@@ -548,9 +563,9 @@ class WcsHDU(pf.PrimaryHDU):
 
         """
 
-        if rakey in self.header.keys() and deckey in self.header.keys():
-            ra = self.header[rakey]
-            dec = self.header[deckey]
+        if rakey in self.wcshdr.keys() and deckey in self.wcshdr.keys():
+            ra = self.wcshdr[rakey]
+            dec = self.wcshdr[deckey]
             if isinstance(ra, str) and isinstance(dec, str):
                 self.pointing = \
                     SkyCoord('%s %s' % (ra, dec), unit=(u.hourangle, u.deg))
@@ -1016,7 +1031,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         data = self.data.copy()
-        hdr = self.header
+        hdr = self.wcshdr
         if 'CRPIX1' in hdr.keys() and 'CRPIX2' in hdr.keys():
             do_update = True
             crpix1 = hdr['crpix1']
@@ -1236,14 +1251,14 @@ class WcsHDU(pf.PrimaryHDU):
         """
         sci_Ne = (self.data - skymean) * wht
         rms_e = np.sqrt(sci_Ne + bkgd_expected)
-        rmsarr = np.zeros(arrshape)
+        rmsarr = np.zeros(arrshape, dtype=np.float32)
         rmsarr[wmask] = rms_e[wmask] / wht[wmask]
 
         """
         Calculate the distribution of pixel values in terms of number of
         sigma from the mean, and use that to make a SNR map
         """
-        normdiff = np.zeros(arrshape)
+        normdiff = np.zeros(arrshape, dtype=np.float32)
         normdiff[wmask] = (self.data[wmask] - skymean) / rmsarr[wmask]
 
         """
@@ -1586,7 +1601,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         """ Get the full size of the image """
-        hdr = self.header
+        hdr = self.wcshdr
         nx = hdr['naxis1']
         ny = hdr['naxis2']
 
