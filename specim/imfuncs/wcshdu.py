@@ -516,7 +516,9 @@ class WcsHDU(pf.PrimaryHDU):
         Put the WCS info into a standard form, i.e., one that uses the 
         PC matrix and CDELTn keywords rather than the HST-like CD matrix  
         """
-        if wcsinfo.wcs.has_cd():
+        if wcsinfo.wcs.has_pc():
+            pass
+        elif wcsinfo.wcs.has_cd():
             """ Convert the CD matrix into a PC matrix """
             wcsinfo.wcs.pc = self.cd_to_pc(wcsinfo.wcs.cd, raax, decax)
 
@@ -530,6 +532,8 @@ class WcsHDU(pf.PrimaryHDU):
                 cdstr = 'CD%s' % axstr
                 if cdstr in self.wcshdr.keys():
                     del self.wcshdr[cdstr]
+        else:
+            wcsinfo.wcs.pc = np.array([[1., 0.], [0., 1.]])
 
         """ Add the information to the object """
         self.wcsinfo = wcsinfo
