@@ -1776,7 +1776,7 @@ def make_cutout(infile, imcent, imsize, outfile, scale=None, whtsuff=None,
     Make an rms image if requested
     NOTE: This procedure will only work if the input science image is in
     units of e-/s and the weight map gives the effective exposure time in
-    each pixel.  This time of weight file is produced, for example, from
+    each pixel.  This type of weight file is produced, for example, from
     the drizzle code.
     """
     if makerms:
