@@ -159,12 +159,11 @@ class WcsHDU(pf.PrimaryHDU):
         self.decaxis = None
         self.radec = None
         self.pixscale = None
-        self.impa = 0.
+        self.pa = None
         self.radec = None
         self.crpix = None
         self.crval = None
         self.cdelt = None
-        self.pc = None
         self.pointing = None
 
         """
@@ -259,8 +258,6 @@ class WcsHDU(pf.PrimaryHDU):
                     sgn = 1.
                 self.wcshdr['cdelt%d' % ax] = sgn * newscale[i] / 3600.
                 self.wcsinfo.wcs.cdelt[(ax - 1)] = sgn * newscale[i] / 3600.
-
-                self.wcsinfo.wcs.cdelt[(ax-1)] = sgn * newscale[i] / 3600.
 
     # -----------------------------------
 
@@ -384,20 +381,51 @@ class WcsHDU(pf.PrimaryHDU):
         else:
             raise TypeError('pc must be a numpy ndarray')
 
-        """ Update the attribute and the associated impa attribute """
+        """ Update the attribute  """
         self._pc = pc
-        self.impa = coords.matrix_to_rot(pc, raax=self.raaxis-1,
-                                         decax=self.decaxis-1)
 
     # -----------------------------------------------------------------------
 
-    @staticmethod
-    def cd_to_pc(cdmatx, raax=0, decax=1):
+    """ Position angle values """
+    @property
+    def pa(self):
+        return self._pa
+
+    @pa.setter
+    def pa(self, pa):
+        """
+
+        Updates the pa (position angle) attribute and also updates the pc
+         matrix, which encodes the position angle, in:
+          1. the header
+          2. the wcsinfo object
+
+        """
+
+        """ If pa is None then don't change anything """
+        if pa is None:
+            self._pa = None
+            return
+        elif not isinstance(pa, (int, float)):
+            print('')
+            print('ERROR: pa must be a float or an int')
+            print('')
+            raise TypeError
+        else:
+            self._pa = float(pa)
+
+        """ Convert new PA into a PC matrix and then update that matrix """
+        self.pc = coords.rot_to_pcmatrix(pa, verbose=False)
+
+    # -----------------------------------------------------------------------
+
+    def cd_to_pa(self, cdmatx, raax=0, decax=1):
         """
 
         Converts a CD matrix, which is how HST fits file typically indicate
-         both the pixel scale and the rotation into a PC matrix and a pixel
-         scale.
+         both the pixel scale and the rotation into a rotation angle, in
+         degrees east of north.  This position angle is used to later set
+         the PC matrix
         Note that the CD matrix is left-handed (determinant < 0) since the
          RA pixel scale is formally negative, meaning that the two eletments
          in the first row of a 2D CD matrix will have the opposite signs
@@ -406,17 +434,21 @@ class WcsHDU(pf.PrimaryHDU):
 
         Inputs:
          cdmatx - the CD matrix to be converted
+         raax   - the coordinate axis associated with RA (zero-indexed).
+                  Default value = 0
+         decax  - the coordinate axis associated with Dec (zero-indexed).
+                  Default value = 1
 
         Output:
-         pc - the PC matrix corresponding to the input CD matrix
+         pa - the position angle of the image, in degrees east of north
+
         """
 
-        """ Get the image rotation from the CD matrix """
-        impa = coords.matrix_to_rot(cdmatx, raax=raax, decax=decax)
-
-        """ Convert this rotation angle to a PC matrix and return the result"""
-        pc = coords.rot_to_pcmatrix(impa, verbose=False)
-        return pc
+        """
+        Get the image rotation from the CD matrix.
+        """
+        pa = coords.matrix_to_rot(cdmatx, raax=raax, decax=decax)
+        return pa
 
     # -----------------------------------------------------------------------
 
@@ -517,10 +549,10 @@ class WcsHDU(pf.PrimaryHDU):
         PC matrix and CDELTn keywords rather than the HST-like CD matrix  
         """
         if wcsinfo.wcs.has_pc():
-            pass
+            impa = coords.matrix_to_rot(wcsinfo.wcs.pc, raax=raax, decax=decax)
         elif wcsinfo.wcs.has_cd():
-            """ Convert the CD matrix into a PC matrix """
-            wcsinfo.wcs.pc = self.cd_to_pc(wcsinfo.wcs.cd, raax, decax)
+            """ Convert the CD matrix into a position angle """
+            impa = self.cd_to_pa(wcsinfo.wcs.cd, raax, decax)
 
             """ Get rid of all of the CD matrix information """
             del wcsinfo.wcs.cd
@@ -533,7 +565,8 @@ class WcsHDU(pf.PrimaryHDU):
                 if cdstr in self.wcshdr.keys():
                     del self.wcshdr[cdstr]
         else:
-            wcsinfo.wcs.pc = np.array([[1., 0.], [0., 1.]])
+            impa = 0.
+            # wcsinfo.wcs.pc = np.array([[1., 0.], [0., 1.]])
 
         """ Add the information to the object """
         self.wcsinfo = wcsinfo
@@ -543,7 +576,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.pixscale = pixscale
         self.crpix = wcsinfo.wcs.crpix
         self.crval = wcsinfo.wcs.crval
-        self.pc = wcsinfo.wcs.pc
+        self.pa = impa
 
         """ Summarize the WCS information """
         if verbose:
@@ -552,7 +585,7 @@ class WcsHDU(pf.PrimaryHDU):
             print('Instrument FOV (arcsec): %7.1f x %7.1f' %
                   (pixscale[0] * self.wcshdr[rakey],
                    pixscale[1] * self.wcshdr[deckey]))
-            print('Image position angle (E of N): %+7.2f' % self.impa)
+            print('Image position angle (E of N): %+7.2f' % self.pa)
 
     # -----------------------------------------------------------------------
 
@@ -781,7 +814,7 @@ class WcsHDU(pf.PrimaryHDU):
         ysize, xsize = data.shape
         pad = int(padfrac * max(xsize, ysize))
         padsize = int(2 * pad + max(xsize, ysize))
-        
+
         """
         If the conjugate FFT doesn't already exist, take the FFT of the
         selected data and then take its conjugate
@@ -817,14 +850,14 @@ class WcsHDU(pf.PrimaryHDU):
         f2 = np.zeros((padsize, padsize))
         f2[pad:pad+ysize, pad:pad+xsize] = data2
         F2 = fft2(f2)
-        
+
         """ Do the cross correlation and return the results as a WcsHDU """
         if shift:
             xc = fftshift(ifft2(F1c * F2)).real
         else:
             xc = ifft2(F1c * F2).real
         return WcsHDU(xc, verbose=False, wcsverb=False)
-            
+
     # -----------------------------------------------------------------------
 
     def make_hdr_wcs(self, inhdr, wcsinfo, keeplist='all', debug=False):
@@ -952,7 +985,7 @@ class WcsHDU(pf.PrimaryHDU):
             is being kept in for legacy reasons ***
 
         Inputs:
-         crvalarr - a list, tuple, or numpy ndarray containing the new 
+         crvalarr - a list, tuple, or numpy ndarray containing the new
                      CRVAL values.  For most data, this parameter will
                      contain two elements, to replace CRVAL1 and CRVAL2
 
@@ -974,7 +1007,7 @@ class WcsHDU(pf.PrimaryHDU):
         self.raaxis = wcshdu.raaxis
         self.decaxis = wcshdu.decaxis
         self.pixscale = wcshdu.pixscale
-        self.impa = wcshdu.impa
+        self.pa = wcshdu.pa
         self.radec = wcshdu.radec
 
     # -----------------------------------------------------------------------
@@ -1070,7 +1103,7 @@ class WcsHDU(pf.PrimaryHDU):
         if do_update:
             self.crpix = [crpix1, crpix2]
             # self.update_crpix([crpix1, crpix2], verbose=False)
-    
+
     # -----------------------------------------------------------------------
 
     def sigma_clip(self, nsig=3., statsec=None, mask=None,
@@ -1322,7 +1355,7 @@ class WcsHDU(pf.PrimaryHDU):
         """ Return the smoothed data set """
         del tmpdata
         return smdata
-        
+
     # -----------------------------------------------------------------------
 
     def normalize(self, method='sigclip', mask=None):
@@ -1353,7 +1386,7 @@ class WcsHDU(pf.PrimaryHDU):
                              'or "mean"')
         self.data = self.data / normfac
         return normfac
-            
+
     # -----------------------------------------------------------------------
 
     def sky_to_zero(self, method='sigclip', mask=None, verbose=False):
@@ -1386,7 +1419,7 @@ class WcsHDU(pf.PrimaryHDU):
                 descript = 'the data'
             print('   Subtracted value of %f from %s' % (skyval, descript))
         return skyval
-            
+
     # -----------------------------------------------------------------------
 
     def make_bpm(self, intype, nsig=10., goodval=1, smosize=5, smtype='median',
@@ -1549,7 +1582,7 @@ class WcsHDU(pf.PrimaryHDU):
         objmask = ndimage.maximum_filter(objmask, growkernel)
 
         return objmask
-    
+
     # -----------------------------------------------------------------------
 
     def apply_pixmask(self, mask, badval=0, maskval=np.nan):
@@ -1577,7 +1610,7 @@ class WcsHDU(pf.PrimaryHDU):
 
         """ Apply the mask """
         self.data[pixmask] = maskval
-            
+
     # -----------------------------------------------------------------------
 
     def subim_bounds_xy(self, centpos, imsize):
@@ -1666,7 +1699,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
 
         # NEED TO ADD A CHECK FOR VALUES OF X1, X2, ETC. ##
-        
+
         """
         Cut out the subimage based on the bounds.
         Note that radio images often have 4 dimensions (x, y, freq, stokes)
@@ -1780,7 +1813,7 @@ class WcsHDU(pf.PrimaryHDU):
          parameters of the displayed HDU correctly
         """
         if imsize is None:
-            if fabs(self.impa) < theta_tol:
+            if fabs(self.pa) < theta_tol:
                 subim = self.cutout_xy(0, 0, nx, ny, fixnans=fixnans,
                                        nanval=nanval, verbose=False)
                 return subim
@@ -1854,7 +1887,7 @@ class WcsHDU(pf.PrimaryHDU):
         If they are then just do a pixel-based cutout rather than the more
          complex interpolation that is required otherwise.
         """
-        if fabs(self.impa) < theta_tol and outscale is None:
+        if fabs(self.pa) < theta_tol and outscale is None:
             if verbose:
                 print(' ------------------')
                 print(' Image PA is effectively zero, so doing pixel-based '
@@ -2045,7 +2078,7 @@ class WcsHDU(pf.PrimaryHDU):
           texp_key     Divide by exposure time (set keyword to fits header
                         keyword name, e.g., 'exptime')
           flip          0 => no flip
-                        1 => PFCam style (flip x then rotate -90), 
+                        1 => PFCam style (flip x then rotate -90),
                         2 => P60 CCD13 style (not yet implemented)
                         3 => flip x-axis
           pixscale     If >0, apply a rough WCS using this pixel scale (RA and
@@ -2054,7 +2087,7 @@ class WcsHDU(pf.PrimaryHDU):
                          Default = 'ra'
           deckey       FITS header keyword for Dec of telescope pointing.
                          Default = 'dec'
-        
+
          Required inputs:
           frame
 
@@ -2096,7 +2129,7 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.header[keystr] = 'Bias frame for %s is %s with mean %f' % \
                 (hdustr, bias.infile, biasmean)
             print('   Subtracted bias/dark frame %s' % bias.infile)
-    
+
         """ Convert to electrons if requested """
         if gain > 0:
             tmp *= gain
@@ -2121,7 +2154,7 @@ class WcsHDU(pf.PrimaryHDU):
                 print('   Converted units to e- using gain = %f' % gain)
         else:
             keystrb1 = None
-    
+
         """ Divide by the exposure time if requested """
         if texp > 0.:
             tmp = tmp / texp
@@ -2145,18 +2178,18 @@ class WcsHDU(pf.PrimaryHDU):
                            'texp=%7.2f' % (hdustr, texp), after=afterkey)
             print('   Converted units from e- to e-/sec using exposure '
                   'time %7.2f' % texp)
-    
+
         """ Apply the flat-field correction if requested """
         if flat is not None:
             tmp = tmp / flat
-            
+
             """
             Set up a bad pixel mask based on places where the 
             flat frame = 0, since dividing by zero gives lots of problems
             """
             flatdata = flat.data
             zeromask = flatdata == 0
-            
+
             """ Correct for any zero pixels in the flat-field frame """
             tmp.data[zeromask] = 0
             flatmean = flatdata.mean()
@@ -2175,7 +2208,7 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.fixpix(bpm, verbose=verbose, **kwargs)
             if verbose:
                 print('   Fixed bad pixels')
-    
+
         """ Apply the fringe correction if requested """
         if fringe is not None:
             fringedata = fringe.data
@@ -2189,7 +2222,7 @@ class WcsHDU(pf.PrimaryHDU):
                 'Fringe image for %s is %s with mean=%f' % \
                 (hdustr, fringe.infile, fringemean)
             print('   Subtracted fringe image: %s' % fringe.infile)
-    
+
         """ Apply the dark sky flat-field correction if requested """
         if darkskyflat is not None:
             dsflatdata = darkskyflat.data
@@ -2235,7 +2268,7 @@ class WcsHDU(pf.PrimaryHDU):
             tmp.pixscale = pixscale
 
         return tmp
-    
+
     # -----------------------------------------------------------------------
 
     def im_moments(self, x0, y0, rmax=10., detect_thresh=3., skytype='global',
