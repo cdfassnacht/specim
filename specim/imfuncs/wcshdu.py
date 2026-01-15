@@ -369,15 +369,19 @@ class WcsHDU(pf.PrimaryHDU):
         """
         if isinstance(pc, np.ndarray):
             """ Check dimensionality """
-            if pc.size != self.wcsinfo.wcs.pc.size:
-                raise IndexError(' Input PC matrix size does not match'
-                                 ' size of current PC matrix')
+            if self.wcsinfo.wcs.has_pc():
+                if pc.size != self.wcsinfo.wcs.pc.size:
+                    raise IndexError(' Input PC matrix size does not match'
+                                     ' size of current PC matrix')
             """ Set the PC values in both the header and wcsinfo """
             self.wcsinfo.wcs.pc = pc
-            hdr2 = self.wcsinfo.to_header()
-            for k in hdr2.keys():
-                if k[:2] == 'PC':
-                    self.wcshdr[k] = hdr2[k]
+            for i in range(2):
+                for j in range(2):
+                    self.wcshdr['pc%d_%d' % ((i+1), (j+1))] = pc[i][j]
+            # hdr2 = self.wcsinfo.to_header()
+            # for k in hdr2.keys():
+            #     if k[:2] == 'PC':
+            #         self.wcshdr[k] = hdr2[k]
         else:
             raise TypeError('pc must be a numpy ndarray')
 
