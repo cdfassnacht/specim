@@ -484,7 +484,7 @@ class WcsHDU(pf.PrimaryHDU):
         """
         Set parameters related to image properties and return the hdulist
         """
-        self.infile = os.path.basename(infile)
+        # self.infile = os.path.basename(infile)
         return hdu
 
     # -----------------------------------------------------------------------
@@ -1389,6 +1389,7 @@ class WcsHDU(pf.PrimaryHDU):
             raise ValueError('method must be one of "sigclip", "median" '
                              'or "mean"')
         self.data = self.data / normfac
+        self.header['normfac'] = (normfac, 'Data normalized by this factor')
         return normfac
 
     # -----------------------------------------------------------------------
@@ -1407,7 +1408,7 @@ class WcsHDU(pf.PrimaryHDU):
         if mask is not None:
             data = self.data[mask]
         else:
-            data = self.data
+            data = self.data.copy()
         if method == 'median':
             skyval = np.median(data)
         elif method == 'sigclip':
@@ -2058,7 +2059,7 @@ class WcsHDU(pf.PrimaryHDU):
 
     def process_data(self, trimsec=None, bias=None, gain=-1., texp=-1.,
                      flat=None, bpm=None, fringe=None,
-                     darkskyflat=None, zerosky=None,
+                     darkskyflat=None, skysub=None, zerosky='doNOTuse',
                      flip=None, pixscale=0.0, rakey='ra', deckey='dec',
                      verbose=True, **kwargs):
 
@@ -2078,7 +2079,7 @@ class WcsHDU(pf.PrimaryHDU):
           flat          Flat-field correction
           fringe        Fringe subtraction
           darksky      Dark-sky flat correction
-          skysub        Subtract mean sky level if keyword set to True
+          skysub       Subtract mean sky level if keyword set to True
           texp_key     Divide by exposure time (set keyword to fits header
                         keyword name, e.g., 'exptime')
           flip          0 => no flip
@@ -2109,8 +2110,8 @@ class WcsHDU(pf.PrimaryHDU):
 
         if verbose:
             startstr = 'Processing data'
-            if self.infile is not None:
-                startstr = '%s for %s' % (startstr, self.infile)
+            if self.basename is not None:
+                startstr = '%s for %s' % (startstr, self.basename)
             if 'OBJECT' in self.header.keys():
                 startstr = '%s: %s' % (startstr, self.header['object'])
             print(startstr)
@@ -2127,11 +2128,14 @@ class WcsHDU(pf.PrimaryHDU):
             tmp -= bias
             biasmean = bias.data.mean()
             if hext == 0:
-                keystr = 'biassub'
+                keystr1 = 'biassub'
+                keystr2 = 'biaslev'
             else:
-                keystr = 'biassub%d' % self.hext
-            tmp.header[keystr] = 'Bias frame for %s is %s with mean %f' % \
-                (hdustr, bias.infile, biasmean)
+                keystr1 = 'biassub%d' % self.hext
+                keystr2 = 'biaslev%d' % self.hext
+            tmp.header[keystr1] = 'Subtracted bias for %s using file %s' % \
+                (hdustr, bias.infile)
+            tmp.header[keystr2] = ('%f' % biasmean, 'Mean value of bias frame')
             print('   Subtracted bias/dark frame %s' % bias.infile)
 
         """ Convert to electrons if requested """
@@ -2250,17 +2254,30 @@ class WcsHDU(pf.PrimaryHDU):
                   darkskyflat.infile)
 
         """ Subtract the sky level if requested """
-        if zerosky is not None:
-            skylev = tmp.sky_to_zero(method=zerosky, verbose=verbose)
-            if hext == 0:
-                keystr = 'zerosky'
-                levstr = 'skylev'
+        if skysub is not None:
+            if skysub == 'sigclip' or skysub == 'median':
+                skylev = tmp.sky_to_zero(method=zerosky, verbose=verbose)
+                if hext == 0:
+                    keystr = 'zerosky'
+                    levstr = 'skylev'
+                else:
+                    keystr = 'zerosky' + str(hext)
+                    levstr = 'skylev' + str(hext)
+                tmp.header[keystr] = ('%s: subtracted constant sky level of %f'
+                                      %  (hdustr, skylev))
+                tmp.header[levstr] = skylev
+            elif isinstance(skysub, str):
+                try:
+                    sky = WcsHDU(skysub, wcsverb=False)
+                except OSError:
+                    print('Cannot open sky file %s' % skysub)
+                    raise ValueError
             else:
-                keystr = 'zerosky' + str(hext)
-                levstr = 'skylev' + str(hext)
-            tmp.header[keystr] = ('%s: subtracted constant sky level of %f' %
-                                  (hdustr, skylev))
-            tmp.header[levstr] = skylev
+                print('')
+                print('ERROR: process_data')
+                print('skysub parameter must be "sigclip", "median" or the '
+                      'filename for a sky frame')
+                raise TypeError
 
         """ Flip if requested """
         if flip is not None:
