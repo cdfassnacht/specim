@@ -467,7 +467,7 @@ class WcsHDU(pf.PrimaryHDU):
         if os.path.isfile(infile):
             try:
                 hdu = open_fits(infile)
-            except IOError:
+            except (IOError, OSError):
                 print(' ERROR. Problem in loading file %s' % infile)
                 print(' Check to make sure filename matches an existing'
                       'file')
@@ -1394,39 +1394,6 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
-    def sky_to_zero(self, method='sigclip', mask=None, verbose=False):
-        """
-
-        Subtracts a constant "sky value" from data in the object.
-        The allowed methods for determining the sky value are:
-          'sigclip' - the clipped mean (the default)
-          'median'  - the median
-
-        """
-
-        method = method.lower()
-        if mask is not None:
-            data = self.data[mask]
-        else:
-            data = self.data.copy()
-        if method == 'median':
-            skyval = np.median(data)
-        elif method == 'sigclip':
-            self.sigma_clip(mask=mask)
-            skyval = self.mean_clip
-        else:
-            raise ValueError('method must be one of "sigclip" or "median" ')
-        self.data -= skyval
-        if verbose:
-            if self.infile is not None:
-                descript = self.infile
-            else:
-                descript = 'the data'
-            print('   Subtracted value of %f from %s' % (skyval, descript))
-        return skyval
-
-    # -----------------------------------------------------------------------
-
     def make_bpm(self, intype, nsig=10., goodval=1, smosize=5, smtype='median',
                  var=None, flat=None, flatnsig=15., flatmin=0.5,
                  outfile=None, outobj=None):
@@ -2057,9 +2024,81 @@ class WcsHDU(pf.PrimaryHDU):
 
     # -----------------------------------------------------------------------
 
+    def sky_to_zero(self, method='sigclip', mask=None, verbose=False):
+        """
+
+        Subtracts a constant "sky value" from data in the object.
+        The allowed methods for determining the sky value are:
+          'sigclip' - the clipped mean (the default)
+          'median'  - the median
+
+        """
+
+        method = method.lower()
+        if mask is not None:
+            data = self.data[mask]
+        else:
+            data = self.data.copy()
+        if method == 'median':
+            skyval = np.median(data)
+        elif method == 'sigclip':
+            self.sigma_clip(mask=mask)
+            skyval = self.mean_clip
+        else:
+            raise ValueError('method must be one of "sigclip" or "median" ')
+        self.data -= skyval
+        if verbose:
+            if self.infile is not None:
+                descript = self.infile
+            else:
+                descript = 'the data'
+            # print('   Subtracted value of %f from %s' % (skyval, descript))
+        return skyval
+
+    # -----------------------------------------------------------------------
+
+    def skysub(self, sky, hext, hdustr, verbose=True):
+        if sky is None:
+            raise TypeError('skysub: sky parameter must be a string')
+        elif sky == 'sigclip' or sky == 'median':
+            skylev = self.sky_to_zero(method=sky, verbose=verbose)
+            if hext == 0:
+                keystr = 'skysub'
+                levstr = 'skylev'
+            else:
+                keystr = 'skysub' + str(hext)
+                levstr = 'skylev' + str(hext)
+            self.header[keystr] = ('%s: subtracted constant sky level of %f'
+                                  % (hdustr, skylev))
+            self.header[levstr] = skylev
+            print('   Subtracted constant sky level (%s): %f' %
+                  (sky, skylev))
+        else:
+            try:
+                skyhdu = WcsHDU(sky, wcsverb=False)
+            except IOError:
+                print('Cannot open sky file %s' % sky)
+                raise ValueError
+            except TypeError:
+                raise TypeError
+            # tmp = WcsHDU(self, verbose=False, wcsverb=False)
+            self.sigma_clip(verbose=False)
+            skyhdu.sigma_clip()
+            tmpmean = self.mean_clip
+            skymean = skyhdu.mean_clip
+            self.data -= skyhdu.data - skymean + tmpmean
+            if skyhdu.basename is not None:
+                print('   Subtracted sky frame: %s' % sky.basename)
+            else:
+                print('   Subtracted sky frame: %s' % sky.infile)
+            print('    Image clipped mean: %f' % tmpmean)
+            print('    Sky clipped mean: %f' % skymean)
+
+    # -----------------------------------------------------------------------
+
     def process_data(self, trimsec=None, bias=None, gain=-1., texp=-1.,
-                     flat=None, bpm=None, fringe=None,
-                     darkskyflat=None, skysub=None, zerosky='doNOTuse',
+                     flat=None, bpm=None, fringe=None, darkskyflat=None,
+                     normalize=None, sky=None,
                      flip=None, pixscale=0.0, rakey='ra', deckey='dec',
                      verbose=True, **kwargs):
 
@@ -2078,20 +2117,23 @@ class WcsHDU(pf.PrimaryHDU):
                           NB: Gain must be in e-/ADU
           flat          Flat-field correction
           fringe        Fringe subtraction
-          darksky      Dark-sky flat correction
-          skysub       Subtract mean sky level if keyword set to True
-          texp_key     Divide by exposure time (set keyword to fits header
-                        keyword name, e.g., 'exptime')
-          flip          0 => no flip
-                        1 => PFCam style (flip x then rotate -90),
-                        2 => P60 CCD13 style (not yet implemented)
-                        3 => flip x-axis
-          pixscale     If >0, apply a rough WCS using this pixel scale (RA and
-                         Dec come from telescope pointing info in fits header)
-          rakey        FITS header keyword for RA of telescope pointing.
-                         Default = 'ra'
-          deckey       FITS header keyword for Dec of telescope pointing.
-                         Default = 'dec'
+          darkskyflat   Dark-sky flat correction
+          normalize     Normalize the data set using the method given
+          sky           Sky to be subtracted. Can be either an input file or
+                         one of 'median' or 'sigclip' in which a single sky
+                         value is estimated from the image data themselves
+          texp_key      Divide by exposure time (set keyword to fits header
+                         keyword name, e.g., 'exptime')
+          flip           0 => no flip
+                         1 => PFCam style (flip x then rotate -90),
+                         2 => P60 CCD13 style (not yet implemented)
+                         3 => flip x-axis
+          pixscale      If >0, apply a rough WCS using this pixel scale (RA and
+                          Dec come from telescope pointing info in fits header)
+          rakey         FITS header keyword for RA of telescope pointing.
+                          Default = 'ra'
+          deckey        FITS header keyword for Dec of telescope pointing.
+                          Default = 'dec'
 
          Required inputs:
           frame
@@ -2253,31 +2295,16 @@ class WcsHDU(pf.PrimaryHDU):
             print('   Divided by dark-sky flat: %s' %
                   darkskyflat.infile)
 
+        """ Normalize the data if requested """
+        if normalize is not None:
+            mask = np.isfinite(tmp.data)
+            normfac = tmp.normalize(method=normalize, mask=mask)
+            if verbose:
+                print('   Normalizing by %f' % normfac)
+
         """ Subtract the sky level if requested """
-        if skysub is not None:
-            if skysub == 'sigclip' or skysub == 'median':
-                skylev = tmp.sky_to_zero(method=zerosky, verbose=verbose)
-                if hext == 0:
-                    keystr = 'zerosky'
-                    levstr = 'skylev'
-                else:
-                    keystr = 'zerosky' + str(hext)
-                    levstr = 'skylev' + str(hext)
-                tmp.header[keystr] = ('%s: subtracted constant sky level of %f'
-                                      %  (hdustr, skylev))
-                tmp.header[levstr] = skylev
-            elif isinstance(skysub, str):
-                try:
-                    sky = WcsHDU(skysub, wcsverb=False)
-                except OSError:
-                    print('Cannot open sky file %s' % skysub)
-                    raise ValueError
-            else:
-                print('')
-                print('ERROR: process_data')
-                print('skysub parameter must be "sigclip", "median" or the '
-                      'filename for a sky frame')
-                raise TypeError
+        if sky is not None:
+            tmp.skysub(sky, hext, hdustr)
 
         """ Flip if requested """
         if flip is not None:
