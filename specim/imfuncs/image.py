@@ -2182,7 +2182,7 @@ def plot_cat(fitsfile, catfile, xcol=0, ycol=1, marksize=20., markcolor='g',
 
     """ Plot the image """
     try:
-        quick_display(fitsfile, inhdu=inhdu, cmap=cmap, fmin=fmin, fmax=fmax,
+        quick_display(fitsfile, cmap=cmap, fmin=fmin, fmax=fmax,
                       funits=funits)
     except IOError:
         print('')
