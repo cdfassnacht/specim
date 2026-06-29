@@ -628,7 +628,10 @@ class Image(dict):
         if verbose:
             print(self.rcirc)
             print(self.fcirc)
-            print(self.rprof_amp, self.rprof_sig)
+            fwhm = 2.355 * self.rprof_sig
+            print('')
+            print('Gaussian fit to profile: Amp=%f, sigma=%f, FWHM=%f'
+                  % (self.rprof_amp, self.rprof_sig, fwhm))
 
     # -----------------------------------------------------------------------
 
