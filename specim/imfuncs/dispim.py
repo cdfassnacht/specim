@@ -162,18 +162,18 @@ class DispIm(WcsHDU):
         """
 
         """ Check the format of dpar['crosshair'] """
-        if isinstance(dpar['crosshair'], (tuple, list)):
-            if len(dpar['crosshair']) != 2:
+        if isinstance(dpar.crosshair, (tuple, list)):
+            if len(dpar.crosshair) != 2:
                 raise ValueError('\nThe "crosshair" parameter must have two'
                                  ' elements: (x,y) or (RA,Dec)\n')
         else:
             raise TypeError('\nThe "crosshair" parameter must be either a'
                             ' tuple or a list, with 2 elements')
 
-        ax.axvline(dpar['crosshair'][0], color=dpar['xhaircolor'],
-                   lw=dpar['xhairlw'], ls=dpar['xhairls'])
-        ax.axhline(dpar['crosshair'][1], color=dpar['xhaircolor'],
-                   lw=dpar['xhairlw'], ls=dpar['xhairls'])
+        ax.axvline(dpar.crosshair[0], color=dpar.xhaircolor,
+                   lw=dpar.xhairlw, ls=dpar.xhairls)
+        ax.axhline(dpar.crosshair[1], color=dpar.xhaircolor,
+                   lw=dpar.xhairlw, ls=dpar.xhairls)
 
     # -----------------------------------------------------------------------
 
@@ -269,7 +269,8 @@ class DispIm(WcsHDU):
             self.add_scalebar(ax1, dpar)
 
         """ Add a crosshair if requested """
-        if 'crosshair' in dpar.keys():
+        #if 'crosshair' in dpar.keys():
+        if dpar.crosshair is not None:
             self.add_crosshair(ax1, dpar)
 
         """ Save the current axis that was used to make the plot """

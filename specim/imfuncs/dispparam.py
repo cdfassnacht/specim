@@ -76,8 +76,9 @@ class DispParam(dict):
         self['intlabcolor'] = 'w'    # Color for internal labels
         self['barlength'] = 1.0      # Scalebar length in arcsec
         self['barcolor'] = 'w'       # Color for scalebar
+        self.crosshair=None          # Set to a list or tuple giving position
         self['xhaircolor'] = 'g'     # Crosshair color
-        self['xhairlw'] = 1          # Crosshair linewidth
+        self['xhairlw'] = 1.5        # Crosshair linewidth
         self['xhairls'] = '-'        # Crosshair linestyle (solid is default)
 
         """ Link the data to be displayed to this DispParam object """
@@ -360,6 +361,8 @@ class DispParam(dict):
                       fscale='linear', title=None,  mode='xy', zeropos=None,
                       mask=None, tltext=None, tctext=None, trtext=None,
                       bltext=None, bctext=None, brtext=None, scalebar=False,
+                      crosshair=None, xhairlw=1.5, xhairls='solid',
+                      xhaircolor='g',
                       verbose=False, dpi=100., facecolor='w', debug=False):
         """
         Sets the parameter values that will be used to actually
@@ -397,6 +400,16 @@ class DispParam(dict):
         self.bltext = bltext
         self.bctext = bctext
         self.brtext = brtext
+
+        """ Set up the cross-hair """
+        if crosshair is not None:
+            self.crosshair = crosshair
+        if xhairlw is not None:
+            self.xhairlw = xhairlw
+        if xhairls is not None:
+            self.xhairls = xhairls
+        if xhaircolor is not None:
+            self.xhaircolor = xhaircolor
 
         """ Set other display parameters """
         self.title = title

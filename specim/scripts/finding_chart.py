@@ -54,7 +54,7 @@ def make_fc(srcname, infile, imcent, imsize, zoomsize, outfile=None,
     """ Make the wide-field image """
     fcim = imf.Image(infile)
     fig = plt.figure(figsize=(8, 10))
-    fig.add_axes([0.1, 0.3, 0.7, 0.7])
+    fig.add_axes((0.1, 0.3, 0.7, 0.7))
     title = '%s Finding Chart' % srcname
     fcim.display(imcent=cent, imsize=imsize, cmap='grey_inv', title=title,
                  fmax=fcfmax)
