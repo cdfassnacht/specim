@@ -539,6 +539,21 @@ class WcsHDU(pf.PrimaryHDU):
             self.wcsinfo = None
             raise KeyError
 
+        """
+        Also test for the case where the WCS keywords are in the file but they
+         are set to null
+        """
+        checkkeys = ['crpix1', 'crpix2', 'crval1', 'crval2']
+        for k in checkkeys:
+            if k in self.wcshdr:
+                if isinstance(self.wcshdr[k], str):
+                    if self.wcshdr[k][:4].lower() == 'null':
+                        self.wcsinfo = None
+                        raise KeyError
+            else:
+                self.wcsinfo = None
+                raise KeyError
+
         """ Get the RA and Dec of the center of the image """
         xcent = self.wcshdr[rakey] / 2.
         ycent = self.wcshdr[deckey] / 2.
