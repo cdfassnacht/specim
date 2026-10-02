@@ -64,9 +64,18 @@ class WcsHDU(pf.PrimaryHDU):
                       automatically generated.
         """
 
+        """
+        Make the call to the super class to create an empty WcsHDU instance
+        """
+        if pyversion == 2:
+            super(WcsHDU, self).__init__()
+        else:
+            super().__init__()
+
         """ Set up default starting values for basic HDU """
         # self.header = None
-        # self.data = None
+        self.data = None
+        self.infile = None
 
         """
         Check the format of the input info and get the data and header info
@@ -122,12 +131,13 @@ class WcsHDU(pf.PrimaryHDU):
         """
         Use the input data and header info to make the call to the super class
         """
-        if pyversion == 2:
-            super(WcsHDU, self).__init__(data, hdr)
-        else:
-            super().__init__(data, hdr)
-        # self.data = data
-        # self.header = hdr
+        # if pyversion == 2:
+        #     super(WcsHDU, self).__init__(data, hdr)
+        # else:
+        #     super().__init__(data, hdr)
+        self.data = data
+        if hdr is not None:
+            self.header = hdr
         self.infile = infile
         if infile is not None:
             self.basename = os.path.basename(infile)
