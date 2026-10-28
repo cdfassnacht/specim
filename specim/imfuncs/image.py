@@ -115,7 +115,8 @@ class Image(dict):
 
         """ Set some short-cut variables """
         self.infile = self['input'].infile
-        self.header = self['input'].header
+        self.header = self['input'].make_hdr_wcs(self['input'].header,
+                                                 self['input'].wcsinfo)
         self.data = self['input'].data
         self.wcsinfo = self['input'].wcsinfo
 

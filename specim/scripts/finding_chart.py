@@ -4,7 +4,7 @@ from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 # from cdfutils import coords
-from . import image as imf
+from ..imfuncs import image as imf
 
 
 def read_posfile(posfile, verbose=True):

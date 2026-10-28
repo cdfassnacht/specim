@@ -55,6 +55,12 @@ for f in files:
       except:
          inst = None
 
+   # Camera
+   try:
+      cam = hdr['camera'].strip()
+   except KeyError:
+      cam = None
+
    # Set some default values for instrument-specific parameters
    usecoadd  = False
    inst2     = None
@@ -90,6 +96,11 @@ for f in files:
          inst = 'LRIS'
          texpname = 'ttime'
          filtname = 'redfilt'
+      elif inst[0:4] == 'KCWI':
+         texpname = 'ttime'
+         if cam is not None:
+            if cam.lower() == 'blue':
+               filtname = 'bfiltnam'
       elif inst == 'OSIRIS':
          usecoadd = True
          texpname = 'itime'
@@ -156,7 +167,7 @@ for f in files:
    # Get filter
    try:
       filt = hdr[filtname]
-   except:
+   except KeyError:
       filt = 'N/A'
 
    # Get instrument-specific cards
@@ -164,13 +175,13 @@ for f in files:
    if inst == 'NICMOS':
       try:
          aper = hdr['aperture'][0:4]
-      except:
+      except KeyError:
          aper = ''
       inst = '%s-%s' % (inst,aper)
    if(inst == 'NIRC2'):
       try:
          cam = hdr['camname']
-      except:
+      except KeyError:
          cam = 'N/A'
       cam = cam[0:4]
       inst = "%s-%s" % (inst,cam)

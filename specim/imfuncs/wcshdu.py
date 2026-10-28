@@ -138,6 +138,9 @@ class WcsHDU(pf.PrimaryHDU):
         self.data = data
         if hdr is not None:
             self.header = hdr
+            self.ndim = hdr['naxis']
+        else:
+            self.ndim = len(data.shape)
         self.infile = infile
         if infile is not None:
             self.basename = os.path.basename(infile)
@@ -218,6 +221,15 @@ class WcsHDU(pf.PrimaryHDU):
     """
     # -----------------------------------
 
+    """ Data """
+    # @property
+    # def data(self):
+    #     return self._data
+
+    # @data.setter
+    # def data(self, data):
+    #     self._data = data
+
     """ Pixel scale """
     @property
     def pixscale(self):
@@ -243,10 +255,6 @@ class WcsHDU(pf.PrimaryHDU):
         else:
             raise TypeError('pixscale must be a scalar or one of: '
                             'list, numpy array, or tuple')
-
-        """ Set shortcuts """
-        raax = self.raaxis
-        decax = self.decaxis
 
         """
         Update the values in the WcsHDU object.  Assume for now that the
@@ -381,13 +389,17 @@ class WcsHDU(pf.PrimaryHDU):
             """ Check dimensionality """
             if self.wcsinfo.wcs.has_pc():
                 if pc.size != self.wcsinfo.wcs.pc.size:
-                    raise IndexError(' Input PC matrix size does not match'
-                                     ' size of current PC matrix')
+                    estr1 = 'Input PC array size (%d x %d) ' % \
+                            (pc.shape[0], pc.shape[1])
+                    estr2 = 'size of current PC matrix (%d x %d)' % \
+                            (self.wcsinfo.wcs.pc.shape[0],
+                             self.wcsinfo.wcs.pc.shape[1])
+                    raise IndexError(' %s does not match %s' % (estr1, estr2))
             """ Set the PC values in both the header and wcsinfo """
             self.wcsinfo.wcs.pc = pc
-            for i in range(2):
-                for j in range(2):
-                    self.wcshdr['pc%d_%d' % ((i+1), (j+1))] = pc[i][j]
+            for i in [self.raaxis, self.decaxis]:
+                for j in [self.raaxis, self.decaxis]:
+                    self.wcshdr['pc%d_%d' % (i, j)] = pc[i-1][j-1]
             # hdr2 = self.wcsinfo.to_header()
             # for k in hdr2.keys():
             #     if k[:2] == 'PC':
@@ -429,7 +441,7 @@ class WcsHDU(pf.PrimaryHDU):
             self._pa = float(pa)
 
         """ Convert new PA into a PC matrix and then update that matrix """
-        self.pc = coords.rot_to_pcmatrix(pa, verbose=False)
+        self.pc = coords.rot_to_pcmatrix(pa, ndim=self.ndim, verbose=False)
 
     # -----------------------------------------------------------------------
 
@@ -537,23 +549,25 @@ class WcsHDU(pf.PrimaryHDU):
             if ct[0:2] == 'RA':
                 rafound = True
                 raax = count
-                rakey = 'naxis%d' % (raax + 1)
+                rafits = raax + 1
+                rakey = 'naxis%d' % rafits
             if ct[0:3] == 'DEC':
                 decfound = True
                 decax = count
-                deckey = 'naxis%d' % (decax + 1)
+                decfits = decax + 1
+                deckey = 'naxis%d' % decfits
         if rafound is False or decfound is False:
             if verbose:
-                print('No valid WCS information in image header')
-                print(' CTYPE keys are not RA/DEC')
+                print('Missing either RA or DEC in image header')
             self.wcsinfo = None
-            raise KeyError
+            raise KeyError('Missing either RA or DEC in image header')
 
         """
         Also test for the case where the WCS keywords are in the file but they
          are set to null
         """
-        checkkeys = ['crpix1', 'crpix2', 'crval1', 'crval2']
+        checkkeys = ['crpix%d' % rafits, 'crpix%d' % decfits,
+                     'crval%d' % rafits, 'crval%d' % decfits]
         for k in checkkeys:
             if k in self.wcshdr:
                 if isinstance(self.wcshdr[k], str):
@@ -580,31 +594,47 @@ class WcsHDU(pf.PrimaryHDU):
         if wcsinfo.wcs.has_pc():
             impa = coords.matrix_to_rot(wcsinfo.wcs.pc, raax=raax, decax=decax)
         elif wcsinfo.wcs.has_cd():
+            """
+            Copy over the CD matrix to a temporary holder
+            and then delete the cd matrix and put in a PC matrix and CDELT
+            array
+            """
+            tmpcd = wcsinfo.wcs.cd.copy()
+            del wcsinfo.wcs.cd
+            wcsinfo.wcs.pc = np.identity(self.ndim)
+            wcsinfo.wcs.cdelt = np.ones(self.ndim)
+
             """ Convert the CD matrix into a position angle """
-            impa = self.cd_to_pa(wcsinfo.wcs.cd, raax, decax)
+            # impa = self.cd_to_pa(wcsinfo.wcs.cd, raax, decax)
+            impa = self.cd_to_pa(tmpcd, raax, decax)
+
+            """ Get info on non-celestial axes, if present """
+            for i in range(self.ndim):
+                if wcsinfo.wcs.ctype[i][:2] == 'RA' or \
+                        wcsinfo.wcs.ctype[i][:3] == 'DEC':
+                    pass
+                else:
+                    wcsinfo.wcs.cdelt[i] = tmpcd[i, i]
 
             """ Get rid of all of the CD matrix information """
-            del wcsinfo.wcs.cd
-            ax00 = '%d_%d' % (raax, raax)
-            ax01 = '%d_%d' % (raax, decax)
-            ax10 = '%d_%d' % (decax, raax)
-            ax11 = '%d_%d' % (decax, decax)
-            for axstr in [ax00, ax01, ax10, ax11]:
-                cdstr = 'CD%s' % axstr
-                if cdstr in self.wcshdr.keys():
-                    del self.wcshdr[cdstr]
+            for i in range(self.ndim):
+                for j in range(self.ndim):
+                    cdstr = 'CD%d_%d' % (i, j)
+                    if cdstr in self.wcshdr.keys():
+                        del self.wcshdr[cdstr]
         else:
             impa = 0.
             # wcsinfo.wcs.pc = np.array([[1., 0.], [0., 1.]])
 
         """ Add the information to the object """
         self.wcsinfo = wcsinfo
-        self.raaxis = raax + 1
-        self.decaxis = decax + 1
+        self.raaxis = rafits
+        self.decaxis = decfits
         self.radec = radec
         self.pixscale = pixscale
         self.crpix = wcsinfo.wcs.crpix
         self.crval = wcsinfo.wcs.crval
+        self.cdelt = wcsinfo.wcs.cdelt
         self.pa = impa
 
         """ Summarize the WCS information """
